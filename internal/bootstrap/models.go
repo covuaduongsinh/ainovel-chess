@@ -276,12 +276,19 @@ func createModelFromConfig(providerKey, model string, pc ProviderConfig, cache m
 	if err != nil {
 		return nil, fmt.Errorf("解析 provider 类型失败: %w", err)
 	}
+	providerExtra := cloneMap(pc.Extra)
+	if pc.API != "" {
+		if providerExtra == nil {
+			providerExtra = make(map[string]any, 1)
+		}
+		providerExtra["api"] = pc.API
+	}
 
 	m, err := llm.NewModel(providerType, model,
 		llm.WithAPIKey(pc.APIKey),
 		llm.WithBaseURL(pc.BaseURL),
 		llm.WithStreamIdleTimeout(streamIdleTimeout),
-		llm.WithProviderExtra(pc.Extra),
+		llm.WithProviderExtra(providerExtra),
 		llm.WithExtra(pc.ExtraBody),
 	)
 	if err != nil {

@@ -130,6 +130,7 @@ func TestMergeConfig_ProviderExtraFields(t *testing.T) {
 		ModelName: "google/gemini-2.5-flash",
 		Providers: map[string]ProviderConfig{
 			"openrouter": {
+				API:    "chat",
 				APIKey: "sk-test-123456",
 				ExtraBody: map[string]any{
 					"temperature": 0.8,
@@ -143,6 +144,7 @@ func TestMergeConfig_ProviderExtraFields(t *testing.T) {
 	overlay := Config{
 		Providers: map[string]ProviderConfig{
 			"openrouter": {
+				API:     "responses",
 				BaseURL: "https://proxy.example.com/v1",
 				ExtraBody: map[string]any{
 					"min_p": 0.05,
@@ -161,6 +163,9 @@ func TestMergeConfig_ProviderExtraFields(t *testing.T) {
 	pc := cfg.Providers["openrouter"]
 	if pc.APIKey != "sk-test-123456" {
 		t.Fatalf("APIKey = %q, want inherited key", pc.APIKey)
+	}
+	if pc.API != "responses" {
+		t.Fatalf("API = %q, want responses", pc.API)
 	}
 	if pc.BaseURL != "https://proxy.example.com/v1" {
 		t.Fatalf("BaseURL = %q, want overlay URL", pc.BaseURL)
@@ -197,6 +202,42 @@ func TestValidateBase_ProviderOverrideWithoutCredentials(t *testing.T) {
 	err := cfg.ValidateBase()
 	if err == nil {
 		t.Fatal("provider 缺凭证应报错")
+	}
+	if !errors.Is(err, errs.ErrConfig) {
+		t.Errorf("应包装 errs.ErrConfig，得到: %v", err)
+	}
+}
+
+func TestValidateBaseRejectsInvalidProviderAPI(t *testing.T) {
+	cfg := Config{
+		Provider:  "openai",
+		ModelName: "gpt-5.1",
+		Providers: map[string]ProviderConfig{
+			"openai": {APIKey: "sk-test-123456", API: "legacy"},
+		},
+	}
+	cfg.FillDefaults()
+	err := cfg.ValidateBase()
+	if err == nil {
+		t.Fatal("provider api 非法应报错")
+	}
+	if !errors.Is(err, errs.ErrConfig) {
+		t.Errorf("应包装 errs.ErrConfig，得到: %v", err)
+	}
+}
+
+func TestValidateBaseRejectsProviderAPIOnNonOpenAIProvider(t *testing.T) {
+	cfg := Config{
+		Provider:  "anthropic",
+		ModelName: "claude-sonnet-4",
+		Providers: map[string]ProviderConfig{
+			"anthropic": {APIKey: "sk-test-123456", API: "responses"},
+		},
+	}
+	cfg.FillDefaults()
+	err := cfg.ValidateBase()
+	if err == nil {
+		t.Fatal("非 OpenAI provider 配置 api 应报错")
 	}
 	if !errors.Is(err, errs.ErrConfig) {
 		t.Errorf("应包装 errs.ErrConfig，得到: %v", err)

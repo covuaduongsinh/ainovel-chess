@@ -46,7 +46,6 @@ type thinkingOption struct{ Key, Label string }
 var allThinkingOptions = []thinkingOption{
 	{"", "默认(继承)"},
 	{"off", "关闭"},
-	{"minimal", "最小"},
 	{"low", "低"},
 	{"medium", "中"},
 	{"high", "高"},

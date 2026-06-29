@@ -5,7 +5,7 @@
   //   运行时用 /model 面板切换会写回全局配置 ~/.ainovel/config.json。
   "provider": "openrouter",
   "model": "google/gemini-2.5-flash",
-  // 可选。默认推理强度：off / minimal / low / medium / high / xhigh / max。
+  // 可选。默认推理强度：off / low / medium / high / xhigh / max。
   // 省略或空字符串 = 不覆盖，沿用模型/provider 默认。
   "reasoning_effort": "medium",
 
@@ -66,6 +66,9 @@
       "api_key": "sk-xxx",
       "base_url": "https://proxy.example.com/v1",
       "models": ["gpt-5.4", "gpt-5.4-mini", "MiniMax-M3"],
+      // 可选。OpenAI 协议 endpoint：chat（默认 /v1/chat/completions）/
+      // responses（/v1/responses）。Codex 类代理通常需要 responses。
+      "api": "responses",
       "extra": {
         "user_agent": "codex-tui/0.142.3 (Mac OS 26.5.1; arm64) Apple_Terminal/470.2 (codex-tui; 0.142.3)",
         "headers": {

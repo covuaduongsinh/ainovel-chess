@@ -48,6 +48,7 @@ func CompactReserveTokens(window int) int {
 // ProviderConfig 定义单个 LLM 提供商的凭证。
 type ProviderConfig struct {
 	Type    string   `json:"type,omitempty"`     // API 协议类型（openai/anthropic/gemini），自定义代理时指定
+	API     string   `json:"api,omitempty"`      // OpenAI 协议 endpoint：chat（默认）/ responses
 	APIKey  string   `json:"api_key,omitempty"`  // API Key
 	BaseURL string   `json:"base_url,omitempty"` // API Base URL
 	Models  []string `json:"models,omitempty"`   // 可选模型列表，供 TUI 切换时展示
@@ -96,7 +97,7 @@ type RoleConfig struct {
 	Provider  string     `json:"provider"`            // 主 provider 名称（Providers map 中的 key）
 	Model     string     `json:"model"`               // 主模型名（原样透传，不做任何解析）
 	Fallbacks []ModelRef `json:"fallbacks,omitempty"` // 显式备用 provider/model 列表
-	// ReasoningEffort 该角色的推理强度（off/minimal/low/medium/high/xhigh/max），空=继承顶层默认。
+	// ReasoningEffort 该角色的推理强度（off/low/medium/high/xhigh/max），空=继承顶层默认。
 	// 由 agents.ParseThinkingLevel 校验后应用，越级值视为空。
 	ReasoningEffort string `json:"reasoning_effort,omitempty"`
 }
@@ -117,7 +118,7 @@ type Config struct {
 	// 默认 LLM 配置
 	Provider  string `json:"provider"` // 默认 provider（Providers map 中的 key）
 	ModelName string `json:"model"`    // 默认模型名
-	// ReasoningEffort 顶层默认推理强度（off/minimal/low/medium/high/xhigh/max），空=不覆盖（沿用模型/provider 默认）。
+	// ReasoningEffort 顶层默认推理强度（off/low/medium/high/xhigh/max），空=不覆盖（沿用模型/provider 默认）。
 	// 角色未单独配置 reasoning_effort 时回落到此值。
 	ReasoningEffort string `json:"reasoning_effort,omitempty"`
 
@@ -192,11 +193,17 @@ func (c *Config) ValidateBase() error {
 	if err := validateProviderConfigText(c.Provider, pc); err != nil {
 		return err
 	}
+	if err := c.validateProviderAPI("default", c.Provider, pc); err != nil {
+		return err
+	}
 	for name, provider := range c.Providers {
 		if err := validateConfigText("provider name", name); err != nil {
 			return err
 		}
 		if err := validateProviderConfigText(name, provider); err != nil {
+			return err
+		}
+		if err := c.validateProviderAPI(fmt.Sprintf("provider %q", name), name, provider); err != nil {
 			return err
 		}
 	}
@@ -269,6 +276,7 @@ func validateProviderConfigText(name string, pc ProviderConfig) error {
 		value string
 	}{
 		{label: fmt.Sprintf("provider %q type", name), value: pc.Type},
+		{label: fmt.Sprintf("provider %q api", name), value: pc.API},
 		{label: fmt.Sprintf("provider %q api_key", name), value: pc.APIKey},
 		{label: fmt.Sprintf("provider %q base_url", name), value: pc.BaseURL},
 	}
@@ -281,6 +289,11 @@ func validateProviderConfigText(name string, pc ProviderConfig) error {
 		if err := validateConfigText(fmt.Sprintf("provider %q models[%d]", name, i), model); err != nil {
 			return err
 		}
+	}
+	switch pc.API {
+	case "", "chat", "responses":
+	default:
+		return fmt.Errorf("provider %q api must be chat or responses: %w", name, errs.ErrConfig)
 	}
 	return nil
 }
@@ -344,7 +357,7 @@ func (c Config) ResolveContextWindow(modelName string) (int, ContextWindowSource
 	return DefaultContextWindow, CtxWindowDefault
 }
 
-// ResolveReasoningEffort 返回某角色生效的推理强度原始串（off/minimal/low/medium/high/xhigh/max 或空）。
+// ResolveReasoningEffort 返回某角色生效的推理强度原始串（off/low/medium/high/xhigh/max 或空）。
 // 优先级：角色级 Roles[role].ReasoningEffort → 顶层默认 ReasoningEffort → ""（不覆盖，沿用模型/provider 默认）。
 // role 为空或 "default" 时直接取顶层默认。值的合法性由 agents.ParseThinkingLevel 把关。
 func (c Config) ResolveReasoningEffort(role string) string {
@@ -421,6 +434,23 @@ func (c Config) validateModelRef(owner string, ref ModelRef) error {
 	}
 	if pc.RequiresAPIKey(ref.Provider) && pc.APIKey == "" {
 		return fmt.Errorf("%s references provider %q which has no api_key: %w", owner, ref.Provider, errs.ErrConfig)
+	}
+	if err := c.validateProviderAPI(owner, ref.Provider, pc); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (c Config) validateProviderAPI(owner, providerName string, pc ProviderConfig) error {
+	if pc.API == "" {
+		return nil
+	}
+	providerType, err := pc.ProviderType(providerName)
+	if err != nil {
+		return fmt.Errorf("%s provider %q api 配置无法解析协议类型: %w", owner, providerName, err)
+	}
+	if strings.ToLower(strings.TrimSpace(providerType)) != "openai" {
+		return fmt.Errorf("%s provider %q api 仅支持 OpenAI 协议 provider: %w", owner, providerName, errs.ErrConfig)
 	}
 	return nil
 }
