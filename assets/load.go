@@ -17,7 +17,7 @@ var referencesFS embed.FS
 //go:embed styles/*.md
 var stylesFS embed.FS
 
-// Prompts 表示嵌入的提示词集合。
+// Prompts là tập hợp prompt được nhúng.
 type Prompts struct {
 	Coordinator      string
 	ArchitectShort   string
@@ -30,14 +30,14 @@ type Prompts struct {
 	SimulationMerge  string
 }
 
-// Bundle 表示运行所需的静态资源集合。
+// Bundle là tập hợp tài nguyên tĩnh cần cho việc chạy.
 type Bundle struct {
 	References tools.References
 	Prompts    Prompts
 	Styles     map[string]string
 }
 
-// Load 返回指定风格对应的资源集合。
+// Load trả về tập tài nguyên tương ứng với phong cách chỉ định.
 func Load(style string) Bundle {
 	return Bundle{
 		References: loadReferences(style),
@@ -90,19 +90,21 @@ func loadPrompts() Prompts {
 	}
 }
 
-// WithSimulationGuidance 给核心 prompt 追加仿写画像指引。导出供 eval 等外部场景做
-// variant 覆盖时复用，保证覆盖后的 prompt 与 Load 产出的 baseline 等价（同一包装路径）。
+// WithSimulationGuidance bổ sung chỉ dẫn chân dung phỏng tác vào prompt cốt lõi. Xuất ra để các
+// cảnh ngoài như eval dùng lại khi override variant, bảo đảm prompt sau khi override tương đương
+// baseline mà Load sinh ra (cùng đường bao gói).
 func WithSimulationGuidance(prompt, role string) string {
 	return prompt + "\n\n" + strings.ReplaceAll(simulationGuidance, "{{role}}", role)
 }
 
-// OverridePrompt 用 raw 覆盖 bundle 中指定 prompt 文件对应的角色提示词，并走与 Load
-// 完全相同的 WithSimulationGuidance 包装——eval 做 A/B 时只需调它，不必复制包装逻辑，
-// 否则 baseline 带仿写画像后缀、variant 不带，A/B 不等价。file 为 prompt 文件名。
+// OverridePrompt dùng raw để override prompt vai trò tương ứng với tệp prompt chỉ định trong bundle,
+// và đi qua đúng bao gói WithSimulationGuidance giống hệt Load — khi eval làm A/B chỉ cần gọi nó,
+// không phải sao chép logic bao gói, nếu không baseline có hậu tố chân dung phỏng tác còn variant thì
+// không, A/B sẽ không tương đương. file là tên tệp prompt.
 func (b *Bundle) OverridePrompt(file, raw string) error {
 	role, ok := promptRole[file]
 	if !ok {
-		return fmt.Errorf("不支持覆盖的 prompt 文件: %s（仅核心提示词可覆盖）", file)
+		return fmt.Errorf("tệp prompt không hỗ trợ override: %s (chỉ prompt cốt lõi mới override được)", file)
 	}
 	wrapped := WithSimulationGuidance(raw, role)
 	switch file {
@@ -120,7 +122,7 @@ func (b *Bundle) OverridePrompt(file, raw string) error {
 	return nil
 }
 
-// promptRole 把核心 prompt 文件名映射到 simulation guidance 的角色占位符。
+// promptRole ánh xạ tên tệp prompt cốt lõi sang placeholder vai trò của simulation guidance.
 var promptRole = map[string]string{
 	"coordinator.md":     "coordinator",
 	"architect-short.md": "architect",
@@ -129,11 +131,11 @@ var promptRole = map[string]string{
 	"editor.md":          "editor",
 }
 
-const simulationGuidance = `## 仿写画像
+const simulationGuidance = `## Chân dung phỏng tác
 
-当 novel_context 返回 simulation_profile 时，必须把它视为当前作品的仿写方向约束。{{role}} 应读取其中的 style、lexicon、plot_design、hook_design、pacing_density、reader_engagement 和 role_guidance。
+Khi novel_context trả về simulation_profile, bắt buộc coi nó là ràng buộc hướng phỏng tác của tác phẩm hiện tại. {{role}} nên đọc trong đó các phần style, lexicon, plot_design, hook_design, pacing_density, reader_engagement và role_guidance.
 
-使用原则：借鉴结构、节奏、钩子、信息释放和吸引读者的手法；不要复制原文句子、人物、地名、专有设定或固定桥段。若 simulation_profile 与用户显式要求冲突，优先服从用户要求。`
+Nguyên tắc sử dụng: tham khảo cấu trúc, nhịp, móc câu, cách phóng thích thông tin và thủ pháp cuốn hút độc giả; đừng sao chép câu văn, nhân vật, địa danh, thiết định riêng hay tình tiết cố định của nguyên văn. Nếu simulation_profile xung đột với yêu cầu rõ ràng của người dùng, ưu tiên tuân theo yêu cầu của người dùng.`
 
 func loadStyles() map[string]string {
 	styles := make(map[string]string)

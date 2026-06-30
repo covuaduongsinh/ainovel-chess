@@ -10,44 +10,44 @@ import (
 	storepkg "github.com/voocel/ainovel-cli/internal/store"
 )
 
-// Dispatcher 在子代理返回的同步工具边界计算路由并下达 Host 指令。
+// Dispatcher tính định tuyến tại ranh giới công cụ đồng bộ khi subagent trả về và ra lệnh Host.
 type Dispatcher struct {
 	coordinator *agentcore.Agent
 	store       *storepkg.Store
 
-	enabled atomic.Bool // 由 Host 控制是否派发（启动完成前应关）
+	enabled atomic.Bool // do Host kiểm soát có phân phối hay không (trước khi khởi động xong thì nên tắt)
 
-	// 重复追踪：记住最近一次派发的 Agent+Task 与连续下达次数。
-	// 同一指令重复计算（子代理返回后状态未推进，Route 重算结果不变）不静默吞掉，
-	// 而是带次数事实重发——"路由结果连续 N 次相同"是只有 Host 能观测到的事实；
-	// 若沉默，Coordinator 会陷入"禁止自行决定下一步"（coordinator.md）与
-	// "禁止停机"（StopGuard）的双重矛盾，自由发挥即 #24 类 freelance 死循环。
-	// 裁定权仍在 LLM：重发消息只附事实与核对许可，不设阈值、不熔断（架构 §10.13）。
-	// 消息因带次数而互不相同，不会把字面相同的指令重复压进 steeringQ。
+	// Theo dõi lặp: nhớ Agent+Task của lần phân phối gần nhất và số lần ra lệnh liên tiếp.
+	// Cùng một lệnh tính lại trùng (sau khi subagent trả về trạng thái không tiến triển, Route tính lại kết quả
+	// không đổi) không nuốt lặng, mà phát lại kèm sự thật số lần — "kết quả định tuyến giống nhau N lần liên tiếp"
+	// là sự thật chỉ Host quan sát được; nếu im lặng, Coordinator sẽ rơi vào mâu thuẫn kép giữa "cấm tự quyết bước
+	// tiếp theo" (coordinator.md) và "cấm dừng máy" (StopGuard), tự do phát huy chính là vòng lặp chết freelance kiểu #24.
+	// Quyền phán định vẫn ở LLM: thông điệp phát lại chỉ kèm sự thật và giấy phép đối chiếu, không đặt ngưỡng, không ngắt mạch (kiến trúc §10.13).
+	// Thông điệp vì kèm số lần nên khác nhau, không đẩy lặp lệnh giống chữ vào steeringQ.
 	lastMu   sync.Mutex
 	lastSent *Instruction
 	repeats  int
 
-	// onRepeat 是纯 telemetry 回调（无人值守告警用），在同一指令第 repeatNotifyAt
-	// 次下达时触发一次；不反向影响派发，派发逻辑对它的存在无感知。
+	// onRepeat là callback telemetry thuần (dùng cho cảnh báo không người trực), kích hoạt một lần khi cùng một
+	// lệnh ra đến lần thứ repeatNotifyAt; không ảnh hưởng ngược tới phân phối, logic phân phối vô cảm với sự tồn tại của nó.
 	onRepeat func(agent, task string, n int)
 }
 
-// repeatNotifyAt 写死不进配置：它不是控制流阈值（不触发任何动作，只是"喊人"），
-// 调它没有收益；进配置反而暗示可调出行为差异。
+// repeatNotifyAt viết chết không vào config: nó không phải ngưỡng luồng điều khiển (không kích hoạt hành động nào,
+// chỉ "gọi người"), chỉnh nó không có lợi ích; vào config ngược lại ngầm gợi ý có thể chỉnh ra khác biệt hành vi.
 const repeatNotifyAt = 3
 
-// NewDispatcher 创建 Dispatcher。
+// NewDispatcher tạo Dispatcher.
 func NewDispatcher(coordinator *agentcore.Agent, store *storepkg.Store) *Dispatcher {
 	d := &Dispatcher{coordinator: coordinator, store: store}
 	return d
 }
 
-// Enable 打开路由派发；关闭时 Dispatch 不产生指令。
-// Host 在 Start/Resume 完成首条 prompt 之后启用，避免与启动流程冲突。
+// Enable bật phân phối định tuyến; khi tắt thì Dispatch không sinh lệnh.
+// Host bật sau khi Start/Resume hoàn thành prompt đầu tiên, tránh xung đột với luồng khởi động.
 func (d *Dispatcher) Enable() { d.enabled.Store(true) }
 
-// Dispatch 立即计算路由并下达指令；可被 Host 在特殊时机（如 Resume 后）主动调用。
+// Dispatch tính định tuyến ngay và ra lệnh; có thể được Host chủ động gọi vào thời điểm đặc biệt (như sau Resume).
 func (d *Dispatcher) Dispatch() {
 	if !d.enabled.Load() {
 		return
@@ -58,8 +58,8 @@ func (d *Dispatcher) Dispatch() {
 		return
 	}
 	n := d.trackRepeat(inst)
-	// Writer 任务：在派发同一刻把章节标为进行中，UI 右侧大纲立即反映"▸ 进行中"，
-	// 不用等 plan_chapter 真正执行（plan_chapter 会再调一次 StartChapter，幂等）。
+	// Nhiệm vụ Writer: ngay khi phân phối thì đánh dấu chương là đang tiến hành, dàn ý bên phải UI lập tức phản ánh
+	// "▸ đang tiến hành", không phải chờ plan_chapter thực sự chạy (plan_chapter sẽ gọi StartChapter lần nữa, lũy đẳng).
 	if inst.Agent == "writer" && inst.Chapter > 0 && d.store != nil {
 		if err := d.store.Progress.ValidateChapterWork(inst.Chapter); err != nil {
 			slog.Error("flow router refuses invalid writer dispatch", "module", "host.flow", "chapter", inst.Chapter, "err", err)
@@ -74,25 +74,25 @@ func (d *Dispatcher) Dispatch() {
 	d.coordinator.Steer(agentcore.UserMsg(msg))
 }
 
-// formatDispatchMessage 组装下达给 Coordinator 的指令消息。
-// n>1 时附加重复事实——告知"上次派发后路由事实未变化"并放开核对许可，
-// 让 LLM 自己裁定照常执行还是改派；不在 Host 层做任何强制分支。
+// formatDispatchMessage lắp ráp thông điệp lệnh ra cho Coordinator.
+// Khi n>1 thì đính kèm sự thật lặp — báo "sau lần phân phối trước sự thật định tuyến không đổi" và mở giấy phép đối chiếu,
+// để LLM tự phán định thực thi như cũ hay đổi phân công; không làm phân nhánh cưỡng bức nào ở tầng Host.
 func formatDispatchMessage(inst *Instruction, n int) string {
 	msg := FormatMessage(inst)
 	if n > 1 {
-		msg += fmt.Sprintf("\n（注意：本指令为第 %d 次下达——上次派发后路由事实未变化。本次允许先调 novel_context 核对事实，再裁定照常执行或改派其它子代理。）", n)
+		msg += fmt.Sprintf("\n(Lưu ý: lệnh này là lần ra lệnh thứ %d — sau lần phân phối trước sự thật định tuyến không đổi. Lần này cho phép gọi novel_context đối chiếu sự thật trước, rồi phán định thực thi như cũ hay đổi phân công subagent khác.)", n)
 	}
 	return msg
 }
 
-// SetOnRepeat 注册重复指令的 telemetry 回调。须在派发开始前调用一次。
+// SetOnRepeat đăng ký callback telemetry cho lệnh lặp. Phải gọi một lần trước khi bắt đầu phân phối.
 func (d *Dispatcher) SetOnRepeat(cb func(agent, task string, n int)) {
 	d.onRepeat = cb
 }
 
-// trackRepeat 记录连续相同指令的下达次数并返回当前次数（1 = 新指令）。
-// 用 Agent+Task 相等性（不比 Reason，因为 Reason 是给人看的辅助文本）。
-// 次数恰好到 repeatNotifyAt 时在锁外触发一次 onRepeat（键变更重计数后重新武装）。
+// trackRepeat ghi số lần ra lệnh giống nhau liên tiếp và trả về số lần hiện tại (1 = lệnh mới).
+// Dùng đẳng thức Agent+Task (không so Reason, vì Reason là văn bản phụ cho người xem).
+// Khi số lần đúng bằng repeatNotifyAt thì kích hoạt onRepeat một lần ngoài lock (sau khi khóa đổi, đếm lại rồi vũ trang lại).
 func (d *Dispatcher) trackRepeat(next *Instruction) int {
 	d.lastMu.Lock()
 	if d.lastSent != nil && d.lastSent.Agent == next.Agent && d.lastSent.Task == next.Task {
@@ -111,8 +111,8 @@ func (d *Dispatcher) trackRepeat(next *Instruction) int {
 	return n
 }
 
-// ResetRepeat 清空重复追踪。Resume / 新 Start 时 Host 调用，
-// 确保恢复或新建后首条指令以"第 1 次"语义下达。
+// ResetRepeat xóa theo dõi lặp. Host gọi khi Resume / Start mới,
+// bảo đảm lệnh đầu tiên sau khi khôi phục hoặc tạo mới ra theo ngữ nghĩa "lần thứ 1".
 func (d *Dispatcher) ResetRepeat() {
 	d.lastMu.Lock()
 	defer d.lastMu.Unlock()

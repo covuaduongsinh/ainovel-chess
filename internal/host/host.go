@@ -171,12 +171,12 @@ func New(cfg bootstrap.Config, bundle assets.Bundle) (*Host, error) {
 	}
 	h.router = flow.NewDispatcher(coordinator, store)
 	router = h.router
-	// 重复指令告警：纯 telemetry，挂机时"模型可能在原地打转"值得喊人看一眼。
-	// 事件流与 notify 成对发出——notify 只是屏内事件的离屏副本（架构 §2.3）。
+	// Cảnh báo lệnh lặp: telemetry thuần, khi treo máy thì "mô hình có thể đang xoay tại chỗ" đáng gọi người ngó qua.
+	// Luồng sự kiện và notify phát theo cặp — notify chỉ là bản sao ngoài màn hình của sự kiện trong màn hình (kiến trúc §2.3).
 	h.router.SetOnRepeat(func(agent, task string, n int) {
-		body := fmt.Sprintf("同一指令已第 %d 次下达（%s）：%s", n, agent, task)
-		h.emitEvent(Event{Time: time.Now(), Category: "SYSTEM", Summary: "指令重复: " + body, Level: "warn"})
-		h.notifier.Send(notify.Notification{Kind: "repeat", Level: "warn", Title: "ainovel: 指令重复", Body: body})
+		body := fmt.Sprintf("Cùng một lệnh đã ra lệnh lần thứ %d (%s): %s", n, agent, task)
+		h.emitEvent(Event{Time: time.Now(), Category: "SYSTEM", Summary: "Lệnh lặp: " + body, Level: "warn"})
+		h.notifier.Send(notify.Notification{Kind: "repeat", Level: "warn", Title: "ainovel: lệnh lặp", Body: body})
 	})
 
 	if err := store.RunMeta.Init(cfg.Style, cfg.Provider, cfg.ModelName); err != nil {
@@ -336,15 +336,16 @@ func (h *Host) Resume() (string, error) {
 	return label, nil
 }
 
-// interventionMsg 把用户文本包装成 Coordinator 可识别的干预消息。
-// Steer 与 Continue 共用同一 framing：两条入口的用户指令都带 `[用户干预]` 前缀，
-// 才能稳定触发 coordinator.md 的干预分类。否则 Continue 的裸文本会绕过路由规则，
-// Coordinator 失去分类锚点而误派子代理（曾导致"改已写章节"被派给 writer 撞 edit_chapter 守卫）。
+// interventionMsg gói văn bản người dùng thành thông điệp can thiệp mà Coordinator nhận diện được.
+// Steer và Continue dùng chung một framing: lệnh người dùng ở cả hai lối vào đều mang tiền tố `[Người dùng can thiệp]`,
+// mới kích hoạt ổn định việc phân loại can thiệp của coordinator.md. Nếu không, văn bản trần của Continue sẽ vòng qua
+// quy tắc định tuyến, Coordinator mất điểm neo phân loại nên phân nhầm subagent (từng khiến "sửa chương đã viết" bị
+// phân cho writer rồi đụng chốt edit_chapter).
 func interventionMsg(text string) agentcore.Message {
-	return agentcore.UserMsg("[用户干预] " + text)
+	return agentcore.UserMsg("[Người dùng can thiệp] " + text)
 }
 
-// Continue 用指定 prompt 继续。停机后用户在输入框输入时调用。
+// Continue tiếp tục với prompt chỉ định. Gọi khi người dùng nhập ở khung sau khi dừng máy.
 func (h *Host) Continue(text string) error {
 	text = strings.TrimSpace(text)
 	if text == "" {
@@ -353,18 +354,18 @@ func (h *Host) Continue(text string) error {
 	h.mu.Lock()
 	if h.cocreating {
 		h.mu.Unlock()
-		return fmt.Errorf("阶段共创进行中，请先结束共创")
+		return fmt.Errorf("đang đồng sáng tác giai đoạn, hãy kết thúc đồng sáng tác trước")
 	}
 	running := h.lifecycle == lifecycleRunning
 	h.mu.Unlock()
 
-	h.emitEvent(Event{Time: time.Now(), Category: "USER", Summary: "[继续] " + text, Level: "info"})
+	h.emitEvent(Event{Time: time.Now(), Category: "USER", Summary: "[Tiếp tục] " + text, Level: "info"})
 
 	if running {
 		h.coordinator.FollowUp(interventionMsg(text))
 		return nil
 	}
-	// 停机后 → 注入并自动恢复（恢复 run 也受预算前置约束）
+	// Sau khi dừng máy → tiêm và tự động khôi phục (run khôi phục cũng chịu ràng buộc tiền đề ngân sách)
 	if err := h.budget.Refuse(); err != nil {
 		return err
 	}
@@ -381,13 +382,13 @@ func (h *Host) Continue(text string) error {
 	return nil
 }
 
-// Steer 提交用户干预。
+// Steer gửi can thiệp của người dùng.
 func (h *Host) Steer(text string) {
 	h.mu.Lock()
 	running := h.lifecycle == lifecycleRunning
 	h.mu.Unlock()
 
-	h.emitEvent(Event{Time: time.Now(), Category: "USER", Summary: "[用户干预] " + text, Level: "info"})
+	h.emitEvent(Event{Time: time.Now(), Category: "USER", Summary: "[Người dùng can thiệp] " + text, Level: "info"})
 
 	msg := interventionMsg(text)
 	if running {
@@ -1062,11 +1063,12 @@ func (h *Host) StageCoCreateStream(ctx context.Context, history []CoCreateMessag
 	return coCreateStream(ctx, h.models, h.store.Sessions, stageSystemPrompt(h.store), history, onProgress)
 }
 
-// stagePlanPrefix 把共创产出的"后续方向 brief"包装成一条阶段规划干预，交 Coordinator 裁定。
-// 只贴 [阶段规划] 事实标记 + 中性陈述，不写死"怎么落地"——具体路由（compass / architect /
-// save_user_rules）交给 coordinator.md 的「阶段规划」判据，避免与 prompt 形成第二真相源、
-// 也不堵死风格类要求走 user_rules（守"分类裁定归 LLM"）。Continue 再叠加 [用户干预] 前缀。
-const stagePlanPrefix = "[阶段规划] 我暂停创作，和共创助手一起梳理了下面的后续方向，请按你的干预分类裁定如何落地，然后继续创作。后续方向如下：\n\n"
+// stagePlanPrefix gói "brief hướng đi tiếp theo" do đồng sáng tác sinh ra thành một can thiệp hoạch định giai đoạn,
+// giao Coordinator phán định. Chỉ dán dấu sự thật [Hoạch định giai đoạn] + phát biểu trung tính, không viết chết
+// "làm sao triển khai" — định tuyến cụ thể (compass / architect / save_user_rules) giao cho tiêu chí "Hoạch định
+// giai đoạn" của coordinator.md, tránh tạo nguồn sự thật thứ hai với prompt, cũng không chặn yêu cầu phong cách đi
+// qua user_rules (giữ "phán định phân loại thuộc về LLM"). Continue rồi xếp chồng thêm tiền tố [Người dùng can thiệp].
+const stagePlanPrefix = "[Hoạch định giai đoạn] Tôi tạm dừng sáng tác, cùng trợ lý đồng sáng tác rà soát hướng đi tiếp theo dưới đây, hãy theo phân loại can thiệp của bạn mà phán định cách triển khai, rồi tiếp tục sáng tác. Hướng đi tiếp theo như sau:\n\n"
 
 // PauseForCoCreate 进入阶段共创：置共创占用标记，运行中则一并暂停 coordinator。
 // 返回 false 表示无法进入（全书已完成或已在共创中），调用方忽略即可。

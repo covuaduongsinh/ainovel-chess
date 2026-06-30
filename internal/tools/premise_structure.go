@@ -7,24 +7,22 @@ import (
 )
 
 var premiseHeadingAliases = map[string]string{
-	"题材定位":    "题材定位",
-	"题材和基调":   "题材和基调",
-	"核心冲突":    "核心冲突",
-	"主角目标":    "主角目标",
-	"结局方向":    "终局方向",
-	"终局方向":    "终局方向",
-	"写作禁区":    "写作禁区",
-	"差异化卖点":   "差异化卖点",
-	"差异化钩子":   "差异化钩子",
-	"核心兑现承诺":  "核心兑现承诺",
-	"故事引擎":    "故事引擎",
-	"关系/成长主线": "关系/成长主线",
-	"升级路径":    "升级路径",
-	"中段转折":    "中段转折",
-	"中期转向":    "中段转折",
-	"终局命题":    "终局命题",
-	"短篇适配性":   "短篇适配性",
-	"本作为什么适合短篇/单卷收束": "短篇适配性",
+	"Định vị đề tài":             "Định vị đề tài",
+	"Đề tài và tông điệu":        "Đề tài và tông điệu",
+	"Xung đột cốt lõi":           "Xung đột cốt lõi",
+	"Mục tiêu nhân vật chính":    "Mục tiêu nhân vật chính",
+	"Hướng kết cục":              "Hướng kết cục",
+	"Vùng cấm sáng tác":          "Vùng cấm sáng tác",
+	"Điểm bán khác biệt":         "Điểm bán khác biệt",
+	"Móc câu khác biệt":          "Móc câu khác biệt",
+	"Cam kết cốt lõi":            "Cam kết cốt lõi",
+	"Động cơ truyện":             "Động cơ truyện",
+	"Tuyến quan hệ/trưởng thành": "Tuyến quan hệ/trưởng thành",
+	"Lộ trình thăng cấp":         "Lộ trình thăng cấp",
+	"Bước ngoặt giữa truyện":     "Bước ngoặt giữa truyện",
+	"Mệnh đề kết cục":            "Mệnh đề kết cục",
+	"Tính phù hợp truyện ngắn":   "Tính phù hợp truyện ngắn",
+	"Tại sao tác phẩm phù hợp truyện ngắn/kết thúc trong một tập": "Tính phù hợp truyện ngắn",
 }
 
 func parsePremiseSections(premise string) map[string]string {
@@ -97,34 +95,34 @@ func premiseStructure(premise string, tier domain.PlanningTier) map[string]any {
 
 func requiredPremiseHeadings(tier domain.PlanningTier) []string {
 	common := []string{
-		"题材和基调",
-		"题材定位",
-		"核心冲突",
-		"主角目标",
-		"终局方向",
-		"写作禁区",
-		"差异化卖点",
-		"差异化钩子",
-		"核心兑现承诺",
+		"Đề tài và tông điệu",
+		"Định vị đề tài",
+		"Xung đột cốt lõi",
+		"Mục tiêu nhân vật chính",
+		"Hướng kết cục",
+		"Vùng cấm sáng tác",
+		"Điểm bán khác biệt",
+		"Móc câu khác biệt",
+		"Cam kết cốt lõi",
 	}
 
 	switch tier {
 	case domain.PlanningTierLong:
 		return append(common,
-			"故事引擎",
-			"关系/成长主线",
-			"升级路径",
-			"中段转折",
-			"终局命题",
+			"Động cơ truyện",
+			"Tuyến quan hệ/trưởng thành",
+			"Lộ trình thăng cấp",
+			"Bước ngoặt giữa truyện",
+			"Mệnh đề kết cục",
 		)
 	case domain.PlanningTierMid:
 		return append(common,
-			"故事引擎",
-			"中段转折",
+			"Động cơ truyện",
+			"Bước ngoặt giữa truyện",
 		)
 	case domain.PlanningTierShort:
 		return append(common,
-			"短篇适配性",
+			"Tính phù hợp truyện ngắn",
 		)
 	default:
 		return common
