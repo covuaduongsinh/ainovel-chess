@@ -1,38 +1,38 @@
-## 奇幻/仙侠 弧型参考
+## Tham khảo loại cung kỳ ảo/tiên hiệp
 
-以下弧型适用于修仙、玄幻、奇幻冒险类长篇。根据具体设定自由组合，不必全部使用。
+Các loại cung dưới đây phù hợp với truyện dài thể loại tu tiên, huyền ảo, phiêu lưu kỳ ảo. Tự do kết hợp theo thiết định cụ thể, không cần dùng tất cả.
 
-### 修炼突破弧（10-15 章）
-3-4 章瓶颈困境/资源不足 → 2-3 章外部干扰或意外机缘 → 2-3 章闭关突破（穿插危机） → 1-2 章实力展示+收获
-- 突破前必须有明确代价或风险
-- 不要"坐下修炼三天就突破了"，过程中穿插人物互动和外部威胁
-- 突破后立刻用新实力解决一个之前无法解决的问题
+### Cung đột phá tu luyện (10-15 chương)
+3-4 chương bế tắc/thiếu nguồn lực → 2-3 chương can thiệp bên ngoài hoặc cơ duyên tình cờ → 2-3 chương đóng cửa đột phá (xen kẽ khủng hoảng) → 1-2 chương thể hiện thực lực+thu hoạch
+- Trước đột phá phải có cái giá hoặc rủi ro rõ ràng
+- Không được "ngồi tu ba ngày là đột phá", trong quá trình xen kẽ tương tác nhân vật và mối đe dọa bên ngoài
+- Sau đột phá lập tức dùng thực lực mới giải quyết một vấn đề trước đây không thể giải quyết
 
-### 宗门大比/擂台弧（12-20 章）
-2-3 章赛前准备/情报收集 → 6-10 章逐轮对决（每轮对手有特色，穿插角色互动） → 2-3 章决赛高潮+奖惩
-- 每轮对手不能只是"更强的人"，要有性格和动机
-- 比赛间隙穿插阴谋、结盟、赌约等副线
-- 结局不一定是夺冠，失败或意外中断也能推动剧情
+### Cung tông môn đại tỷ/đấu đài (12-20 chương)
+2-3 chương chuẩn bị trước thi đấu/thu thập thông tin → 6-10 chương đối quyết từng vòng (mỗi vòng đối thủ có đặc trưng, xen kẽ tương tác nhân vật) → 2-3 chương quyết chiến cao trào+thưởng phạt
+- Đối thủ mỗi vòng không thể chỉ là "người mạnh hơn", phải có tính cách và động cơ
+- Khoảng giữa các trận xen kẽ âm mưu, liên minh, cược đấu và tuyến phụ
+- Kết cục không nhất thiết phải đoạt quán quân, thất bại hoặc gián đoạn bất ngờ cũng có thể đẩy tiến cốt truyện
 
-### 秘境/副本探险弧（15-25 章）
-2-3 章情报收集+组队 → 8-15 章层层深入（每层新机制/新危险） → 2-3 章最终Boss或宝藏+收获
-- 每层有独特的环境、规则和挑战，不是简单的打怪升级
-- 队伍内部关系在压力下发生变化（信任/背叛/牺牲）
-- 收获不只是法宝，也包括认知和关系转变
+### Cung bí địa/phó bản thám hiểm (15-25 chương)
+2-3 chương thu thập thông tin+lập nhóm → 8-15 chương tiến sâu từng tầng (mỗi tầng cơ chế mới/nguy hiểm mới) → 2-3 chương Boss cuối hoặc kho báu+thu hoạch
+- Mỗi tầng có môi trường, quy tắc và thử thách độc đáo, không phải đơn thuần đánh quái thăng cấp
+- Quan hệ nội bộ nhóm thay đổi dưới áp lực (tin tưởng/phản bội/hy sinh)
+- Thu hoạch không chỉ là pháp bảo, còn bao gồm nhận thức và chuyển biến quan hệ
 
-### 势力争霸/门派斗争弧（12-18 章）
-2-3 章矛盾积累/站队 → 3-5 章暗战博弈 → 3-5 章正面冲突 → 2-3 章结算+格局重塑
-- 不是简单的正邪对立，各方都有合理立场
-- 主角在其中的角色要有演变（旁观→卷入→被迫选择→主导）
-- 结局要改变势力版图，为后续卷埋线
+### Cung tranh bá thế lực/đấu tranh tông môn (12-18 chương)
+2-3 chương tích lũy mâu thuẫn/chọn phe → 3-5 chương ám chiến mưu lược → 3-5 chương chính diện xung đột → 2-3 chương kết toán+cục diện tái định hình
+- Không phải đơn thuần chính tà đối lập, mỗi bên đều có lập trường hợp lý
+- Vai trò của nhân vật chính trong đó phải có tiến hóa (đứng ngoài → bị cuốn vào → bị buộc chọn phe → chủ đạo)
+- Kết cục phải thay đổi bản đồ thế lực, cài tuyến phục bút cho tập sau
 
-### 渡劫/大战弧（8-12 章）
-2-3 章战前态势/最后准备 → 4-6 章多线战斗（不同战场交叉叙事） → 1-2 章决定性转折+代价
-- 战斗要有策略层面，不是纯粹的力量碾压
-- 要有重要角色的牺牲或重大损失
-- 战后世界发生不可逆变化
+### Cung vượt kiếp/đại chiến (8-12 chương)
+2-3 chương thế trận trước chiến/chuẩn bị cuối cùng → 4-6 chương chiến đấu đa tuyến (chiến trường khác nhau xen kẽ tự sự) → 1-2 chương bước ngoặt quyết định+cái giá
+- Chiến đấu phải có tầng chiến lược, không phải đơn thuần đè bằng sức mạnh
+- Phải có hy sinh hoặc tổn thất lớn của nhân vật quan trọng
+- Thế giới sau chiến phát sinh thay đổi không thể đảo ngược
 
-### 日常/过渡弧（5-8 章）
-修炼日常/人物社交/势力建设/伏笔布局/角色情感发展
-- 不是水字数，每章至少推进一条暗线
-- 为下一个高潮弧蓄势，建立情感连接后破坏才有冲击力
+### Cung chuyển tiếp thường ngày (5-8 chương)
+Tu luyện thường ngày/giao tiếp nhân vật/xây dựng thế lực/bố trí phục bút/phát triển cảm xúc nhân vật
+- Không phải đổ chữ, mỗi chương ít nhất đẩy tiến một tuyến ngầm
+- Tạo đà cho cung cao trào tiếp theo, xây dựng kết nối cảm xúc rồi mới phá vỡ mới có sức rung chuyển
