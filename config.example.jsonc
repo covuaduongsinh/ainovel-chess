@@ -34,6 +34,18 @@
       "api_key": "sk-ant-xxx",
       "models": ["claude-sonnet-4", "claude-opus-4"]
     },
+    "claude-code": {
+      // Tích hợp Claude Code: dùng gói thuê bao qua một CẦU NỐI NỘI BỘ tương thích giao thức Anthropic.
+      // Cách HỢP LỆ: cầu nối đi qua Claude Agent SDK chính thức (vd Meridian: `npm i -g @rynfar/meridian`,
+      // `claude login`, `meridian` → http://127.0.0.1:3456). KHÔNG dùng proxy phát lại token OAuth thẳng
+      // lên api.anthropic.com (vi phạm điều khoản, đã bị chặn).
+      // api_key: cầu nối bỏ qua giá trị này, nhưng litellm đòi khác rỗng → điền giữ chỗ bất kỳ (vd "sk-local").
+      // Muốn trả theo token thay vì thuê bao: đặt base_url = "https://api.anthropic.com" và điền api_key sk-ant-... thật.
+      "type": "anthropic",
+      "api_key": "sk-local",
+      "base_url": "http://127.0.0.1:3456",
+      "models": ["claude-opus-4-8", "claude-opus-4-7", "claude-sonnet-4-6", "claude-haiku-4-5"]
+    },
     "ollama": {
       // ollama / bedrock / proxy tùy chỉnh khai báo type có thể bỏ qua api_key
       // base_url cần có /v1 (endpoint tương thích OpenAI của ollama nằm dưới /v1)
@@ -84,6 +96,8 @@
   // reasoning_effort cũng có thể ghi đè theo vai trò; chưa cấu hình thì kế thừa reasoning_effort cấp trên.
   // Vai trò: coordinator / architect / writer / editor. fallbacks thử lần lượt khi model chính thất bại.
   // Lưu ý: provider ở đây cũng là "con trỏ", phải trỏ vào key tồn tại trong providers.
+  // Mẹo: gõ "/model auto" (TUI) hoặc nút "Tự chọn" (Web) sẽ áp preset Claude cân bằng vào roles bên dưới:
+  //   writer/architect → claude-opus-4-8 (high), coordinator/editor → claude-sonnet-4-6 (medium), qua provider "claude-code".
   // "roles": {
   //   "writer": {
   //     "provider": "anthropic",

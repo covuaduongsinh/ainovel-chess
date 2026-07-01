@@ -62,6 +62,7 @@ func (s *Server) routes() {
 	// Mô hình / mức độ suy luận
 	s.mux.HandleFunc("GET /api/models", s.handleModels)
 	s.mux.HandleFunc("POST /api/model", s.handleSwitchModel)
+	s.mux.HandleFunc("POST /api/model/auto", s.handleModelAuto)
 	s.mux.HandleFunc("GET /api/thinking", s.handleThinking)
 	s.mux.HandleFunc("POST /api/thinking", s.handleSetThinking)
 

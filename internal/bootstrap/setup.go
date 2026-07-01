@@ -46,6 +46,7 @@ type setupProvider struct {
 
 var setupProviders = []setupProvider{
 	{name: "openrouter", label: "OpenRouter", baseURL: "https://openrouter.ai/api/v1"},
+	{name: ClaudeCodeProvider, label: "Claude Code (thuê bao qua proxy nội bộ)", baseURL: ClaudeCodeDefaultBaseURL, apiKeyOptional: true},
 	{name: "anthropic", label: "Anthropic"},
 	{name: "gemini", label: "Gemini"},
 	{name: "openai", label: "OpenAI"},
@@ -124,6 +125,37 @@ func RunSetup() (Config, error) {
 		printStepDone("Base URL", "mặc định")
 	}
 
+	// Claude Code: giao thức anthropic + danh mục model dựng sẵn (không cần gõ tên model),
+	// tùy chọn bật preset tự-chọn cân bằng thay cho bước nhập model tự do.
+	if sp.name == ClaudeCodeProvider {
+		// Dùng chung helper: type anthropic + danh mục model + tự chèn api_key giữ chỗ khi để trống
+		// (litellm đòi x-api-key khác rỗng, cầu nối nội bộ bỏ qua giá trị này).
+		pc = ClaudeCodeProviderConfig(baseURL, apiKey)
+
+		useBalanced, err := runConfirm("Bật tự-chọn model cân bằng? (Opus 4.8 cho Writer/Architect, Sonnet 4.6 cho Coordinator/Editor)")
+		if err != nil {
+			return Config{}, err
+		}
+		cfg := Config{
+			Provider:  ClaudeCodeProvider,
+			ModelName: ClaudeDefaultModel,
+			Providers: map[string]ProviderConfig{ClaudeCodeProvider: pc},
+			Roles:     map[string]RoleConfig{},
+			Style:     "default",
+		}
+		if useBalanced {
+			cfg.Roles = BalancedRoleConfigs(ClaudeCodeProvider)
+			cfg.ReasoningEffort = "medium"
+			printStepDone("Tự-chọn model", "Cân bằng (Writer/Architect: Opus 4.8; Coordinator/Editor: Sonnet 4.6)")
+		} else {
+			printStepDone("Model", ClaudeDefaultModel)
+		}
+		if err := writeSetupConfig(cfg); err != nil {
+			return cfg, err
+		}
+		return cfg, nil
+	}
+
 	// Bước 4: Tên mô hình (bắt buộc)
 	modelName, err := runTextInput("[4/4] Tên mô hình", "Ví dụ: gpt-4o / claude-sonnet-4 / gemini-2.5-pro")
 	if err != nil {
@@ -139,10 +171,17 @@ func RunSetup() (Config, error) {
 		Style:     "default",
 	}
 
-	// Lưu
+	if err := writeSetupConfig(cfg); err != nil {
+		return cfg, err
+	}
+	return cfg, nil
+}
+
+// writeSetupConfig lưu cấu hình wizard xuống đĩa, tạo template chú thích và in tóm tắt.
+func writeSetupConfig(cfg Config) error {
 	path := DefaultConfigPath()
 	if err := SaveConfig(path, cfg); err != nil {
-		return cfg, fmt.Errorf("save config: %w", err)
+		return fmt.Errorf("save config: %w", err)
 	}
 
 	// Tạo template có chú thích
@@ -154,14 +193,17 @@ func RunSetup() (Config, error) {
 	fmt.Fprintln(os.Stderr)
 	fmt.Fprintf(os.Stderr, "%s Cấu hình đã được lưu vào %s\n",
 		lipgloss.NewStyle().Foreground(lipgloss.Color("42")).Render("✓"), path)
-	fmt.Fprintf(os.Stderr, "  Mô hình mặc định: %s\n", modelName)
+	if len(cfg.Roles) > 0 {
+		fmt.Fprintf(os.Stderr, "  Model mặc định: %s (một số vai dùng model riêng — xem /model)\n", cfg.ModelName)
+	} else {
+		fmt.Fprintf(os.Stderr, "  Mô hình mặc định: %s\n", cfg.ModelName)
+	}
 	fmt.Fprintln(os.Stderr, "  Nếu muốn cấu hình mô hình khác nhau theo vai, chỉnh sửa file cấu hình là được.")
 	if rulesDir != "" {
 		fmt.Fprintf(os.Stderr, "  Tùy chọn viết toàn cục có thể đặt file .md trong %s (xem README.txt trong đó)\n", rulesDir)
 	}
 	fmt.Fprintln(os.Stderr)
-
-	return cfg, nil
+	return nil
 }
 
 func saveExampleConfig() {
@@ -227,6 +269,24 @@ func runTypeSelect() (string, error) {
 		return "", fmt.Errorf("setup cancelled")
 	}
 	return result.items[result.cursor].name, nil
+}
+
+// runConfirm hiển thị lựa chọn Có/Không, trả về true khi người dùng chọn "Có".
+func runConfirm(title string) (bool, error) {
+	m := setupSelectModel{
+		title: title,
+		items: []setupProvider{{name: "yes", label: "Có"}, {name: "no", label: "Không"}},
+	}
+	p := tea.NewProgram(m, tea.WithOutput(os.Stderr))
+	final, err := p.Run()
+	if err != nil {
+		return false, err
+	}
+	result := final.(setupSelectModel)
+	if result.cancelled {
+		return false, fmt.Errorf("setup cancelled")
+	}
+	return result.items[result.cursor].name == "yes", nil
 }
 
 func runTextInput(label, placeholder string) (string, error) {

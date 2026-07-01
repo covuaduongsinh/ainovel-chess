@@ -554,7 +554,14 @@ function openModels() {
       <table style="width:100%;border-collapse:collapse;font-size:13px">
         <thead><tr style="color:var(--dim);text-align:left"><th style="padding:6px 8px">Vai trò</th><th>Provider</th><th>Mô hình</th><th>Suy luận</th><th></th></tr></thead>
         <tbody>${rows}</tbody></table>
-      <div class="modal-actions"><button class="btn" onclick="closeModal()">Đóng</button></div>`, { wide: true });
+      <div class="modal-actions"><button class="btn mAuto">Tự chọn (Claude cân bằng)</button><button class="btn" onclick="closeModal()">Đóng</button></div>`, { wide: true });
+    const auto = document.querySelector('.mAuto');
+    if (auto) auto.onclick = () => {
+      auto.disabled = true;
+      api('/api/model/auto', {})
+        .then(() => { toast('Đã áp tự chọn model Claude (cân bằng)', 'ok'); openModels(); })
+        .catch((e) => { auto.disabled = false; toast(e.message, 'err'); });
+    };
     document.querySelectorAll('.mApply').forEach((b) => {
       b.onclick = () => {
         const tr = b.closest('tr');

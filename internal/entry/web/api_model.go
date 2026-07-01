@@ -3,6 +3,8 @@ package web
 import (
 	"net/http"
 	"strings"
+
+	"github.com/voocel/ainovel-cli/internal/bootstrap"
 )
 
 // roleList là danh sách các vai có thể cấu hình mô hình/mức độ suy luận riêng (nhất quán với nội bộ host).
@@ -54,6 +56,22 @@ func (s *Server) handleSwitchModel(w http.ResponseWriter, r *http.Request) {
 	if err := s.eng.SwitchModel(role, req.Provider, req.Model); err != nil {
 		writeErr(w, http.StatusBadRequest, err)
 		return
+	}
+	writeOK(w, nil)
+}
+
+// handleModelAuto áp preset Claude "cân bằng" cho cả bốn vai qua provider claude-code.
+// Yêu cầu provider "claude-code" đã được cấu hình (chạy setup chọn Claude Code).
+func (s *Server) handleModelAuto(w http.ResponseWriter, _ *http.Request) {
+	for _, p := range bootstrap.BalancedClaudeRoles() {
+		if err := s.eng.SwitchModel(p.Role, bootstrap.ClaudeCodeProvider, p.Model); err != nil {
+			writeErr(w, http.StatusBadRequest, err)
+			return
+		}
+		if err := s.eng.SetRoleThinking(p.Role, p.Effort); err != nil {
+			writeErr(w, http.StatusBadRequest, err)
+			return
+		}
 	}
 	writeOK(w, nil)
 }

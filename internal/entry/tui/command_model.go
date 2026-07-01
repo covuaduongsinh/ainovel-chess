@@ -3,10 +3,13 @@ package tui
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/voocel/agentcore"
+	"github.com/voocel/ainovel-cli/internal/bootstrap"
+	"github.com/voocel/ainovel-cli/internal/host"
 )
 
 type modelRuntime interface {
@@ -251,6 +254,36 @@ func (s *modelSwitchState) apply(rt modelRuntime) error {
 		s.syncThinking(rt)
 	}
 	return nil
+}
+
+// applyModelAutoPreset áp preset Claude "cân bằng" cho cả bốn vai (writer/architect → Opus 4.8,
+// coordinator/editor → Sonnet 4.6) qua provider claude-code, mỗi thay đổi tự lưu vào config.
+// Yêu cầu provider "claude-code" đã được cấu hình (chạy setup chọn Claude Code).
+func (m Model) applyModelAutoPreset() (tea.Model, tea.Cmd) {
+	for _, p := range bootstrap.BalancedClaudeRoles() {
+		if err := m.runtime.SwitchModel(p.Role, bootstrap.ClaudeCodeProvider, p.Model); err != nil {
+			m.applyEvent(host.Event{
+				Time: time.Now(), Category: "ERROR", Level: "error",
+				Summary: "Tự-chọn model thất bại (cần cấu hình provider \"claude-code\"): " + err.Error(),
+			})
+			m.refreshEventViewport()
+			return m, nil
+		}
+		if err := m.runtime.SetRoleThinking(p.Role, p.Effort); err != nil {
+			m.applyEvent(host.Event{
+				Time: time.Now(), Category: "ERROR", Level: "error",
+				Summary: "Đặt cường độ suy luận thất bại: " + err.Error(),
+			})
+			m.refreshEventViewport()
+			return m, nil
+		}
+	}
+	m.applyEvent(host.Event{
+		Time: time.Now(), Category: "SYSTEM", Level: "info",
+		Summary: "Đã áp tự-chọn model Claude (cân bằng): Writer/Architect → Opus 4.8, Coordinator/Editor → Sonnet 4.6",
+	})
+	m.refreshEventViewport()
+	return m, fetchSnapshot(m.runtime)
 }
 
 func (m Model) handleModelSwitchKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {

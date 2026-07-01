@@ -34,22 +34,18 @@ func (t *DraftChapterTool) ReadOnly(_ json.RawMessage) bool        { return fals
 func (t *DraftChapterTool) ConcurrencySafe(_ json.RawMessage) bool { return false }
 
 func (t *DraftChapterTool) Schema() map[string]any {
-	// mode được đánh dấu required để tương thích với OpenAI strict tool calling — chế độ strict
-	// yêu cầu tất cả properties đều nằm trong danh sách required. Hành vi cũ "bỏ qua mode thì đi theo
-	// mặc định write" giờ yêu cầu model truyền tường minh mode="write", nhánh default của Execute không đổi.
+	// mode để optional: bỏ trống thì Execute đi theo nhánh default (write). Trước đây mode bị đánh
+	// required để tương thích OpenAI strict tool calling, nhưng Gemini không hỗ trợ strict và thỉnh
+	// thoảng gọi tool mà không kèm mode → agentcore validation từ chối với "required parameter `mode`
+	// is missing" trước cả khi Execute chạy, đốt lượt của writer và đẩy nhanh tới giới hạn max turns /
+	// stop guard. Vì Execute vốn coi mode rỗng là write, để optional vừa khớp hành vi vừa hết lỗi.
 	return schema.Object(
 		schema.Property("chapter", schema.Int("số chương")).Required(),
 		schema.Property("content", schema.String("nội dung chương")).Required(),
-		schema.Property("mode", schema.Enum("chế độ ghi", "write", "append")).Required(),
+		schema.Property("mode", schema.Enum("chế độ ghi (bỏ trống = write)", "write", "append")),
 	)
 }
 
-// StrictSchema bật strict tool calling của OpenAI, buộc model phải tuân thủ nghiêm ngặt
-// schema: tất cả trường required phải điền, arguments không thể "EOT sớm" xuất hiện đối tượng rỗng.
-// litellm truyền xuyên trường strict; các backend hỗ trợ như OpenAI / xAI sẽ thực thi, các backend khác
-// theo thông lệ HTTP/JSON bỏ qua trường không biết. Anthropic/Gemini/Bedrock đi qua chuỗi chuyển đổi riêng
-// tự nhiên sẽ không thấy trường này.
-func (t *DraftChapterTool) StrictSchema() bool { return true }
 
 func (t *DraftChapterTool) Execute(_ context.Context, args json.RawMessage) (json.RawMessage, error) {
 	var a struct {

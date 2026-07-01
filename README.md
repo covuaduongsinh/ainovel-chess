@@ -18,7 +18,7 @@ Engine sáng tác tiểu thuyết dài AI hoàn toàn tự động. Coordinator 
 - **Xét duyệt chất lượng bảy chiều** — Editor xét duyệt theo bảy chiều: nhất quán thiết định, hành vi nhân vật, nhịp độ, mạch lạc tự sự, phục bút, hook, chất lượng thẩm mỹ; chiều thẩm mỹ chia nhỏ thành năm hạng mục: cảm giác miêu tả, thủ pháp tự sự, khả năng phân biệt đối thoại, chất lượng dùng từ, sức lay động cảm xúc; mỗi hạng mục phải trích dẫn nguyên văn làm bằng chứng
 - **Can thiệp người dùng thời gian thực** — Có thể chèn ý kiến sửa đổi vào ô nhập liệu bất kỳ lúc nào trong quá trình viết (không cần tạm dừng), hệ thống tự động đánh giá phạm vi ảnh hưởng và viết lại các chương bị ảnh hưởng
 - **Cổng vào TUI thống nhất** — Giao diện tương tác theo dõi tiến độ thời gian thực, cũng hỗ trợ khởi động trực tiếp với một câu yêu cầu
-- **Hỗ trợ đa LLM** — Chuyển đổi tùy ý giữa OpenRouter / Anthropic / Gemini / OpenAI và nhiều nhà cung cấp khác
+- **Hỗ trợ đa LLM** — Chuyển đổi tùy ý giữa OpenRouter / Anthropic / Gemini / OpenAI / Claude Code và nhiều nhà cung cấp khác
 
 ## Kiến trúc
 
@@ -434,7 +434,57 @@ Sau khi chọn bất kỳ Provider nào, điền địa chỉ proxy là được
 }
 ```
 
-Các Provider được hỗ trợ: `openrouter` / `anthropic` / `gemini` / `openai` / `deepseek` / `qwen` / `glm` / `grok` / `ollama` / `bedrock` và bất kỳ proxy tùy chỉnh nào.
+Các Provider được hỗ trợ: `openrouter` / `anthropic` / `gemini` / `openai` / `deepseek` / `qwen` / `glm` / `grok` / `ollama` / `bedrock` / `claude-code` và bất kỳ proxy tùy chỉnh nào.
+
+### Dùng gói thuê bao Claude Code (tự động / tự chọn model)
+
+Có thể dùng chính bộ mô hình trong Claude Code (Opus 4.8, Opus 4.7, Sonnet 4.6, Haiku 4.5) để viết truyện mới và viết tiếp bộ truyện hiện có, với hai chế độ: **tự động chọn** model theo vai, hoặc **tự chọn tay** trong bảng `/model`.
+
+> 📖 Hướng dẫn đầy đủ (thiết lập Meridian, preset cân bằng, xử lý sự cố): [docs/claude-code.md](docs/claude-code.md).
+
+**Lưu ý xác thực (quan trọng):** engine bên dưới (`litellm`) chỉ xác thực Anthropic bằng `x-api-key`, **không** đăng nhập gói thuê bao trực tiếp trong app được. Có **hai cách hợp lệ**:
+
+- **Dùng thuê bao (qua Agent SDK):** chạy một cầu nối nội bộ đi qua **Claude Agent SDK chính thức** — ví dụ [Meridian](https://github.com/rynfar/meridian): `npm i -g @rynfar/meridian` → `claude login` → `meridian` (mở `http://127.0.0.1:3456`, nói giao thức Anthropic Messages). Usage rút từ **hạn mức Agent SDK** của gói (Pro $20 / Max 5x $100 / Max 20x $200 mỗi tháng, tính theo giá API, có trần). ⚠️ **Không** dùng proxy phát lại token OAuth thẳng lên `api.anthropic.com` — vi phạm điều khoản và đã bị chặn từ 4/2026.
+- **Dùng API key (trả theo token):** đặt `base_url = https://api.anthropic.com` và `api_key = sk-ant-...`. Không có trần tháng — hợp cho truyện dài.
+
+1. **Chuẩn bị backend:** khởi động cầu nối Meridian ở `http://127.0.0.1:3456` (đường thuê bao), hoặc chuẩn bị một API key (đường trả-theo-token).
+2. **Thiết lập:** chạy `ainovel-cli` (hoặc `--web`), ở wizard chọn **"Claude Code"**, để Base URL mặc định `http://127.0.0.1:3456` (Meridian) — hoặc đổi thành `https://api.anthropic.com` + điền API key, rồi đồng ý **bật preset tự-chọn cân bằng**. Wizard sẽ dựng sẵn provider `claude-code` (type anthropic) kèm danh mục 4 model.
+3. **Tự chọn tay:** gõ `/model` (TUI) hoặc mở bảng Mô hình (Web) — 4 model Claude hiện sẵn để đổi theo từng vai.
+4. **Tự động chọn:** gõ `/model auto` (TUI) hoặc bấm nút **"Tự chọn (Claude cân bằng)"** (Web) để áp preset cân bằng:
+
+| Vai trò | Model | Cường độ suy luận |
+|---|---|---|
+| Writer | `claude-opus-4-8` | high |
+| Architect | `claude-opus-4-8` | high |
+| Editor | `claude-sonnet-4-6` | medium |
+| Coordinator | `claude-sonnet-4-6` | medium |
+
+Preset ưu tiên chất lượng nơi quan trọng (viết prose, dựng thế giới) và tiết kiệm cho điều phối/xét duyệt; mọi thay đổi được ghi vào `~/.ainovel/config.json`. Muốn chỉnh khác vai nào thì đổi tay trong `/model` (ví dụ đưa Editor lên Opus, hoặc chọn `claude-haiku-4-5` cho rẻ hơn). Với "viết tiếp bộ truyện hiện có": `cd` vào thư mục truyện cũ rồi khởi động — engine tự khôi phục và viết tiếp bằng model Claude đã chọn.
+
+Ví dụ khối `providers.claude-code` tương ứng (tham chiếu `config.example.jsonc`):
+
+```jsonc
+{
+  "provider": "claude-code",
+  "model": "claude-sonnet-4-6",
+  "reasoning_effort": "medium",
+  "providers": {
+    "claude-code": {
+      "type": "anthropic",
+      "base_url": "http://127.0.0.1:3456",
+      "models": ["claude-opus-4-8", "claude-opus-4-7", "claude-sonnet-4-6", "claude-haiku-4-5"]
+    }
+  },
+  "roles": {
+    "writer":      { "provider": "claude-code", "model": "claude-opus-4-8",   "reasoning_effort": "high" },
+    "architect":   { "provider": "claude-code", "model": "claude-opus-4-8",   "reasoning_effort": "high" },
+    "editor":      { "provider": "claude-code", "model": "claude-sonnet-4-6", "reasoning_effort": "medium" },
+    "coordinator": { "provider": "claude-code", "model": "claude-sonnet-4-6", "reasoning_effort": "medium" }
+  }
+}
+```
+
+### Tùy chỉnh proxy Anthropic (nâng cao)
 
 Nếu proxy sử dụng giao thức Anthropic và giới hạn chỉ có thể truy cập bởi client Claude Code, `type` nên đặt là `anthropic`, `anthropic_beta` đặt ở tầng trên của `extra`, các HTTP header như Stainless đặt trong `extra.headers`:
 
@@ -650,6 +700,12 @@ Như vậy lệnh sẽ không bị nuốt bởi gọi chuỗi, cũng không bị
 - **[agentcore](https://github.com/voocel/agentcore)** — Nhân Agent cực giản (tool-calling + streaming)
 - **[litellm](https://github.com/voocel/litellm)** — Thích ứng giao diện LLM thống nhất
 - **[Bubble Tea](https://github.com/charmbracelet/bubbletea)** — Framework TUI terminal
+
+## Tài liệu thêm
+
+- [CHANGELOG.md](CHANGELOG.md) — nhật ký thay đổi
+- [CLAUDE.md](CLAUDE.md) — định hướng cho AI agent / người đóng góp
+- [docs/](docs/) — kiến trúc, quản lý ngữ cảnh, đánh giá, quan sát, Claude Code, hướng dẫn sử dụng
 
 ## Giấy phép
 

@@ -24,6 +24,7 @@ type setupProviderInfo struct {
 
 var setupCatalog = []setupProviderInfo{
 	{Name: "openrouter", Label: "OpenRouter", BaseURL: "https://openrouter.ai/api/v1", SampleModel: "google/gemini-2.5-flash"},
+	{Name: bootstrap.ClaudeCodeProvider, Label: "Claude Code (thuê bao qua proxy nội bộ)", BaseURL: bootstrap.ClaudeCodeDefaultBaseURL, APIKeyOptional: true, SampleModel: "claude-opus-4-8"},
 	{Name: "anthropic", Label: "Anthropic", SampleModel: "claude-sonnet-4-5"},
 	{Name: "gemini", Label: "Gemini", SampleModel: "gemini-2.5-flash"},
 	{Name: "openai", Label: "OpenAI", SampleModel: "gpt-4o"},
@@ -115,6 +116,25 @@ func buildSetupConfig(req setupRequest) (bootstrap.Config, error) {
 	if info == nil {
 		return bootstrap.Config{}, errMsg("nhà cung cấp không hợp lệ")
 	}
+
+	// Claude Code: dựng provider giao thức anthropic trỏ proxy nội bộ + danh mục model
+	// + preset tự-chọn cân bằng (Opus cho Writer/Architect, Sonnet cho Coordinator/Editor).
+	// Model để trống thì dùng mặc định cân bằng.
+	if req.Provider == bootstrap.ClaudeCodeProvider {
+		model := strings.TrimSpace(req.Model)
+		if model == "" {
+			model = bootstrap.ClaudeDefaultModel
+		}
+		return bootstrap.Config{
+			Provider:        bootstrap.ClaudeCodeProvider,
+			ModelName:       model,
+			ReasoningEffort: "medium",
+			Providers:       map[string]bootstrap.ProviderConfig{bootstrap.ClaudeCodeProvider: bootstrap.ClaudeCodeProviderConfig(req.BaseURL, req.APIKey)},
+			Roles:           bootstrap.BalancedRoleConfigs(bootstrap.ClaudeCodeProvider),
+			Style:           "default",
+		}, nil
+	}
+
 	model := strings.TrimSpace(req.Model)
 	if model == "" {
 		return bootstrap.Config{}, errMsg("vui lòng nhập tên mô hình")

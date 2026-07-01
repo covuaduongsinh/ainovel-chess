@@ -79,9 +79,14 @@
       // (vd gemini-2.5-flash), chỉ OpenRouter mới dùng tiền tố "hãng/mô-hình".
       if (p.sampleModel) $('model').placeholder = 'vd: ' + p.sampleModel;
       const isRouter = p.name === 'openrouter';
-      $('modelHint').textContent = isRouter
-        ? 'OpenRouter dùng dạng "hãng/mô-hình", vd: google/gemini-2.5-flash'
-        : 'Dùng tên mô hình gốc của nhà cung cấp (KHÔNG thêm tiền tố như "google/").';
+      const isClaudeCode = p.name === 'claude-code';
+      if (isClaudeCode) {
+        $('modelHint').textContent = 'Cần chạy một proxy nội bộ (VD claude-code-router) dùng đăng nhập Claude Code, rồi điền Base URL trỏ tới proxy đó. Để trống ô model = dùng preset cân bằng (Opus cho Writer/Architect, Sonnet cho phần còn lại).';
+      } else {
+        $('modelHint').textContent = isRouter
+          ? 'OpenRouter dùng dạng "hãng/mô-hình", vd: google/gemini-2.5-flash'
+          : 'Dùng tên mô hình gốc của nhà cung cấp (KHÔNG thêm tiền tố như "google/").';
+      }
     }
     $('provider').addEventListener('change', onProvider);
 
