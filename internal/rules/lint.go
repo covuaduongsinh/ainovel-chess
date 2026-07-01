@@ -5,12 +5,12 @@ import (
 	"strings"
 )
 
-// Lint 内置产品底线检查：扫描正文中的机制残留，与用户规则无关，commit 时始终执行。
-// 与 Check 同契约——仅返事实（铁律一），不阻断流程，由评审/用户裁定。
+// Lint kiểm tra đường đáy sản phẩm tích hợp sẵn: quét cơ chế sót trong nội dung, không liên quan đến quy tắc người dùng, luôn chạy khi commit.
+// Cùng hợp đồng với Check — chỉ trả về sự thật (nguyên tắc sắt một), không chặn luồng, do thẩm định/người dùng phán quyết.
 //
-// 当前三类（全部来自真实长跑产物的实证缺陷）：
-//   - markdown_residue：正文残留 ** 加粗、首行之外的 # 标题行（导出 txt 会裸露符号）
-//   - non_cjk_fragments：连续拉丁字母片段（模型语言混杂，如中文正文裸混 "pattern"）
+// Hiện tại ba loại (đều từ lỗi thực chứng của bản chạy dài):
+//   - markdown_residue: nội dung còn sót ** in đậm, dòng tiêu đề # ngoài dòng đầu (khi xuất txt sẽ lộ ký hiệu)
+//   - non_cjk_fragments: đoạn ký tự Latin liên tiếp (mô hình trộn ngôn ngữ, ví dụ nội dung tiếng Việt lẫn "pattern")
 func Lint(text string) []Violation {
 	var vs []Violation
 	vs = appendMarkdownResidue(vs, text)
@@ -34,7 +34,7 @@ func appendMarkdownResidue(vs []Violation, text string) []Violation {
 		if t == "" {
 			continue
 		}
-		// 第一个非空行的 # 标题是章文件的合法格式（不按行号写死，容忍前导空行）
+		// Dòng # tiêu đề ở dòng không rỗng đầu tiên là định dạng hợp lệ của tệp chương (không cố định theo số dòng, chấp nhận dòng trống đầu)
 		first := !seenContent
 		seenContent = true
 		if !first && strings.HasPrefix(t, "#") {
@@ -54,8 +54,8 @@ func appendMarkdownResidue(vs []Violation, text string) []Violation {
 
 var latinFragmentRe = regexp.MustCompile(`[A-Za-z]{2,}`)
 
-// appendNonCJKFragments 报告拉丁字母片段的总次数与去重示例。
-// 现代题材的合法英文（品牌名/缩写）也会命中——warning 级事实，由评审按题材裁定。
+// appendNonCJKFragments báo cáo tổng số lần và ví dụ không trùng lặp của các đoạn ký tự Latin.
+// Tiếng Anh hợp lệ trong đề tài hiện đại (tên thương hiệu/viết tắt) cũng bị khớp — sự thật mức warning, do thẩm định phán quyết theo đề tài.
 func appendNonCJKFragments(vs []Violation, text string) []Violation {
 	matches := latinFragmentRe.FindAllString(text, -1)
 	if len(matches) == 0 {

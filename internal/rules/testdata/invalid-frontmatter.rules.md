@@ -4,6 +4,6 @@ forbidden_chars: [unclosed
 fatigue_words: {oops
 ---
 
-# 偏好
+# Sở thích
 
-虽然 front matter 解析失败，正文应当仍作为偏好注入。
+Dù front matter phân tích thất bại, phần thân vẫn nên được nạp vào sở thích.

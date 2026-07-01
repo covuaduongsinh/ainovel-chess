@@ -29,15 +29,15 @@ func errorKind(err error, msg string) string {
 	return ""
 }
 
-// 单调递增的事件 ID 计数器；配合时间戳生成稳定 ID。
+// Bộ đếm ID sự kiện tăng đơn điệu; kết hợp với timestamp tạo ID ổn định.
 var eventIDCounter uint64
 
 func nextEventID() string {
 	return fmt.Sprintf("e%d", atomic.AddUint64(&eventIDCounter, 1))
 }
 
-// activeCall 记录一次正在进行的调用（TOOL / DISPATCH）的 ID、起点时间与 summary。
-// summary 在完成事件时回填进 finish Event，保证 replay（runtime queue）能还原行内容。
+// activeCall ghi lại ID, thời điểm bắt đầu và summary của một lần gọi đang tiến hành (TOOL / DISPATCH).
+// summary được điền lại vào finish Event khi hoàn thành, đảm bảo replay (runtime queue) có thể khôi phục nội dung dòng.
 type activeCall struct {
 	id      string
 	start   time.Time
@@ -45,41 +45,41 @@ type activeCall struct {
 	depth   int
 }
 
-// observer 订阅 coordinator 事件流并投影到 Host 的输出通道。
-// 它是纯观察者,不参与任何控制决策。
+// observer đăng ký luồng sự kiện của coordinator và chiếu sang kênh xuất của Host.
+// Đây là observer thuần túy, không tham gia bất kỳ quyết định điều khiển nào.
 type observer struct {
 	unsub   func()
 	emitEv  func(Event)
 	emitD   func(string)
 	emitC   func()
-	store   *storepkg.Store // 用于 runtime queue 持久化（ReplayQueue 消费）
+	store   *storepkg.Store // Dùng để lưu runtime queue (ReplayQueue tiêu thụ)
 	agents  map[string]*agentState
 	agentMu sync.Mutex
 
-	// aborting 由 Host 在 Abort()/Close() 入口置位、Start/Resume/Continue 清位。
-	// 置位期间所有 context-cancel 衍生的错误事件被抑制（既是用户期望，也避免与
-	// "用户手动暂停"事件重复）。真实异常（非 cancel）仍照常上报。
+	// aborting được Host đặt tại điểm vào Abort()/Close(), xóa tại Start/Resume/Continue.
+	// Khi được đặt, tất cả sự kiện lỗi dẫn xuất từ context-cancel bị ức chế (vừa là mong muốn người dùng,
+	// vừa tránh trùng lặp với sự kiện "người dùng tạm dừng thủ công"). Lỗi thực (không phải cancel) vẫn báo cáo bình thường.
 	aborting atomic.Bool
 
 	streamThinking        bool
-	lastThinkingByAgent   map[string]string          // agent → 最近的累积 thinking 文本（用于提取增量 delta）
-	dispatchStarts        map[string]*activeCall     // dispatched agent → 进行中的 DISPATCH 调用
-	currentDispatchTarget string                     // 当前正在执行的 subagent 名（handleToolEnd 时 Args 可能为空）
-	toolStarts            map[string]*activeCall     // agent → 进行中的 TOOL 调用
-	streamExtractors      map[string]*agentExtractor // agent → 当前工具调用 JSON 参数的内容抽取器
-	streamArgPrefixes     map[string]string          // agent/tool → 参数流前缀，用于提前识别轻量标签
-	streamArgLabels       map[string]string          // agent/tool → 已从参数流提前识别出的展示名
-	retryEvents           map[string]string          // retry scope → event ID，用同一行原地更新 (2/7)
-	streamHasContent      bool                       // 当前 streamRound 是否已输出过内容（判断是否需要段落分隔）
-	streamLastByte        byte                       // 最近一次流式输出的末字节（用于精确补齐换行）
+	lastThinkingByAgent   map[string]string          // agent → văn bản thinking tích lũy gần nhất (dùng để trích delta tăng dần)
+	dispatchStarts        map[string]*activeCall     // dispatched agent → lần gọi DISPATCH đang tiến hành
+	currentDispatchTarget string                     // tên subagent đang thực thi (Args có thể rỗng khi handleToolEnd)
+	toolStarts            map[string]*activeCall     // agent → lần gọi TOOL đang tiến hành
+	streamExtractors      map[string]*agentExtractor // agent → bộ trích nội dung tham số JSON lần gọi công cụ hiện tại
+	streamArgPrefixes     map[string]string          // agent/tool → tiền tố luồng tham số, dùng để nhận diện sớm thẻ nhẹ
+	streamArgLabels       map[string]string          // agent/tool → tên hiển thị đã nhận diện sớm từ luồng tham số
+	retryEvents           map[string]string          // retry scope → event ID, cập nhật tại chỗ cùng dòng (2/7)
+	streamHasContent      bool                       // streamRound hiện tại có đã xuất nội dung nào chưa (để xác định có cần ngăn cách đoạn không)
+	streamLastByte        byte                       // byte cuối cùng của lần xuất luồng gần nhất (dùng để bổ sung xuống dòng chính xác)
 }
 
-// agentExtractor 记录某个 agent 当前正在抽取的工具名与抽取器实例。
-// 工具名用于检测"新的工具调用开始了"，避免缓存被上一轮残留污染。
+// agentExtractor ghi lại tên công cụ và instance bộ trích mà một agent đang trích xuất hiện tại.
+// Tên công cụ dùng để phát hiện "lần gọi công cụ mới bắt đầu", tránh cache bị ô nhiễm bởi dư cặn vòng trước.
 type agentExtractor struct {
 	tool       string
 	ext        *jsonFieldExtractor
-	emittedAny bool // 本 extractor 是否已经产出过内容；用于首次输出前补段落分隔
+	emittedAny bool // extractor này đã sản xuất nội dung nào chưa; dùng để bổ sung ngăn cách đoạn trước lần xuất đầu tiên
 }
 
 type agentState struct {
@@ -120,8 +120,8 @@ func (o *observer) finalize() {
 	}
 }
 
-// setAborting 由 Host 在 Abort/Close/Start 等生命周期切换处调用，控制
-// "context canceled" 类衍生事件是否需要抑制（避免与"用户手动暂停"重复）。
+// setAborting được Host gọi tại các điểm chuyển vòng đời như Abort/Close/Start, điều khiển
+// việc các sự kiện dẫn xuất kiểu "context canceled" có cần ức chế không (tránh trùng lặp với "người dùng tạm dừng thủ công").
 func (o *observer) setAborting(v bool) { o.aborting.Store(v) }
 
 func (o *observer) retryEventID(scope string, attempt int) string {
@@ -137,13 +137,13 @@ func (o *observer) retryEventID(scope string, attempt int) string {
 	return o.retryEvents[scope]
 }
 
-// emitAndLog 用于调用类事件的"开始"态：发给 TUI 但不写入 runtime queue，
-// 避免 replay 时"开始一行、完成又一行"重复。slog 由 host.emitEvent 统一记录。
+// emitAndLog dùng cho trạng thái "bắt đầu" của sự kiện loại gọi: gửi cho TUI nhưng không ghi vào runtime queue,
+// tránh replay bị trùng "bắt đầu một dòng, hoàn thành lại một dòng". slog được host.emitEvent ghi tập trung.
 func (o *observer) emitAndLog(ev Event) {
 	o.emitEv(ev)
 }
 
-// persistEvent 把事件写入 runtime queue（slog 由 host.emitEvent 统一记录）。
+// persistEvent ghi sự kiện vào runtime queue (slog được host.emitEvent ghi tập trung).
 func (o *observer) persistEvent(ev Event) {
 	if o.store == nil || o.store.Runtime == nil {
 		return

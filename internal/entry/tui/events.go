@@ -12,11 +12,11 @@ import (
 	"github.com/voocel/ainovel-cli/internal/store"
 )
 
-// 消息类型
+// Kiểu thông điệp
 type (
 	eventMsg       host.Event
 	snapshotMsg    host.UISnapshot
-	doneMsg        struct{ complete bool } // complete=true 全书完成，false 出错停止
+	doneMsg        struct{ complete bool } // complete=true toàn bộ sách hoàn thành, false dừng do lỗi
 	abortResultMsg struct{ stopped bool }
 	bootstrapMsg   struct {
 		replay  []domain.RuntimeQueueItem
@@ -26,7 +26,7 @@ type (
 	reportLoadedMsg struct {
 		reqID      int
 		report     diag.Report
-		exportPath string // 脱敏诊断文件绝对路径；空 = 导出失败
+		exportPath string // đường dẫn tuyệt đối file chẩn đoán đã ẩn danh; rỗng = xuất thất bại
 		finishedAt time.Time
 	}
 	askUserMsg       askUserRequest
@@ -36,7 +36,7 @@ type (
 		kind  string // host.CoCreateProgressThinking | host.CoCreateProgressReply
 		text  string
 	}
-	// cocreateStreamItem 是 deltaCh 内部载荷，把流式 kind 与累积文本一起送达 TUI。
+	// cocreateStreamItem là payload nội bộ của deltaCh, gửi kind stream và văn bản tích lũy cùng nhau đến TUI.
 	cocreateStreamItem struct {
 		kind string
 		text string
@@ -49,15 +49,15 @@ type (
 	steerResultMsg     struct{}
 	continueResultMsg  struct{ err error }
 	spinnerTickMsg     time.Time
-	toolSpinnerTickMsg time.Time // 事件流工具 spinner 独立 tick（更快、独立于顶栏/星星）
-	cursorTickMsg      time.Time // 流式光标独立 tick
-	streamDeltaMsg     string    // 流式 token 增量
-	streamClearMsg     struct{}  // 清空流式缓冲（新消息开始）
-	streamFlushTickMsg struct{}  // 60fps 节流刷新流式面板（合并 token 级 delta）
-	quitResetMsg       struct{}  // 双次 Ctrl+C 超时重置
+	toolSpinnerTickMsg time.Time // tick độc lập của spinner công cụ luồng sự kiện (nhanh hơn, độc lập với thanh đầu/ngôi sao)
+	cursorTickMsg      time.Time // tick độc lập của con trỏ stream
+	streamDeltaMsg     string    // delta token stream
+	streamClearMsg     struct{}  // xóa buffer stream (bắt đầu tin nhắn mới)
+	streamFlushTickMsg struct{}  // làm mới panel stream 60fps với giới hạn tốc độ (hợp nhất delta cấp token)
+	quitResetMsg       struct{}  // đặt lại timeout Ctrl+C kép
 )
 
-// --- Cmd 函数 ---
+// --- Hàm Cmd ---
 
 func listenEvents(rt *host.Host) tea.Cmd {
 	return func() tea.Msg {
@@ -111,7 +111,7 @@ func bootstrapRuntime(rt *host.Host) tea.Cmd {
 
 func startRuntime(rt *host.Host, plan startup.Plan) tea.Cmd {
 	return func() tea.Msg {
-		// 启动侧确定性生成本书用户规则快照（用原始 prompt 归一化），须在 StartPrepared 前。
+		// Phía khởi động tạo xác định snapshot quy tắc người dùng cho cuốn sách này (chuẩn hóa bằng prompt gốc), phải trước StartPrepared.
 		if err := rt.PrepareUserRules(plan.RawPrompt); err != nil {
 			return startResultMsg{err: err}
 		}
@@ -126,7 +126,7 @@ func runCoCreate(rt *host.Host, state *cocreateState) tea.Cmd {
 	state.cancel = cancel
 	state.deltaCh = make(chan cocreateStreamItem, 64)
 	state.doneCh = make(chan cocreateDoneMsg, 1)
-	// 阶段共创带故事状态摘要、产出"后续方向 brief"；冷启动从零澄清需求。两者签名一致。
+	// Cộng tác giai đoạn mang tóm tắt trạng thái câu chuyện, tạo ra "brief hướng đi tiếp theo"; khởi động lạnh làm rõ yêu cầu từ đầu. Cả hai có chữ ký giống nhau.
 	stream := rt.CoCreateStream
 	if state.stage {
 		stream = rt.StageCoCreateStream
@@ -152,8 +152,8 @@ func listenCoCreateDelta(state *cocreateState) tea.Cmd {
 	if state == nil || state.deltaCh == nil {
 		return nil
 	}
-	// 抓取 channel 局部引用：避免后续 state.deltaCh 被 reassign 时
-	// 旧 listen 闭包错读新 channel（虽然当前流程不触发，留作维护陷阱不应该）。
+	// Lấy tham chiếu cục bộ của channel: tránh trường hợp sau này state.deltaCh bị reassign
+	// closure listen cũ đọc nhầm channel mới (dù luồng hiện tại không kích hoạt, không nên để lại bẫy bảo trì).
 	reqID := state.reqID
 	ch := state.deltaCh
 	return func() tea.Msg {
@@ -195,8 +195,8 @@ func continueRuntime(rt *host.Host, text string) tea.Cmd {
 	}
 }
 
-// resumeFromCoCreate 把阶段共创产出的后续方向 brief 注入并恢复创作。
-// 复用 continueResultMsg：成功即接 listenDone 续跑，失败回显错误。
+// resumeFromCoCreate tiêm brief hướng đi tiếp theo từ cộng tác giai đoạn và khôi phục sáng tác.
+// Tái sử dụng continueResultMsg: thành công thì tiếp tục với listenDone, thất bại hiển thị lỗi.
 func resumeFromCoCreate(rt *host.Host, draft string) tea.Cmd {
 	return func() tea.Msg {
 		err := rt.ResumeFromCoCreate(draft)
@@ -204,7 +204,7 @@ func resumeFromCoCreate(rt *host.Host, draft string) tea.Cmd {
 	}
 }
 
-// cancelCoCreate 放弃阶段共创：清占用标记、保持暂停。事件经 events 通道回流，无需返回消息。
+// cancelCoCreate hủy bỏ cộng tác giai đoạn: xóa cờ chiếm dụng, giữ trạng thái tạm dừng. Sự kiện hồi lưu qua kênh events, không cần trả thông điệp.
 func cancelCoCreate(rt *host.Host) tea.Cmd {
 	return func() tea.Msg {
 		rt.CancelCoCreate()
@@ -221,9 +221,9 @@ func abortRuntime(rt *host.Host) tea.Cmd {
 func loadReport(dir string, reqID int) tea.Cmd {
 	return func() tea.Msg {
 		s := store.NewStore(dir)
-		// Diagnose = 创作诊断 + 运行时检测，运行时 Finding 也进屏上报告。
+		// Diagnose = chẩn đoán sáng tác + phát hiện runtime, Finding của runtime cũng vào báo cáo trên màn hình.
 		rep, rc := diag.Diagnose(s)
-		// 复用 rep+rc 写出脱敏诊断文件（导出失败不影响屏上报告）。
+		// Tái sử dụng rep+rc để ghi file chẩn đoán đã ẩn danh (xuất thất bại không ảnh hưởng báo cáo trên màn hình).
 		exportPath, _ := diag.WriteExport(s, rep, rc)
 		return reportLoadedMsg{
 			reqID:      reqID,
@@ -240,7 +240,7 @@ func tickSpinner() tea.Cmd {
 	})
 }
 
-// tickToolSpinner 驱动事件流"进行中"行的 spinner。独立于 tickSpinner，节奏更快（150ms）。
+// tickToolSpinner điều khiển spinner của dòng "đang tiến hành" trong luồng sự kiện. Độc lập với tickSpinner, nhịp nhanh hơn (150ms).
 func tickToolSpinner() tea.Cmd {
 	return tea.Tick(150*time.Millisecond, func(t time.Time) tea.Msg {
 		return toolSpinnerTickMsg(t)
@@ -253,9 +253,9 @@ func tickCursor() tea.Cmd {
 	})
 }
 
-// tickStreamFlush 驱动流式面板节流刷新。streamDelta 不再每个 token 立即重渲，
-// 而是 mark dirty；本 tick 每 16ms（~60fps）检查并合并刷新一次，把 LLM 高速流式
-// 期的"每秒数十次全量重渲"压回 60 次上限。
+// tickStreamFlush điều khiển làm mới panel stream có giới hạn tốc độ. streamDelta không còn tái render ngay mỗi token,
+// mà đánh dấu dirty; tick này kiểm tra và hợp nhất làm mới mỗi 16ms (~60fps), nén "hàng chục lần tái render đầy đủ mỗi giây"
+// trong giai đoạn LLM stream tốc độ cao xuống giới hạn 60 lần.
 func tickStreamFlush() tea.Cmd {
 	return tea.Tick(16*time.Millisecond, func(t time.Time) tea.Msg {
 		return streamFlushTickMsg{}
@@ -268,9 +268,8 @@ func listenStream(rt *host.Host) tea.Cmd {
 		if !ok {
 			return nil
 		}
-		// sentinel 派发为 streamClearMsg，保证与正常 delta 在同一通道里按 emit
-		// 顺序到达 TUI。双通道时 clearCh 与 streamCh 之间无序，✻ header 经常被
-		// 错塞到上一段 thinking 末尾。
+		// sentinel được phân phát dưới dạng streamClearMsg, đảm bảo đến TUI theo thứ tự emit trong cùng kênh với delta thông thường.
+		// Khi dùng hai kênh, clearCh và streamCh không có thứ tự, header ✻ thường bị nhét nhầm vào cuối đoạn thinking trước.
 		if delta == host.StreamClearSentinel {
 			return streamClearMsg{}
 		}

@@ -7,8 +7,8 @@ import (
 	"github.com/voocel/ainovel-cli/internal/store"
 )
 
-// nil 模型 + 空规则目录：归一化全降级，但快照仍可产出（system_defaults 兜底）并落盘。
-// LoadOptions{} 的两个目录为空串，RawFileSources 返回 nil，测试不触碰真实磁盘。
+// Mô hình nil + thư mục quy tắc rỗng: chuẩn hóa toàn bộ giáng cấp, nhưng ảnh chụp vẫn có thể tạo ra (system_defaults đảm bảo) và lưu xuống đĩa.
+// Hai thư mục của LoadOptions{} là chuỗi rỗng, RawFileSources trả về nil, kiểm tra không chạm vào đĩa thật.
 func newDegradedService(t *testing.T) (*Service, *store.Store) {
 	t.Helper()
 	st := store.NewStore(t.TempDir())
@@ -18,29 +18,29 @@ func newDegradedService(t *testing.T) (*Service, *store.Store) {
 func TestService_Build_DegradesButPersists(t *testing.T) {
 	svc, st := newDegradedService(t)
 
-	snap, err := svc.Build(t.Context(), "每章1200字，主角冷静克制")
+	snap, err := svc.Build(t.Context(), "mỗi chương 1200 chữ, nhân vật chính bình tĩnh kiềm chế")
 	if err != nil {
-		t.Fatalf("Build 不应报错（降级而非阻断）：%v", err)
+		t.Fatalf("Build không nên báo lỗi (giáng cấp chứ không chặn): %v", err)
 	}
 	if snap.Status != rules.StatusDegraded {
-		t.Fatalf("无模型应降级，status=%q", snap.Status)
+		t.Fatalf("không có mô hình nên giáng cấp, status=%q", snap.Status)
 	}
-	// system_defaults 始终兜底机械基线。
+	// system_defaults luôn đảm bảo đường đáy cơ học.
 	if snap.Structured.ChapterWords == nil || snap.Structured.ChapterWords.Min != 3000 {
-		t.Fatalf("应保留 system_defaults 字数基线，got %+v", snap.Structured.ChapterWords)
+		t.Fatalf("nên giữ đường đáy số chữ system_defaults, got %+v", snap.Structured.ChapterWords)
 	}
-	// 启动 prompt 降级为 raw preferences，原文不丢。
+	// startup prompt giáng cấp thành raw preferences, văn bản gốc không mất.
 	if snap.Preferences == "" {
-		t.Fatal("降级应把启动 prompt 原文记入 preferences")
+		t.Fatal("giáng cấp nên ghi văn bản gốc startup prompt vào preferences")
 	}
 
-	// 已落盘：GetOrBuild 读回同一份而非重建。
+	// Đã lưu xuống đĩa: GetOrBuild đọc lại cùng bản chứ không tạo lại.
 	reloaded, err := st.UserRules.Load()
 	if err != nil || reloaded == nil {
-		t.Fatalf("快照应已落盘：err=%v snap=%v", err, reloaded)
+		t.Fatalf("ảnh chụp nên đã được lưu: err=%v snap=%v", err, reloaded)
 	}
 	if reloaded.Preferences != snap.Preferences {
-		t.Fatal("落盘内容与返回不一致")
+		t.Fatal("nội dung lưu không nhất quán với kết quả trả về")
 	}
 }
 
@@ -48,44 +48,44 @@ func TestService_GetOrBuild_LazyForOldBook(t *testing.T) {
 	svc, st := newDegradedService(t)
 
 	if cur, _ := st.UserRules.Load(); cur != nil {
-		t.Fatal("初始应无快照")
+		t.Fatal("ban đầu không nên có ảnh chụp")
 	}
 	snap, err := svc.GetOrBuild(t.Context())
 	if err != nil {
-		t.Fatalf("GetOrBuild 不应报错：%v", err)
+		t.Fatalf("GetOrBuild không nên báo lỗi: %v", err)
 	}
 	if snap.Structured.ChapterWords == nil {
-		t.Fatal("惰性生成应含 system_defaults")
+		t.Fatal("tạo lười biếng nên chứa system_defaults")
 	}
 	if cur, _ := st.UserRules.Load(); cur == nil {
-		t.Fatal("GetOrBuild 应顺带落盘")
+		t.Fatal("GetOrBuild nên đồng thời lưu xuống đĩa")
 	}
 }
 
 func TestService_AddRuntimeRule_PersistsAndReturnsCandidate(t *testing.T) {
 	svc, st := newDegradedService(t)
 
-	const text = "以后少用比喻"
+	const text = "ít dùng ẩn dụ sau này"
 	merged, cand, err := svc.AddRuntimeRule(t.Context(), text)
 	if err != nil {
-		t.Fatalf("AddRuntimeRule 不应报错：%v", err)
+		t.Fatalf("AddRuntimeRule không nên báo lỗi: %v", err)
 	}
-	// 候选用于回显：无模型时降级，原文进 preferences。
+	// Ứng viên dùng để phản hồi lại: không có mô hình thì giáng cấp, văn bản gốc vào preferences.
 	if !cand.Degraded {
-		t.Fatal("无模型时本次候选应降级")
+		t.Fatal("không có mô hình, ứng viên lần này nên giáng cấp")
 	}
 	if cand.Preferences != text {
-		t.Fatalf("候选应保留原文，got %q", cand.Preferences)
+		t.Fatalf("ứng viên nên giữ văn bản gốc, got %q", cand.Preferences)
 	}
-	// 叠加后快照含该条且已落盘。
+	// Ảnh chụp sau khi chồng chứa mục đó và đã được lưu.
 	if merged.Preferences == "" {
-		t.Fatal("叠加后 preferences 不应为空")
+		t.Fatal("preferences sau khi chồng không nên rỗng")
 	}
 	reloaded, err := st.UserRules.Load()
 	if err != nil || reloaded == nil {
-		t.Fatalf("叠加后应落盘：err=%v", err)
+		t.Fatalf("sau khi chồng nên lưu xuống đĩa: err=%v", err)
 	}
 	if reloaded.Status != rules.StatusDegraded {
-		t.Fatalf("含降级来源，status 应为 degraded，got %q", reloaded.Status)
+		t.Fatalf("chứa nguồn giáng cấp, status nên là degraded, got %q", reloaded.Status)
 	}
 }

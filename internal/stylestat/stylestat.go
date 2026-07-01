@@ -1,4 +1,4 @@
-// Package stylestat 对已写正文做全书级风格统计，产出纯事实。
+﻿// Package stylestat 对已写正文做全书级风格统计，产出纯事实。
 //
 // 动机：弧内评审窗口（~10 章）对全书级模式固化天然失明——句式 tic 章均几十次、
 // 章末形态同构、跨章复读，单章看每处都"正常"，只有全书统计能暴露。统计归代码
@@ -235,7 +235,7 @@ func repeatedSentences(chapters []string) []SentenceStat {
 	for ci, text := range chapters {
 		for _, sent := range sentenceSplit.Split(text, -1) {
 			// 剥掉包裹引号再归并：同一句台词带/不带前引号不应算成两条
-			sent = strings.Trim(strings.TrimSpace(sent), `"“”‘’「」『』`)
+			sent = strings.Trim(strings.TrimSpace(sent), `"""‘’「」『』`)
 			if len([]rune(sent)) < 12 {
 				continue
 			}

@@ -8,7 +8,7 @@ forbidden_phrases:
 fatigue_words: true
 ---
 
-# 类型错误
+# Lỗi kiểu dữ liệu
 
-每个字段都用错类型；checker 应跳过这些字段并写 conflicts。
-正文仍应作为偏好注入。
+Mỗi trường đều dùng sai kiểu; checker nên bỏ qua các trường này và ghi vào conflicts.
+Phần thân vẫn nên được nạp vào sở thích.

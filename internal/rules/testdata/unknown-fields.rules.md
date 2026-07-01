@@ -6,6 +6,6 @@ secret_field: hello
 chapter_words: 2000-4000
 ---
 
-# 测试未知字段
+# Kiểm thử trường không xác định
 
-forbidden_emojis 与 secret_field 是 Phase 1 不支持的字段，应进 conflicts 但不影响其他字段加载。
+forbidden_emojis và secret_field là các trường chưa hỗ trợ ở Phase 1, nên vào conflicts nhưng không ảnh hưởng việc tải các trường khác.

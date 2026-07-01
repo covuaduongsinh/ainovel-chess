@@ -12,41 +12,41 @@ func TestTerminalAskUserSingleSelect(t *testing.T) {
 	handler := newTerminalAskUser(strings.NewReader("2\n"), &strings.Builder{})
 	resp, err := handler.handle(context.Background(), []tools.Question{
 		{
-			Question: "你想要什么风格？",
-			Header:   "风格",
+			Question: "Bạn muốn phong cách gì?",
+			Header:   "Phong cách",
 			Options: []tools.Option{
-				{Label: "热血", Description: "偏升级"},
-				{Label: "悬疑", Description: "偏谜团"},
+				{Label: "Nhiệt huyết", Description: "Thiên về tiến cấp"},
+				{Label: "Huyền bí", Description: "Thiên về bí ẩn"},
 			},
 		},
 	})
 	if err != nil {
 		t.Fatalf("handle: %v", err)
 	}
-	if got := resp.Answers["你想要什么风格？"]; got != "悬疑" {
+	if got := resp.Answers["Bạn muốn phong cách gì?"]; got != "Huyền bí" {
 		t.Fatalf("unexpected answer: %q", got)
 	}
 }
 
 func TestTerminalAskUserCustomInput(t *testing.T) {
-	handler := newTerminalAskUser(strings.NewReader("0\n不要感情线\n"), &strings.Builder{})
+	handler := newTerminalAskUser(strings.NewReader("0\nkhông có tuyến tình cảm\n"), &strings.Builder{})
 	resp, err := handler.handle(context.Background(), []tools.Question{
 		{
-			Question: "还有什么限制？",
-			Header:   "限制",
+			Question: "Còn giới hạn gì thêm không?",
+			Header:   "Giới hạn",
 			Options: []tools.Option{
-				{Label: "黑暗", Description: "整体压抑"},
-				{Label: "轻松", Description: "基调明快"},
+				{Label: "U ám", Description: "Tông tổng thể u tối"},
+				{Label: "Nhẹ nhàng", Description: "Tông cơ bản tươi sáng"},
 			},
 		},
 	})
 	if err != nil {
 		t.Fatalf("handle: %v", err)
 	}
-	if got := resp.Answers["还有什么限制？"]; got != "自定义" {
+	if got := resp.Answers["Còn giới hạn gì thêm không?"]; got != "Tùy chỉnh" {
 		t.Fatalf("unexpected answer: %q", got)
 	}
-	if got := resp.Notes["还有什么限制？"]; got != "不要感情线" {
+	if got := resp.Notes["Còn giới hạn gì thêm không?"]; got != "không có tuyến tình cảm" {
 		t.Fatalf("unexpected note: %q", got)
 	}
 }

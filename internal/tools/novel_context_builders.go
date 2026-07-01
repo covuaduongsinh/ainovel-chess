@@ -53,9 +53,9 @@ func newArchitectContextEnvelope() architectContextEnvelope {
 }
 
 func (e chapterContextEnvelope) apply(result map[string]any) {
-	// 合并而非替换：Execute 的章节路径会先后 apply 两个信封（seed + buildChapterContext），
-	// 整体赋值会让第二次 apply 丢弃 seed 的容器内容，working_memory.* 等 canonical
-	// 路径随之失效（prompt 指针指向空气，模型只能靠顶层镜像模糊容错）。
+	// Hop nhat thay vi thay the: duong dan chuong cua Execute se lan luot apply hai phong bi (seed + buildChapterContext),
+	// gan toan bo se khien apply lan hai loai bo noi dung container cua seed, cac duong dan canonical
+	// nhu working_memory.* se mat hieu luc (con tro prompt tro vao khong khi, mo hinh chi co the dua vao ban sao cap tren de xu ly mo).
 	mergeEnvelopeSection(result, "working_memory", e.Working)
 	mergeEnvelopeSection(result, "episodic_memory", e.Episodic)
 	mergeEnvelopeSection(result, "reference_pack", e.References)
@@ -67,7 +67,7 @@ func (e chapterContextEnvelope) apply(result map[string]any) {
 	mergeContextSection(result, e.References)
 }
 
-// mergeEnvelopeSection 把 section 合并进 result[key] 的既有容器；容器不存在时直接挂载。
+// mergeEnvelopeSection hop nhat section vao container hien co cua result[key]; neu container chua ton tai thi gan truc tiep.
 func mergeEnvelopeSection(result map[string]any, key string, section map[string]any) {
 	if existing, ok := result[key].(map[string]any); ok {
 		for k, v := range section {
@@ -93,8 +93,8 @@ func mergeContextSection(result map[string]any, section map[string]any) {
 	}
 }
 
-// buildProgressStatus 仅在 Coordinator 调用（不传 chapter）时返回进度摘要,
-// Writer 不需要这些信息,避免干扰写作。
+// buildProgressStatus chi tra ve tom tat tien do khi Coordinator goi (khong truyen chapter),
+// Writer khong can nhung thong tin nay, tranh gay nhieu lon qua trinh viet.
 func (t *ContextTool) buildProgressStatus(result map[string]any) {
 	progress, err := t.store.Progress.Load()
 	if err != nil || progress == nil {
@@ -126,20 +126,20 @@ func (t *ContextTool) buildProgressStatus(result map[string]any) {
 	result["progress_status"] = status
 }
 
-// buildUserRules 把合并后的 Bundle 注入 working_memory.user_rules（canonical 路径）。
+// buildUserRules tiem Bundle da hop nhat vao working_memory.user_rules (duong dan chuan).
 //
-// 单点注入：writer / editor / architect / coordinator 任一路径调用 novel_context
-// 都能在 working_memory.user_rules 拿到一致的偏好。architect 路径原本没有 working_memory，
-// 由本函数按需新建（仅装 user_rules）；chapter > 0 路径下 working_memory 已存在，直接嵌入。
+// Tiem mot diem duy nhat: bat ky duong dan nao cua writer / editor / architect / coordinator khi goi novel_context
+// deu co the lay duoc tuy chon nhat quan tu working_memory.user_rules. Duong dan architect ban dau khong co working_memory,
+// ham nay se tao moi khi can (chi chua user_rules); duong dan chapter > 0 da co working_memory, chen truc tiep vao.
 //
-// 即便 Bundle 为空也注入，保持字段稳定，避免 LLM 看到 user_rules=null 而走异常分支。
+// Du Bundle rong van tiem, giu on dinh truong, tranh LLM thay user_rules=null roi di vao nhanh ngoai le.
 //
-// 注入策略：只给 LLM 看 structured + preferences——这两项才是创作时需要遵循的偏好。
-// sources / conflicts 是诊断信息（用户冲突排查），不进 LLM；由 CLI 启动诊断面板按需展示。
+// Chien luoc tiem: chi de LLM thay structured + preferences -- day la hai muc tuy chon can tuan theo khi sang tac.
+// sources / conflicts la thong tin chan doan (nguoi dung kiem tra xung dot), khong dua vao LLM; do CLI hien thi panel chan doan khi can.
 func (t *ContextTool) buildUserRules(result map[string]any) {
 	snap, err := t.store.UserRules.Load()
 	if err != nil || snap == nil {
-		// 快照未生成（老书首次/异常）：退到代码内置默认，保证机械底线（字数/禁语/疲劳词）始终存在。
+		// Anh chup chua duoc tao (lan dau/ngoai le voi sach cu): lui ve mac dinh noi trang, dam bao nguong co ban (so tu/tu cam/tu met moi) luon ton tai.
 		def := rules.BuildSnapshot([]rules.Candidate{rules.SystemDefaults()})
 		snap = &def
 	}
@@ -244,11 +244,11 @@ func (t *ContextTool) prepareChapterContext(chapter int, envelope *chapterContex
 	}
 	state.chapterPlan = chapterPlan
 
-	// 是否正在重写本章：决定 novel_context 是否补"重写专用"事实。
+	// Co dang viet lai chuong nay hay khong: quyet dinh novel_context co bo sung su kien "chi danh cho viet lai" hay khong.
 	isRewrite := progress != nil && slices.Contains(progress.PendingRewrites, chapter)
 
-	// 暴露 draft 是否已存在的事实：让 writer 被重派时能自行判断跳过重写还是覆盖。
-	// 只暴露 exists + word_count，不注入正文（正文让 writer 按需用 read_chapter 拉）。
+	// Lo dien su kien ban nhap co ton tai hay khong: de writer khi duoc phan cong lai co the tu phan biet bo qua viet lai hay ghi de.
+	// Chi lo dien exists + word_count, khong tiem noi dung chinh (noi dung de writer tu dung read_chapter keo ve khi can).
 	if _, draftWords, draftErr := t.store.Drafts.LoadChapterContent(chapter); draftErr == nil && draftWords > 0 {
 		envelope.Working["chapter_draft"] = map[string]any{
 			"exists":     true,
@@ -258,9 +258,9 @@ func (t *ContextTool) prepareChapterContext(chapter int, envelope *chapterContex
 		warn("chapter_draft", draftErr)
 	}
 
-	// 重写时把"为什么改 + 改哪里"交给 writer：理由来自返工队列，具体批评来自本章评审
-	// （selectReviewLessons 只召回 chapter-1..chapter-3，恰好漏掉本章本身，writer 又无读评审的工具）。
-	// 正文不在此注入——保持"正文按需 read_chapter 拉"的约定不破。
+	// Khi viet lai, giao cho writer "ly do thay doi + thay doi o dau": ly do tu hang doi viec lam lai, chi trich cu the tu kiem duyet chuong nay
+	// (selectReviewLessons chi goi lai tu chapter-1..chapter-3, vua dung bo sot ban than chuong nay, writer lai khong co cong cu doc kiem duyet).
+	// Noi dung chinh khong tiem o day -- giu nguyen quy uoc "noi dung keo ve khi can qua read_chapter".
 	if isRewrite {
 		brief := map[string]any{"reason": progress.RewriteReason}
 		if review, reviewErr := t.store.World.LoadReview(chapter); reviewErr == nil && review != nil {
@@ -335,10 +335,10 @@ func (t *ContextTool) buildChapterContext(result map[string]any, state contextBu
 	envelope.apply(result)
 }
 
-// buildStyleStats 对全部已完成章节做全书级风格统计，注入 episodic_memory.style_stats。
-// 弧内评审窗口对"章均几十次的句式 tic、章末形态同构、跨章复读"天然失明，只有
-// 全书统计能暴露——统计归代码（确定性），裁定归 LLM（editor 在 aesthetic 维度
-// 按数字判分，writer 据此自避免）。章数不足时 stylestat 返回 nil，不注入。
+// buildStyleStats thong ke phong cach toan cuon tren tat ca cac chuong da hoan thanh va tiem vao episodic_memory.style_stats.
+// Cua so kiem duyet noi cung tu nhien mu voi "mau cau lap lai hang chuc lan moi chuong, cau truc dong dang cuoi chuong, lap lai xuyen chuong",
+// chi co thong ke toan cuon moi lo dien -- thong ke thuoc ve code (xac dinh tinh), phan quyet thuoc LLM (editor cham diem theo so lieu o chieu aesthetic,
+// writer dua vao do ma tu tranh). Khi so chuong khong du stylestat tra ve nil, khong tiem.
 func (t *ContextTool) buildStyleStats(envelope *chapterContextEnvelope, state contextBuildState) {
 	if state.progress == nil || len(state.progress.CompletedChapters) == 0 {
 		return
@@ -347,7 +347,7 @@ func (t *ContextTool) buildStyleStats(envelope *chapterContextEnvelope, state co
 	slices.Sort(completed)
 	chapters := make([]string, 0, len(completed))
 	for _, ch := range completed {
-		// 个别章读取失败跳过：统计是 best-effort 事实，不因单章缺失放弃全书视野
+		// Bo qua neu doc that bai tung chuong: thong ke la su kien best-effort, khong bo gan toan cuon vi thieu mot chuong
 		if text, err := t.store.Drafts.LoadChapterText(ch); err == nil && text != "" {
 			chapters = append(chapters, text)
 		}
@@ -371,7 +371,7 @@ func (t *ContextTool) buildStyleStats(envelope *chapterContextEnvelope, state co
 	envelope.Episodic["style_stats"] = stats
 }
 
-// styleStopwords 收集角色名与别名供短语挖掘过滤——出场人名天然高频，不是文风问题。
+// styleStopwords thu thap ten nhan vat va but danh de loc khi khai thac cum tu -- ten nhan vat xuat hien tu nhien tan suat cao, khong phai van de van phong.
 func (t *ContextTool) styleStopwords() []string {
 	var words []string
 	if chars, err := t.store.Characters.Load(); err == nil {
@@ -448,8 +448,8 @@ func (t *ContextTool) buildChapterEpisodicMemory(envelope *chapterContextEnvelop
 		envelope.Episodic["foreshadow_ledger"] = state.foreshadow
 	}
 
-	// 配角名册：召回最近活跃的次要角色，让 Writer 在引入旧角色时能保持口吻/定位一致
-	// 不召回所有条目（长篇会膨胀），只给最近活跃的前 N 个，按 LastSeenChapter 倒序
+	// Danh sach nhan vat phu: goi lai cac nhan vat phu hoat dong gan day, de Writer khi gioi thieu lai nhan vat cu co the giu nhat quan giong dieu/vi tri
+	// Khong goi tat ca muc (truyen dai se phong to), chi lay N muc hoat dong gan nhat, sap giam dan theo LastSeenChapter
 	if recentCast, err := t.store.Cast.RecentActive(15); err == nil && len(recentCast) > 0 {
 		simplified := make([]map[string]any, 0, len(recentCast))
 		for _, e := range recentCast {
@@ -608,9 +608,9 @@ func (t *ContextTool) buildArchitectPlanning(envelope *architectContextEnvelope,
 		warn("volume_summaries", err)
 	}
 
-	// completion_signals 把"全书是否该结尾"的关键事实集中呈现，
-	// 让架构师在裁定 complete_book / append_volume 时一眼看到对照面。
-	// 散落在 progress / compass / foreshadow / layered_outline 里靠 LLM 脑算容易漏。
+	// completion_signals tap trung trinh bay cac su kien quan trong ve "toan cuon co nen ket thuc hay khong",
+	// de kien truc su co the nhin mot cai la thay ca hai mat khi phan quyet complete_book / append_volume.
+	// Rat de bo sot neu phai tinh toan bang LLM tu cac truong rai rac trong progress / compass / foreshadow / layered_outline.
 	envelope.Planning["completion_signals"] = t.completionSignals(layered, compass)
 }
 

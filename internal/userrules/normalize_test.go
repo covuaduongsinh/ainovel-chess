@@ -12,35 +12,35 @@ func TestExtractJSON_StripsCodeFences(t *testing.T) {
 	cases := []struct{ in, wantHas string }{
 		{"```json\n{\"a\":1}\n```", `"a":1`},
 		{"```\n{\"a\":1}\n```", `"a":1`},
-		{"前缀解释\n{\"a\":1}\n后缀", `"a":1`},
+		{"tiền tố giải thích\n{\"a\":1}\nsau tố", `"a":1`},
 		{"{\"a\":1}", `"a":1`},
 	}
 	for _, c := range cases {
 		got := extractJSON(c.in)
 		if got == "" {
-			t.Fatalf("extractJSON(%q) 返回空", c.in)
+			t.Fatalf("extractJSON(%q) trả về rỗng", c.in)
 		}
 		var m map[string]any
 		if err := json.Unmarshal([]byte(got), &m); err != nil {
-			t.Fatalf("extractJSON(%q)=%q 不是合法 JSON: %v", c.in, got, err)
+			t.Fatalf("extractJSON(%q)=%q không phải JSON hợp lệ: %v", c.in, got, err)
 		}
 	}
-	if extractJSON("没有任何 JSON") != "" {
-		t.Fatal("无 JSON 时应返回空串")
+	if extractJSON("không có JSON nào cả") != "" {
+		t.Fatal("khi không có JSON nên trả về chuỗi rỗng")
 	}
 }
 
 func TestCoerceUncertain_HandlesAllDriftForms(t *testing.T) {
-	// 原型实测：uncertain 时而字符串、时而 []string、时而 [{item,reason}]。
+	// Thực chứng prototype: uncertain lúc là chuỗi, lúc là []string, lúc là [{item,reason}].
 	cases := []struct {
 		name string
 		raw  string
-		want int // 期望条目数（>0 即可，验证不丢）
+		want int // số mục kỳ vọng (>0 là được, kiểm tra không mất)
 	}{
-		{"array_of_string", `["少用比喻：无阈值"]`, 1},
-		{"plain_string", `"chapter_words 太模糊未提升"`, 1},
-		{"array_of_object", `[{"item":"少用比喻","reason":"无明确阈值"}]`, 1},
-		{"array_of_field_object", `[{"field":"chapter_words.min","reason":"未给下限"}]`, 1},
+		{"array_of_string", `["ít dùng ẩn dụ: không có ngưỡng"]`, 1},
+		{"plain_string", `"chapter_words quá mơ hồ chưa nâng cấp"`, 1},
+		{"array_of_object", `[{"item":"ít dùng ẩn dụ","reason":"không có ngưỡng rõ ràng"}]`, 1},
+		{"array_of_field_object", `[{"field":"chapter_words.min","reason":"chưa cung cấp giới hạn dưới"}]`, 1},
 		{"empty_array", `[]`, 0},
 		{"empty_string", `""`, 0},
 	}
@@ -48,7 +48,7 @@ func TestCoerceUncertain_HandlesAllDriftForms(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			got := coerceUncertain(json.RawMessage(c.raw))
 			if len(got) != c.want {
-				t.Fatalf("coerceUncertain(%s)=%v，期望 %d 条", c.raw, got, c.want)
+				t.Fatalf("coerceUncertain(%s)=%v, kỳ vọng %d mục", c.raw, got, c.want)
 			}
 		})
 	}
@@ -56,54 +56,54 @@ func TestCoerceUncertain_HandlesAllDriftForms(t *testing.T) {
 
 func TestParseNormalizerJSON_FullOutput(t *testing.T) {
 	raw := "```json\n" + `{
-  "structured": {"chapter_words": {"min": 1200, "max": 1600}, "forbidden_phrases": ["某种程度上"]},
-  "preferences": "主角冷静克制",
-  "uncertain": [{"item": "少用比喻", "reason": "无阈值"}]
+  "structured": {"chapter_words": {"min": 1200, "max": 1600}, "forbidden_phrases": ["ở một mức độ nào đó"]},
+  "preferences": "nhân vật chính bình tĩnh kiềm chế",
+  "uncertain": [{"item": "ít dùng ẩn dụ", "reason": "không có ngưỡng"}]
 }` + "\n```"
 	out, ok := parseNormalizerJSON(raw)
 	if !ok {
-		t.Fatal("应解析成功")
+		t.Fatal("nên phân tích thành công")
 	}
 	if out.Structured.ChapterWords == nil || out.Structured.ChapterWords.Min != 1200 {
-		t.Fatalf("chapter_words 解析错误：%+v", out.Structured.ChapterWords)
+		t.Fatalf("lỗi phân tích chapter_words: %+v", out.Structured.ChapterWords)
 	}
-	if len(out.Structured.ForbiddenPhrases) != 1 || out.Structured.ForbiddenPhrases[0] != "某种程度上" {
-		t.Fatalf("forbidden_phrases 解析错误：%v", out.Structured.ForbiddenPhrases)
+	if len(out.Structured.ForbiddenPhrases) != 1 || out.Structured.ForbiddenPhrases[0] != "ở một mức độ nào đó" {
+		t.Fatalf("lỗi phân tích forbidden_phrases: %v", out.Structured.ForbiddenPhrases)
 	}
-	if out.Preferences != "主角冷静克制" {
-		t.Fatalf("preferences 解析错误：%q", out.Preferences)
+	if out.Preferences != "nhân vật chính bình tĩnh kiềm chế" {
+		t.Fatalf("lỗi phân tích preferences: %q", out.Preferences)
 	}
 	if got := coerceUncertain(out.Uncertain); len(got) != 1 {
-		t.Fatalf("uncertain 应有 1 条，得到 %v", got)
+		t.Fatalf("uncertain nên có 1 mục, got %v", got)
 	}
 }
 
 func TestParseNormalizerJSON_GarbageFails(t *testing.T) {
-	if _, ok := parseNormalizerJSON("模型只回了一句话，没有 JSON"); ok {
-		t.Fatal("无 JSON 应解析失败（触发降级）")
+	if _, ok := parseNormalizerJSON("mô hình chỉ trả về một câu, không có JSON"); ok {
+		t.Fatal("không có JSON nên phân tích thất bại (kích hoạt giáng cấp)")
 	}
-	if _, ok := parseNormalizerJSON("{ 不完整"); ok {
-		t.Fatal("残缺 JSON 应解析失败")
+	if _, ok := parseNormalizerJSON("{ không đầy đủ"); ok {
+		t.Fatal("JSON không đầy đủ nên phân tích thất bại")
 	}
 }
 
 func TestNormalize_NilModelDegrades(t *testing.T) {
-	// 无模型可用：整体降级为 raw preferences，不产 structured，永不 panic/返错。
+	// Không có mô hình: toàn bộ giáng cấp thành raw preferences, không tạo structured, không bao giờ panic/trả lỗi.
 	var n *Normalizer = NewNormalizer(nil)
-	cand := n.Normalize(t.Context(), "startup_prompt", "每章1200字，主角冷静")
+	cand := n.Normalize(t.Context(), "startup_prompt", "mỗi chương 1200 chữ, nhân vật chính bình tĩnh")
 	if !cand.Degraded {
-		t.Fatal("无模型应降级")
+		t.Fatal("không có mô hình nên giáng cấp")
 	}
 	if cand.Preferences == "" {
-		t.Fatal("降级应保留原文为 preferences")
+		t.Fatal("giáng cấp nên giữ văn bản gốc làm preferences")
 	}
 	if cand.Structured.ChapterWords != nil {
-		t.Fatal("降级不应产出 structured")
+		t.Fatal("giáng cấp không nên tạo structured")
 	}
 }
 
-// scriptedModel 是最小 fake ChatModel：按调用次序吐预设回复，并记录最后一轮收到的
-// messages，供断言反馈式重试是否把纠正提示并入了下一轮对话。回复用尽后重复最后一条。
+// scriptedModel là ChatModel giả tối thiểu: thải ra phản hồi đặt trước theo thứ tự gọi, và ghi lại
+// messages nhận được ở vòng cuối, để kiểm tra xem thử lại có phản hồi có đưa gợi ý sửa vào vòng hội thoại tiếp không. Khi hết phản hồi thì lặp lại cái cuối cùng.
 type scriptedModel struct {
 	replies  []string
 	calls    int
@@ -135,65 +135,65 @@ func (m *scriptedModel) GenerateStream(context.Context, []agentcore.Message, []a
 
 func (m *scriptedModel) SupportsTools() bool { return false }
 
-// 反馈式重试：首轮吐坏 JSON、次轮才合法。Normalize 应成功，且次轮对话里带上了上一轮的
-// 坏输出与纠正提示（反馈式，而非原样盲重试）。
+// Thử lại có phản hồi: vòng đầu thải ra JSON xấu, vòng thứ hai mới hợp lệ. Normalize nên thành công, và vòng thứ hai
+// phải kèm đầu ra xấu của vòng trước với gợi ý sửa (có phản hồi, không phải thử lại mù nguyên xi).
 func TestNormalize_FeedbackRetryRecovers(t *testing.T) {
 	model := &scriptedModel{replies: []string{
-		"这不是 JSON",
+		"đây không phải JSON",
 		`{"structured":{"chapter_words":{"min":1200,"max":1600}},"preferences":"","uncertain":[]}`,
 	}}
 	n := NewNormalizer(model)
 
-	cand := n.Normalize(t.Context(), "startup_prompt", "每章1200到1600字")
+	cand := n.Normalize(t.Context(), "startup_prompt", "mỗi chương 1200 đến 1600 chữ")
 	if cand.Degraded {
-		t.Fatal("次轮已返回合法 JSON，不应降级")
+		t.Fatal("vòng thứ hai đã trả về JSON hợp lệ, không nên giáng cấp")
 	}
 	if cand.Structured.ChapterWords == nil || cand.Structured.ChapterWords.Min != 1200 {
-		t.Fatalf("应解析出 chapter_words，got %+v", cand.Structured)
+		t.Fatalf("nên phân tích ra chapter_words, got %+v", cand.Structured)
 	}
 	if model.calls != 2 {
-		t.Fatalf("应在第 2 次成功，实际调用 %d 次", model.calls)
+		t.Fatalf("nên thành công ở lần thứ 2, thực tế gọi %d lần", model.calls)
 	}
 
 	var sawBad, sawHint bool
 	for _, msg := range model.lastMsgs {
 		switch msg.TextContent() {
-		case "这不是 JSON":
+		case "đây không phải JSON":
 			sawBad = true
 		case normalizerRetryHint:
 			sawHint = true
 		}
 	}
 	if !sawBad || !sawHint {
-		t.Errorf("次轮应并入上一轮坏输出与纠正提示，sawBad=%v sawHint=%v", sawBad, sawHint)
+		t.Errorf("vòng thứ hai nên kèm đầu ra xấu của vòng trước và gợi ý sửa, sawBad=%v sawHint=%v", sawBad, sawHint)
 	}
 }
 
-// 归一化是机械抽取：对支持关闭思考的模型应显式关思考，并把 max_tokens 留足给 JSON。
-// scriptedModel 未实现 CapabilityProvider → 思考策略默认允许 off → 应 Resolve 成 off。
+// Chuẩn hóa là trích xuất cơ học: với mô hình hỗ trợ tắt tư duy nên tắt tư duy tường minh, và dành đủ max_tokens cho JSON.
+// scriptedModel chưa triển khai CapabilityProvider → chiến lược tư duy mặc định cho phép off → nên Resolve thành off.
 func TestNormalize_DisablesThinkingAndReservesTokens(t *testing.T) {
 	model := &scriptedModel{replies: []string{`{"preferences":"x"}`}}
 	n := NewNormalizer(model)
 
-	_ = n.Normalize(t.Context(), "startup_prompt", "随便一条规则")
+	_ = n.Normalize(t.Context(), "startup_prompt", "một quy tắc tùy ý")
 	if model.lastCfg.ThinkingLevel != agentcore.ThinkingOff {
-		t.Errorf("应对可关闭思考的模型关思考，got %q", model.lastCfg.ThinkingLevel)
+		t.Errorf("nên tắt tư duy với mô hình có thể tắt được, got %q", model.lastCfg.ThinkingLevel)
 	}
 	if model.lastCfg.MaxTokens != normalizeMaxTokens {
-		t.Errorf("max_tokens 应为 %d，got %d", normalizeMaxTokens, model.lastCfg.MaxTokens)
+		t.Errorf("max_tokens nên là %d, got %d", normalizeMaxTokens, model.lastCfg.MaxTokens)
 	}
 }
 
-// 全程坏 JSON：重试耗尽后降级，且恰好尝试 normalizeMaxAttempts 次。
+// JSON xấu toàn bộ: giáng cấp sau khi hết số lần thử lại, và đúng normalizeMaxAttempts lần.
 func TestNormalize_FeedbackRetryExhaustsThenDegrades(t *testing.T) {
-	model := &scriptedModel{replies: []string{"坏"}}
+	model := &scriptedModel{replies: []string{"xấu"}}
 	n := NewNormalizer(model)
 
-	cand := n.Normalize(t.Context(), "startup_prompt", "每章1200字")
+	cand := n.Normalize(t.Context(), "startup_prompt", "mỗi chương 1200 chữ")
 	if !cand.Degraded {
-		t.Fatal("全程坏 JSON 应降级")
+		t.Fatal("JSON xấu toàn bộ nên giáng cấp")
 	}
 	if model.calls != normalizeMaxAttempts {
-		t.Fatalf("应尝试 %d 次，实际 %d", normalizeMaxAttempts, model.calls)
+		t.Fatalf("nên thử %d lần, thực tế %d", normalizeMaxAttempts, model.calls)
 	}
 }

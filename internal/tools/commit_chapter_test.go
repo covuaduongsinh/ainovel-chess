@@ -24,7 +24,7 @@ func TestCommitChapterSchemaDescribesFeedbackAsObject(t *testing.T) {
 		t.Fatalf("feedback schema missing: %#v", props["feedback"])
 	}
 	desc, _ := feedback["description"].(string)
-	if !strings.Contains(desc, "JSON object") || !strings.Contains(desc, "字符串化 JSON") {
+	if !strings.Contains(desc, "JSON object") || !strings.Contains(desc, "JSON dạng chuỗi") {
 		t.Fatalf("feedback description should warn against stringified JSON, got %q", desc)
 	}
 	if got := feedback["type"]; got != "object" {
@@ -44,22 +44,22 @@ func TestCommitChapterRejectsNonPendingRewrite(t *testing.T) {
 	if err := store.Progress.MarkChapterComplete(2, 3000, "", ""); err != nil {
 		t.Fatalf("MarkChapterComplete: %v", err)
 	}
-	if err := store.Progress.SetPendingRewrites([]int{2}, "测试重写"); err != nil {
+	if err := store.Progress.SetPendingRewrites([]int{2}, "Kiem tra viet lai"); err != nil {
 		t.Fatalf("SetPendingRewrites: %v", err)
 	}
 	if err := store.Progress.SetFlow(domain.FlowRewriting); err != nil {
 		t.Fatalf("SetFlow: %v", err)
 	}
-	if err := store.Drafts.SaveDraft(3, "这是错误章节的正文。"); err != nil {
+	if err := store.Drafts.SaveDraft(3, "Day la noi dung chuong sai."); err != nil {
 		t.Fatalf("SaveDraft: %v", err)
 	}
 
 	tool := NewCommitChapterTool(store)
 	args, err := json.Marshal(map[string]any{
 		"chapter":         3,
-		"summary":         "错误提交",
-		"characters":      []string{"主角"},
-		"key_events":      []string{"误提交"},
+		"summary":         "Nop sai",
+		"characters":      []string{"Nhan vat chinh"},
+		"key_events":      []string{"Nop nham"},
 		"timeline_events": []any{},
 	})
 	if err != nil {
@@ -98,22 +98,22 @@ func TestCommitChapterAllowsPendingRewrite(t *testing.T) {
 	if err := store.Progress.MarkChapterComplete(2, 3000, "", ""); err != nil {
 		t.Fatalf("MarkChapterComplete: %v", err)
 	}
-	if err := store.Progress.SetPendingRewrites([]int{2}, "测试重写"); err != nil {
+	if err := store.Progress.SetPendingRewrites([]int{2}, "Kiem tra viet lai"); err != nil {
 		t.Fatalf("SetPendingRewrites: %v", err)
 	}
 	if err := store.Progress.SetFlow(domain.FlowRewriting); err != nil {
 		t.Fatalf("SetFlow: %v", err)
 	}
-	if err := store.Drafts.SaveDraft(2, "这是正确待重写章节的正文。"); err != nil {
+	if err := store.Drafts.SaveDraft(2, "Day la noi dung chuong dung can viet lai."); err != nil {
 		t.Fatalf("SaveDraft: %v", err)
 	}
 
 	tool := NewCommitChapterTool(store)
 	args, err := json.Marshal(map[string]any{
 		"chapter":         2,
-		"summary":         "正确提交",
-		"characters":      []string{"主角"},
-		"key_events":      []string{"完成重写"},
+		"summary":         "Nop dung",
+		"characters":      []string{"Nhan vat chinh"},
+		"key_events":      []string{"Hoan thanh viet lai"},
 		"timeline_events": []any{},
 	})
 	if err != nil {
@@ -144,8 +144,8 @@ func TestCommitChapterAllowsPendingRewrite(t *testing.T) {
 	}
 }
 
-// TestCommitChapterUpdatesCastLedger 验证：commit_chapter 把本章 characters 累加进 cast_ledger，
-// cast_intros 提供的 brief_role 被采用，且 characters.json 中的核心角色不进入 ledger。
+// TestCommitChapterUpdatesCastLedger xac minh: commit_chapter tich luy characters cua chuong nay vao cast_ledger,
+// brief_role do cast_intros cung cap duoc su dung, va cac nhan vat chinh trong characters.json khong vao ledger.
 func TestCommitChapterUpdatesCastLedger(t *testing.T) {
 	dir := t.TempDir()
 	s := store.NewStore(dir)
@@ -155,26 +155,26 @@ func TestCommitChapterUpdatesCastLedger(t *testing.T) {
 	if err := s.Progress.Init("test", 10); err != nil {
 		t.Fatalf("InitProgress: %v", err)
 	}
-	// 设定核心角色档案（这些不应进 cast_ledger）
+	// Thiet lap ho so nhan vat chinh (nhung nhan vat nay khong nen vao cast_ledger)
 	if err := s.Characters.Save([]domain.Character{
-		{Name: "林墨", Role: "主角", Tier: "core"},
-		{Name: "李清砚", Role: "导师", Tier: "important"},
+		{Name: "Lam Mo", Role: "Nhan vat chinh", Tier: "core"},
+		{Name: "Le Thanh Nghien", Role: "Su phu", Tier: "important"},
 	}); err != nil {
 		t.Fatalf("Save core characters: %v", err)
 	}
-	if err := s.Drafts.SaveDraft(1, "第一章正文，林墨遇到客栈老板老周与小厮阿云。"); err != nil {
+	if err := s.Drafts.SaveDraft(1, "Noi dung chuong mot, Lam Mo gap chu quan tro Lao Chau va cau boi A Van."); err != nil {
 		t.Fatalf("SaveDraft: %v", err)
 	}
 
 	tool := NewCommitChapterTool(s)
 	args, _ := json.Marshal(map[string]any{
 		"chapter":    1,
-		"summary":    "林墨入住客栈",
-		"characters": []string{"林墨", "李清砚", "老周", "阿云"},
-		"key_events": []string{"入住"},
+		"summary":    "Lam Mo vao tro",
+		"characters": []string{"Lam Mo", "Le Thanh Nghien", "Lao Chau", "A Van"},
+		"key_events": []string{"Vao tro"},
 		"cast_intros": []any{
-			map[string]any{"name": "老周", "brief_role": "客栈老板"},
-			map[string]any{"name": "阿云", "brief_role": "客栈小厮"},
+			map[string]any{"name": "Lao Chau", "brief_role": "Chu quan tro"},
+			map[string]any{"name": "A Van", "brief_role": "Cau boi quan tro"},
 		},
 	})
 	if _, err := tool.Execute(context.Background(), args); err != nil {
@@ -186,23 +186,23 @@ func TestCommitChapterUpdatesCastLedger(t *testing.T) {
 		t.Fatalf("Cast.Load: %v", err)
 	}
 	if len(entries) != 2 {
-		t.Fatalf("expected 2 ledger entries (老周/阿云), got %d: %+v", len(entries), entries)
+		t.Fatalf("expected 2 ledger entries (Lao Chau/A Van), got %d: %+v", len(entries), entries)
 	}
 	byName := map[string]domain.CastEntry{}
 	for _, e := range entries {
 		byName[e.Name] = e
 	}
-	if e, ok := byName["老周"]; !ok || e.BriefRole != "客栈老板" || e.FirstSeenChapter != 1 {
-		t.Errorf("老周 entry wrong: %+v", e)
+	if e, ok := byName["Lao Chau"]; !ok || e.BriefRole != "Chu quan tro" || e.FirstSeenChapter != 1 {
+		t.Errorf("Lao Chau entry wrong: %+v", e)
 	}
-	if e, ok := byName["阿云"]; !ok || e.BriefRole != "客栈小厮" || e.AppearanceCount != 1 {
-		t.Errorf("阿云 entry wrong: %+v", e)
+	if e, ok := byName["A Van"]; !ok || e.BriefRole != "Cau boi quan tro" || e.AppearanceCount != 1 {
+		t.Errorf("A Van entry wrong: %+v", e)
 	}
-	if _, ok := byName["林墨"]; ok {
-		t.Errorf("核心角色 林墨 不应进 ledger")
+	if _, ok := byName["Lam Mo"]; ok {
+		t.Errorf("Nhan vat chinh Lam Mo khong nen vao ledger")
 	}
-	if _, ok := byName["李清砚"]; ok {
-		t.Errorf("核心角色 李清砚 不应进 ledger")
+	if _, ok := byName["Le Thanh Nghien"]; ok {
+		t.Errorf("Nhan vat chinh Le Thanh Nghien khong nen vao ledger")
 	}
 }
 
@@ -215,30 +215,30 @@ func TestCommitChapterReplayAfterPartialCommitDoesNotDuplicateWorldState(t *test
 	if err := s.Progress.Init("test", 10); err != nil {
 		t.Fatalf("InitProgress: %v", err)
 	}
-	if err := s.Drafts.SaveDraft(1, "第一章正文，林墨遇到黑影并突破。"); err != nil {
+	if err := s.Drafts.SaveDraft(1, "Noi dung chuong mot, Lam Mo gap bong toi va dot pha."); err != nil {
 		t.Fatalf("SaveDraft: %v", err)
 	}
 
 	timeline := []domain.TimelineEvent{{
 		Chapter:    1,
-		Time:       "清晨",
-		Event:      "林墨遇到黑影",
-		Characters: []string{"林墨"},
+		Time:       "Sang som",
+		Event:      "Lam Mo gap bong toi",
+		Characters: []string{"Lam Mo"},
 	}}
 	stateChanges := []domain.StateChange{{
 		Chapter:  1,
-		Entity:   "林墨",
+		Entity:   "Lam Mo",
 		Field:    "realm",
-		OldValue: "凡人",
-		NewValue: "练气期",
+		OldValue: "Nguoi thuong",
+		NewValue: "Luyen khi ky",
 	}}
 	foreshadow := []domain.ForeshadowUpdate{{
 		ID:          "f1",
 		Action:      "plant",
-		Description: "黑影身份",
+		Description: "Than phan bong toi",
 	}}
 
-	// 模拟 commit_chapter 已写入世界状态，但尚未 MarkChapterComplete 时进程崩溃。
+	// Mo phong commit_chapter da ghi vao trang thai the gioi nhung tien trinh gap su co truoc khi MarkChapterComplete.
 	if err := s.World.AppendTimelineEvents(timeline); err != nil {
 		t.Fatalf("AppendTimelineEvents seed: %v", err)
 	}
@@ -251,7 +251,7 @@ func TestCommitChapterReplayAfterPartialCommitDoesNotDuplicateWorldState(t *test
 	if err := s.Signals.SavePendingCommit(domain.PendingCommit{
 		Chapter: 1,
 		Stage:   domain.CommitStageStateApplied,
-		Summary: "半提交摘要",
+		Summary: "Tom tat nua chung",
 	}); err != nil {
 		t.Fatalf("SavePendingCommit: %v", err)
 	}
@@ -259,9 +259,9 @@ func TestCommitChapterReplayAfterPartialCommitDoesNotDuplicateWorldState(t *test
 	tool := NewCommitChapterTool(s)
 	args, _ := json.Marshal(map[string]any{
 		"chapter":            1,
-		"summary":            "林墨遇到黑影并突破",
-		"characters":         []string{"林墨"},
-		"key_events":         []string{"遇到黑影", "突破"},
+		"summary":            "Lam Mo gap bong toi va dot pha",
+		"characters":         []string{"Lam Mo"},
+		"key_events":         []string{"Gap bong toi", "Dot pha"},
 		"timeline_events":    timeline,
 		"state_changes":      stateChanges,
 		"foreshadow_updates": foreshadow,
@@ -291,11 +291,11 @@ func TestCommitChapterReplayAfterPartialCommitDoesNotDuplicateWorldState(t *test
 	}
 }
 
-// TestCommitChapterRejectsPolishWithoutDraftChange 验证：已完成章节进入打磨/重写队列后，
-// 若 writer 跳过 draft_chapter 直接 commit（drafts 与 chapters 内容完全相同），
-// commit_chapter 必须拒绝，强制 writer 先调 draft_chapter 写入新版本。
-// TestCommitChapterNonLayeredRecompletesAfterRework 验证非分层书完本后经 reopen 返工，
-// 改完章节 commit、队列排空时能自动重新回到 complete（补 drain 后判完结的非分层分支）。
+// TestCommitChapterRejectsPolishWithoutDraftChange xac minh: sau khi chuong da hoan thanh vao hang doi danh bong/viet lai,
+// neu writer bo qua draft_chapter va nop thang (noi dung drafts va chapters hoan toan giong nhau),
+// commit_chapter phai tu choi, buoc writer goi draft_chapter truoc de ghi phien ban moi.
+// TestCommitChapterNonLayeredRecompletesAfterRework xac minh sach phi phan tang sau khi hoan thanh va reopen de lam lai,
+// khi nop chuong xong va hang doi trong co the tu dong quay lai trang thai complete (nhanh phi phan tang sau khi bo sung drain va ket thuc).
 func TestCommitChapterNonLayeredRecompletesAfterRework(t *testing.T) {
 	dir := t.TempDir()
 	s := store.NewStore(dir)
@@ -306,8 +306,8 @@ func TestCommitChapterNonLayeredRecompletesAfterRework(t *testing.T) {
 		t.Fatalf("InitProgress: %v", err)
 	}
 
-	// 两章写完并完结。第 2 章备齐 drafts/chapters，供返工提交。
-	ch2 := "第二章原始正文，用于模拟已提交终稿。"
+	// Hai chuong viet xong va hoan thanh. Chuong 2 co du drafts/chapters, san sang cho nop lai.
+	ch2 := "Noi dung goc chuong hai, dung de mo phong ban thao da nop."
 	if err := s.Drafts.SaveDraft(2, ch2); err != nil {
 		t.Fatalf("SaveDraft: %v", err)
 	}
@@ -324,21 +324,21 @@ func TestCommitChapterNonLayeredRecompletesAfterRework(t *testing.T) {
 		t.Fatalf("MarkComplete: %v", err)
 	}
 
-	// reopen 第 2 章 → phase 回 writing、PendingRewrites=[2]、flow=rewriting
-	if err := s.Progress.Reopen([]int{2}, "返工"); err != nil {
+	// reopen chuong 2 → phase quay ve writing, PendingRewrites=[2], flow=rewriting
+	if err := s.Progress.Reopen([]int{2}, "Lam lai"); err != nil {
 		t.Fatalf("Reopen: %v", err)
 	}
 
-	// 返工提交（草稿需与终稿不同才放行）
-	if err := s.Drafts.SaveDraft(2, ch2+"\n\n返工新增段落。"); err != nil {
+	// Nop lai (ban nhap can khac ban thao cuoi moi duoc chap nhan)
+	if err := s.Drafts.SaveDraft(2, ch2+"\n\nDoan them moi sau khi lam lai."); err != nil {
 		t.Fatalf("SaveDraft (reworked): %v", err)
 	}
 	tool := NewCommitChapterTool(s)
 	args, _ := json.Marshal(map[string]any{
 		"chapter":    2,
-		"summary":    "返工后摘要",
-		"characters": []string{"主角"},
-		"key_events": []string{"清理"},
+		"summary":    "Tom tat sau khi lam lai",
+		"characters": []string{"Nhan vat chinh"},
+		"key_events": []string{"Don dep"},
 	})
 	raw, err := tool.Execute(context.Background(), args)
 	if err != nil {
@@ -354,18 +354,18 @@ func TestCommitChapterNonLayeredRecompletesAfterRework(t *testing.T) {
 
 	p, _ := s.Progress.Load()
 	if p.Phase != domain.PhaseComplete {
-		t.Errorf("phase = %s, want complete (应自动重新收尾)", p.Phase)
+		t.Errorf("phase = %s, want complete (nen tu dong ket lai)", p.Phase)
 	}
 	if len(p.PendingRewrites) != 0 {
 		t.Errorf("PendingRewrites = %v, want empty", p.PendingRewrites)
 	}
 }
 
-// TestCommitChapterLayeredReopenRecompletesDespiteOpenThread 验证收口：分层书经 reopen
-// 返工后，即便 compass 仍有未收束长线（返工可能扰动），排空后也按"结构完整"重新完结——
-// 不卡在 writing，杜绝终卷末越界续写死循环（§6.5 / known_outline_exhaustion 家族）。
-// 反证：若 reopen 路径仍用质量级 layeredBookComplete，本例 open thread 会让其返 false、
-// book_complete 为假，测试即失败。
+// TestCommitChapterLayeredReopenRecompletesDespiteOpenThread xac minh ket thuc: sach phan tang sau khi reopen
+// lam lai, du compass van con long tuyen chua ket (lam lai co the gay nhieu loan), sau khi hang doi trong van hoan thanh theo "cau truc day du"--
+// khong bi ket o writing, ngan vong lap viet tran bien gioi cuoi tap cuoi (gia dinh §6.5 / known_outline_exhaustion).
+// Phan chung: neu duong dan reopen van dung layeredBookComplete cap chat luong, open thread se tra false,
+// book_complete la false, kiem thu se that bai.
 func TestCommitChapterLayeredReopenRecompletesDespiteOpenThread(t *testing.T) {
 	dir := t.TempDir()
 	s := store.NewStore(dir)
@@ -376,17 +376,17 @@ func TestCommitChapterLayeredReopenRecompletesDespiteOpenThread(t *testing.T) {
 		t.Fatalf("InitProgress: %v", err)
 	}
 
-	// 单卷单弧两章，全部展开
+	// Mot tap mot cung hai chuong, tat ca da trien khai
 	foundation := NewSaveFoundationTool(s)
 	layeredArgs, _ := json.Marshal(map[string]any{
 		"type": "layered_outline",
 		"content": []map[string]any{{
-			"index": 1, "title": "卷一", "theme": "主题",
+			"index": 1, "title": "Tap mot", "theme": "Chu de",
 			"arcs": []map[string]any{{
-				"index": 1, "title": "弧一", "goal": "目标",
+				"index": 1, "title": "Cung mot", "goal": "Muc tieu",
 				"chapters": []map[string]any{
-					{"title": "首章", "core_event": "起", "hook": "续"},
-					{"title": "次章", "core_event": "承", "hook": "终"},
+					{"title": "Chuong dau", "core_event": "Mo dau", "hook": "Tiep theo"},
+					{"title": "Chuong hai", "core_event": "Phat trien", "hook": "Ket thuc"},
 				},
 			}},
 		}},
@@ -396,9 +396,9 @@ func TestCommitChapterLayeredReopenRecompletesDespiteOpenThread(t *testing.T) {
 		t.Fatalf("Execute layered: %v", err)
 	}
 
-	// 两章写完落盘并完结
-	ch2 := "第二章原始正文，模拟已提交终稿。"
-	for ch, body := range map[int]string{1: "第一章正文。", 2: ch2} {
+	// Hai chuong viet xong luu dia va hoan thanh
+	ch2 := "Noi dung goc chuong hai, mo phong ban thao da nop."
+	for ch, body := range map[int]string{1: "Noi dung chuong mot.", 2: ch2} {
 		if err := s.Drafts.SaveDraft(ch, body); err != nil {
 			t.Fatalf("SaveDraft %d: %v", ch, err)
 		}
@@ -413,21 +413,21 @@ func TestCommitChapterLayeredReopenRecompletesDespiteOpenThread(t *testing.T) {
 		t.Fatalf("MarkComplete: %v", err)
 	}
 
-	// 模拟"返工扰动了长线"：compass 仍有未收束的 open thread
-	if err := s.Outline.SaveCompass(domain.StoryCompass{EndingDirection: "主角归乡", OpenThreads: []string{"宿敌未除"}}); err != nil {
+	// Mo phong "lam lai lam xao tron long tuyen": compass van con open thread chua ket
+	if err := s.Outline.SaveCompass(domain.StoryCompass{EndingDirection: "Nhan vat chinh ve que", OpenThreads: []string{"Ke thu chua bi tieu diet"}}); err != nil {
 		t.Fatalf("SaveCompass: %v", err)
 	}
 
-	// reopen 第 2 章 → 返工提交（草稿需与终稿不同才放行）
-	if err := s.Progress.Reopen([]int{2}, "返工"); err != nil {
+	// reopen chuong 2 → nop lai (ban nhap can khac ban thao cuoi moi duoc chap nhan)
+	if err := s.Progress.Reopen([]int{2}, "Lam lai"); err != nil {
 		t.Fatalf("Reopen: %v", err)
 	}
-	if err := s.Drafts.SaveDraft(2, ch2+"\n\n返工新增段落。"); err != nil {
+	if err := s.Drafts.SaveDraft(2, ch2+"\n\nDoan them moi sau khi lam lai."); err != nil {
 		t.Fatalf("SaveDraft reworked: %v", err)
 	}
 	tool := NewCommitChapterTool(s)
 	args, _ := json.Marshal(map[string]any{
-		"chapter": 2, "summary": "返工摘要", "characters": []string{"主角"}, "key_events": []string{"清理"},
+		"chapter": 2, "summary": "Tom tat lam lai", "characters": []string{"Nhan vat chinh"}, "key_events": []string{"Don dep"},
 	})
 	raw, err := tool.Execute(context.Background(), args)
 	if err != nil {
@@ -438,14 +438,14 @@ func TestCommitChapterLayeredReopenRecompletesDespiteOpenThread(t *testing.T) {
 		t.Fatalf("Unmarshal: %v", err)
 	}
 	if bc, _ := out["book_complete"].(bool); !bc {
-		t.Error("reopen 返工排空后应按结构完整重新完结（即便长线未收束）")
+		t.Error("reopen lam lai hang doi trong nen hoan thanh theo cau truc day du (du long tuyen chua ket)")
 	}
 	p, _ := s.Progress.Load()
 	if p.Phase != domain.PhaseComplete {
 		t.Errorf("phase = %s, want complete", p.Phase)
 	}
 	if p.ReopenedFromComplete {
-		t.Error("重新完结后 ReopenedFromComplete 应被清除")
+		t.Error("Sau khi hoan thanh lai ReopenedFromComplete nen duoc xoa")
 	}
 }
 
@@ -459,8 +459,8 @@ func TestCommitChapterRejectsPolishWithoutDraftChange(t *testing.T) {
 		t.Fatalf("InitProgress: %v", err)
 	}
 
-	// 模拟第 2 章已正常完成：drafts 与 chapters 内容相同。
-	original := "第二章原始正文内容，用于模拟已提交终稿。"
+	// Mo phong chuong 2 da hoan thanh binh thuong: noi dung drafts va chapters giong nhau.
+	original := "Noi dung goc chuong hai, dung de mo phong ban thao da nop."
 	if err := s.Drafts.SaveDraft(2, original); err != nil {
 		t.Fatalf("SaveDraft: %v", err)
 	}
@@ -471,8 +471,8 @@ func TestCommitChapterRejectsPolishWithoutDraftChange(t *testing.T) {
 		t.Fatalf("MarkChapterComplete: %v", err)
 	}
 
-	// 进入打磨队列：Flow=Polishing, PendingRewrites=[2]
-	if err := s.Progress.SetPendingRewrites([]int{2}, "测试打磨"); err != nil {
+	// Vao hang doi danh bong: Flow=Polishing, PendingRewrites=[2]
+	if err := s.Progress.SetPendingRewrites([]int{2}, "Kiem tra danh bong"); err != nil {
 		t.Fatalf("SetPendingRewrites: %v", err)
 	}
 	if err := s.Progress.SetFlow(domain.FlowPolishing); err != nil {
@@ -482,17 +482,17 @@ func TestCommitChapterRejectsPolishWithoutDraftChange(t *testing.T) {
 	tool := NewCommitChapterTool(s)
 	args, _ := json.Marshal(map[string]any{
 		"chapter":    2,
-		"summary":    "假装打磨了",
-		"characters": []string{"主角"},
-		"key_events": []string{"无改动"},
+		"summary":    "Gia vo da danh bong",
+		"characters": []string{"Nhan vat chinh"},
+		"key_events": []string{"Khong thay doi"},
 	})
 	_, err := tool.Execute(context.Background(), args)
 	if err == nil {
 		t.Fatal("expected commit to be rejected when drafts equals final content")
 	}
 
-	// 再写一版不同的草稿 → 应该通过
-	polished := original + "\n\n打磨后新增段落。"
+	// Viet them mot phien ban ban nhap khac → nen duoc chap nhan
+	polished := original + "\n\nDoan them moi sau khi danh bong."
 	if err := s.Drafts.SaveDraft(2, polished); err != nil {
 		t.Fatalf("SaveDraft (polished): %v", err)
 	}

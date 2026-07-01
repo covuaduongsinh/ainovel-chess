@@ -7,22 +7,22 @@ import (
 	"github.com/voocel/ainovel-cli/internal/domain"
 )
 
-// SummaryStore 管理章节、弧、卷摘要。
+// SummaryStore quản lý tóm tắt chương, cung, tập.
 type SummaryStore struct {
 	io      *IO
-	outline *OutlineStore // 只读依赖，用于获取弧/卷数量
+	outline *OutlineStore // phụ thuộc chỉ đọc, dùng để lấy số lượng cung/tập
 }
 
 func NewSummaryStore(io *IO, outline *OutlineStore) *SummaryStore {
 	return &SummaryStore{io: io, outline: outline}
 }
 
-// SaveSummary 保存章节摘要到 summaries/{ch}.json。
+// SaveSummary lưu tóm tắt chương vào summaries/{ch}.json.
 func (s *SummaryStore) SaveSummary(sum domain.ChapterSummary) error {
 	return s.io.WriteJSON(fmt.Sprintf("summaries/%02d.json", sum.Chapter), sum)
 }
 
-// LoadSummary 读取指定章节的摘要。
+// LoadSummary đọc tóm tắt của chương được chỉ định.
 func (s *SummaryStore) LoadSummary(chapter int) (*domain.ChapterSummary, error) {
 	var sum domain.ChapterSummary
 	if err := s.io.ReadJSON(fmt.Sprintf("summaries/%02d.json", chapter), &sum); err != nil {
@@ -34,7 +34,7 @@ func (s *SummaryStore) LoadSummary(chapter int) (*domain.ChapterSummary, error) 
 	return &sum, nil
 }
 
-// LoadRecentSummaries 加载 current 章之前最近 count 章的摘要。
+// LoadRecentSummaries tải tóm tắt của count chương gần nhất trước chương current.
 func (s *SummaryStore) LoadRecentSummaries(current, count int) ([]domain.ChapterSummary, error) {
 	var result []domain.ChapterSummary
 	start := max(current-count, 1)
@@ -50,24 +50,24 @@ func (s *SummaryStore) LoadRecentSummaries(current, count int) ([]domain.Chapter
 	return result, nil
 }
 
-// SaveArcSummary 保存弧级摘要。
+// SaveArcSummary lưu tóm tắt cấp cung.
 func (s *SummaryStore) SaveArcSummary(sum domain.ArcSummary) error {
 	return s.io.WriteJSON(fmt.Sprintf("summaries/arc-v%02da%02d.json", sum.Volume, sum.Arc), sum)
 }
 
-// HasArcSummary 检查指定弧是否已保存摘要。读失败按"未保存"处理。
+// HasArcSummary kiểm tra cung được chỉ định đã có tóm tắt chưa. Khi đọc thất bại, xử lý như "chưa lưu".
 func (s *SummaryStore) HasArcSummary(volume, arc int) bool {
 	sum, err := s.LoadArcSummary(volume, arc)
 	return err == nil && sum != nil
 }
 
-// HasVolumeSummary 检查指定卷是否已保存摘要。读失败按"未保存"处理。
+// HasVolumeSummary kiểm tra tập được chỉ định đã có tóm tắt chưa. Khi đọc thất bại, xử lý như "chưa lưu".
 func (s *SummaryStore) HasVolumeSummary(volume int) bool {
 	sum, err := s.LoadVolumeSummary(volume)
 	return err == nil && sum != nil
 }
 
-// LoadArcSummary 读取指定弧的摘要。
+// LoadArcSummary đọc tóm tắt của cung được chỉ định.
 func (s *SummaryStore) LoadArcSummary(volume, arc int) (*domain.ArcSummary, error) {
 	var sum domain.ArcSummary
 	if err := s.io.ReadJSON(fmt.Sprintf("summaries/arc-v%02da%02d.json", volume, arc), &sum); err != nil {
@@ -79,7 +79,7 @@ func (s *SummaryStore) LoadArcSummary(volume, arc int) (*domain.ArcSummary, erro
 	return &sum, nil
 }
 
-// LoadArcSummaries 加载一卷内所有已有弧摘要。
+// LoadArcSummaries tải tất cả tóm tắt cung hiện có trong một tập.
 func (s *SummaryStore) LoadArcSummaries(volume int) ([]domain.ArcSummary, error) {
 	maxArc := s.arcCountForVolume(volume)
 	var result []domain.ArcSummary
@@ -95,12 +95,12 @@ func (s *SummaryStore) LoadArcSummaries(volume int) ([]domain.ArcSummary, error)
 	return result, nil
 }
 
-// SaveVolumeSummary 保存卷级摘要。
+// SaveVolumeSummary lưu tóm tắt cấp tập.
 func (s *SummaryStore) SaveVolumeSummary(sum domain.VolumeSummary) error {
 	return s.io.WriteJSON(fmt.Sprintf("summaries/vol-v%02d.json", sum.Volume), sum)
 }
 
-// LoadVolumeSummary 读取指定卷的摘要。
+// LoadVolumeSummary đọc tóm tắt của tập được chỉ định.
 func (s *SummaryStore) LoadVolumeSummary(volume int) (*domain.VolumeSummary, error) {
 	var sum domain.VolumeSummary
 	if err := s.io.ReadJSON(fmt.Sprintf("summaries/vol-v%02d.json", volume), &sum); err != nil {
@@ -112,7 +112,7 @@ func (s *SummaryStore) LoadVolumeSummary(volume int) (*domain.VolumeSummary, err
 	return &sum, nil
 }
 
-// LoadAllVolumeSummaries 加载所有已有卷摘要。
+// LoadAllVolumeSummaries tải tất cả tóm tắt tập hiện có.
 func (s *SummaryStore) LoadAllVolumeSummaries() ([]domain.VolumeSummary, error) {
 	maxVol := s.volumeCount()
 	var result []domain.VolumeSummary
@@ -128,7 +128,7 @@ func (s *SummaryStore) LoadAllVolumeSummaries() ([]domain.VolumeSummary, error) 
 	return result, nil
 }
 
-// FindCharacterAppearances 批量查找多个角色的最后出场章节号。
+// FindCharacterAppearances tìm kiếm hàng loạt số chương xuất hiện cuối cùng của nhiều nhân vật.
 func (s *SummaryStore) FindCharacterAppearances(names []string, endChapter, recentWindow int) map[string]int {
 	result := make(map[string]int, len(names))
 	remaining := make(map[string]struct{}, len(names))

@@ -11,20 +11,20 @@ import (
 
 func TestAllowsFilter(t *testing.T) {
 	if New("", nil).allows("repeat") != true {
-		t.Error("events 缺省应全放行")
+		t.Error("events mac dinh nen cho qua tat ca")
 	}
 	n := New("", []string{"run_end", "budget"})
 	if !n.allows("run_end") || !n.allows("budget") {
-		t.Error("列入的 kind 应放行")
+		t.Error("kind da liet ke nen duoc cho qua")
 	}
 	if n.allows("repeat") {
-		t.Error("未列入的 kind 应拦截")
+		t.Error("kind chua liet ke nen bi chan")
 	}
 	var nilN *Notifier
 	if nilN.allows("run_end") {
-		t.Error("nil Notifier 应拦截一切")
+		t.Error("nil Notifier nen chan tat ca")
 	}
-	nilN.Send(Notification{Kind: "run_end"}) // 不应 panic
+	nilN.Send(Notification{Kind: "run_end"}) // khong duoc panic
 }
 
 func TestCommandChannelEnvAndStdin(t *testing.T) {
@@ -33,27 +33,27 @@ func TestCommandChannelEnvAndStdin(t *testing.T) {
 	jsonFile := filepath.Join(dir, "stdin.json")
 
 	n := New(`echo "$NOTIFY_KIND|$NOTIFY_LEVEL|$NOTIFY_TITLE|$NOTIFY_BODY" > `+envFile+` && cat > `+jsonFile, nil)
-	nt := Notification{Kind: "budget", Level: "warn", Title: "ainovel: 预算", Body: "已花费 $8.00"}
-	n.deliver(nt) // 同步调用以便断言
+	nt := Notification{Kind: "budget", Level: "warn", Title: "ainovel: ngan sach", Body: "Da chi $8.00"}
+	n.deliver(nt) // goi dong bo de xac nhan
 
 	env, err := os.ReadFile(envFile)
 	if err != nil {
-		t.Fatalf("command 未执行: %v", err)
+		t.Fatalf("command chua duoc thuc thi: %v", err)
 	}
-	if got := strings.TrimSpace(string(env)); got != "budget|warn|ainovel: 预算|已花费 $8.00" {
-		t.Errorf("环境变量传递不符: %q", got)
+	if got := strings.TrimSpace(string(env)); got != "budget|warn|ainovel: ngan sach|Da chi $8.00" {
+		t.Errorf("truyen bien moi truong khong khop: %q", got)
 	}
 
 	raw, err := os.ReadFile(jsonFile)
 	if err != nil {
-		t.Fatalf("stdin 未传递: %v", err)
+		t.Fatalf("stdin chua duoc truyen: %v", err)
 	}
 	var decoded Notification
 	if err := json.Unmarshal(raw, &decoded); err != nil {
-		t.Fatalf("stdin 非合法 JSON: %v", err)
+		t.Fatalf("stdin khong phai JSON hop le: %v", err)
 	}
 	if decoded != nt {
-		t.Errorf("stdin JSON 不符: %+v", decoded)
+		t.Errorf("stdin JSON khong khop: %+v", decoded)
 	}
 }
 
@@ -64,6 +64,6 @@ func TestCommandChannelTimeoutKill(t *testing.T) {
 	start := time.Now()
 	n.deliver(Notification{Kind: "run_end"})
 	if elapsed := time.Since(start); elapsed > 5*time.Second {
-		t.Fatalf("超时未强杀, 阻塞 %v", elapsed)
+		t.Fatalf("het thoi gian chua giet cung buoc, bi chan %v", elapsed)
 	}
 }

@@ -1,77 +1,77 @@
 package diag
 
-// Severity 表示发现的严重程度。
+// Severity bieu thi muc do nghiem trong cua phat hien.
 type Severity string
 
 const (
-	SevCritical Severity = "critical" // 阻塞进度或数据损坏
-	SevWarning  Severity = "warning"  // 可能降低质量或浪费 token
-	SevInfo     Severity = "info"     // 可优化项
+	SevCritical Severity = "critical" // Chan tien do hoac lam hong du lieu
+	SevWarning  Severity = "warning"  // Co the lam giam chat luong hoac lang phi token
+	SevInfo     Severity = "info"     // Muc co the toi uu
 )
 
-// Category 将发现按维度分组。
+// Category nhom cac phat hien theo chieu.
 type Category string
 
 const (
-	CatFlow     Category = "flow"     // 流程卡顿、状态异常、恢复问题
-	CatQuality  Category = "quality"  // 评审评分、合同履约、一致性
-	CatPlanning Category = "planning" // 大纲缺口、伏笔漂移、指南针过时
-	CatContext  Category = "context"  // 角色/时间线/关系异常
+	CatFlow     Category = "flow"     // Quy trinh bi ket, trang thai bat thuong, van de phuc hoi
+	CatQuality  Category = "quality"  // Diem tham dinh, thuc thi hop dong, nhat quan
+	CatPlanning Category = "planning" // Thieu dai cuong, dich chuyen foreshadow, la ban co han
+	CatContext  Category = "context"  // Bat thuong nhan vat/dong thoi gian/moi quan he
 )
 
-// Confidence 表示规则判定的置信度。
+// Confidence bieu thi do tin cay cua phan xet quy tac.
 type Confidence string
 
 const (
-	ConfHigh   Confidence = "high"   // 确定性强，可信赖
-	ConfMedium Confidence = "medium" // 启发式判断，可能有误判
-	ConfLow    Confidence = "low"    // 粗略信号，仅供参考
+	ConfHigh   Confidence = "high"   // Do chinh xac cao, dang tin cay
+	ConfMedium Confidence = "medium" // Phan xet heuristic, co the co sai sot
+	ConfLow    Confidence = "low"    // Tin hieu tho, chi tham khao
 )
 
-// AutoLevel 表示 Finding 是否可以转为自动化动作。
+// AutoLevel bieu thi lieu Finding co the chuyen thanh dong tac tu dong hay khong.
 type AutoLevel string
 
 const (
-	AutoNone    AutoLevel = "none"    // 仅报告，不自动
-	AutoSuggest AutoLevel = "suggest" // 建议动作但需人工确认
-	AutoSafe    AutoLevel = "safe"    // 可安全自动执行
+	AutoNone    AutoLevel = "none"    // Chi bao cao, khong tu dong
+	AutoSuggest AutoLevel = "suggest" // De xuat dong tac nhung can xac nhan thu cong
+	AutoSafe    AutoLevel = "safe"    // Co the tu dong thuc thi an toan
 )
 
-// Finding 是一条可执行的诊断结果。
+// Finding la mot ket qua chan doan co the hanh dong.
 type Finding struct {
-	Rule       string     // 规则名，如 "StaleForeshadow"
-	Category   Category   // 分类
-	Severity   Severity   // 严重程度
-	Confidence Confidence // 判定置信度
-	AutoLevel  AutoLevel  // 自动化级别
-	Target     string     // 建议作用面，如 "runtime.flow"
-	Title      string     // 一行摘要
-	Evidence   string     // 具体数据证据
-	Suggestion string     // 改进建议（指向 prompt/flow/config）
+	Rule       string     // Ten quy tac, vi du "StaleForeshadow"
+	Category   Category   // Phan loai
+	Severity   Severity   // Muc do nghiem trong
+	Confidence Confidence // Do tin cay phan xet
+	AutoLevel  AutoLevel  // Cap do tu dong hoa
+	Target     string     // Mat tac dong de xuat, vi du "runtime.flow"
+	Title      string     // Tom tat mot dong
+	Evidence   string     // Bang chung du lieu cu the
+	Suggestion string     // De xuat cai thien (tro den prompt/flow/config)
 }
 
-// RuleFunc 是诊断规则的统一签名。
+// RuleFunc la chu ky thong nhat cua quy tac chan doan.
 type RuleFunc func(snap *Snapshot) []Finding
 
-// ActionKind 表示诊断动作的类型。
+// ActionKind bieu thi loai dong tac chan doan.
 type ActionKind string
 
 const (
-	ActionEmitNotice      ActionKind = "emit_notice"       // 发系统提示
-	ActionEnqueueFollowUp ActionKind = "enqueue_follow_up" // 注入 coordinator follow-up
+	ActionEmitNotice      ActionKind = "emit_notice"       // Phat thong bao he thong
+	ActionEnqueueFollowUp ActionKind = "enqueue_follow_up" // Nhet follow-up vao coordinator
 )
 
-// Action 是 Planner 根据高置信 Finding 生成的可执行动作。
+// Action la dong tac co the thuc thi duoc Planner tao ra dua tren Finding do tin cay cao.
 type Action struct {
-	SourceRule  string     // 来源规则名
-	Kind        ActionKind // 动作类型
-	Severity    Severity   // 继承自 Finding
-	Summary     string     // 简短描述
-	Message     string     // 传递给控制流的消息
-	Fingerprint string     // 来源 Finding 的稳定指纹，用于运行时去重
+	SourceRule  string     // Ten quy tac nguon goc
+	Kind        ActionKind // Loai dong tac
+	Severity    Severity   // Ke thua tu Finding
+	Summary     string     // Mo ta ngan gon
+	Message     string     // Tin nhan truyen cho luong dieu khien
+	Fingerprint string     // Dau an on dinh cua Finding nguon, dung de loc trung lap thoi gian chay
 }
 
-// Stats 是与发现并列展示的概览指标。
+// Stats la cac chi so tong quan hien thi song song voi cac phat hien.
 type Stats struct {
 	CompletedChapters int
 	TotalChapters     int
@@ -87,7 +87,7 @@ type Stats struct {
 	ForeshadowStale   int
 }
 
-// Report 是一次诊断运行的完整输出。
+// Report la dau ra day du cua mot lan chay chan doan.
 type Report struct {
 	Stats    Stats
 	Findings []Finding

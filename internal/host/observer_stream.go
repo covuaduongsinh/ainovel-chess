@@ -7,34 +7,35 @@ import (
 	"github.com/voocel/ainovel-cli/internal/utils"
 )
 
-// handleSubagentDelta 分流 subagent 的文本与工具调用参数：
-// - DeltaText 直接作为 markdown 流出
-// - DeltaToolCall 只对已知的长内容工具（如 draft_chapter.content）抽取字段流出；其他工具的参数 JSON 全部丢弃
+// handleSubagentDelta phân luồng văn bản và tham số gọi công cụ của subagent:
+// - DeltaText trực tiếp xuất như markdown
+// - DeltaToolCall chỉ trích trường và xuất cho các công cụ có nội dung dài đã biết (như draft_chapter.content); tham số JSON của các công cụ khác đều bị bỏ
 func (o *observer) handleSubagentDelta(p *agentcore.ProgressPayload) {
 	if p.DeltaKind != agentcore.DeltaToolCall {
 		o.emitStreamDelta(p.Delta, false)
 		return
 	}
 	if p.Tool == "" {
-		return // 工具名未就绪，下一个 delta 再试
+		return // Tên công cụ chưa sẵn sàng, thử lại delta tiếp theo
 	}
 
-	// 流式识别到工具名时提前发 TOOL 进行中事件，让 spinner 覆盖整段 LLM 生成期间
-	// （否则 draft_chapter 这类工具的"进行中"只在真实 Execute 的几十毫秒里显示）。
-	// 真正的 ProgressToolStart 到来时识别到 toolStarts 已有记录，只会补齐 summary。
+	// Khi nhận diện tên công cụ qua luồng, phát sớm sự kiện TOOL đang tiến hành,
+	// để spinner bao phủ toàn bộ giai đoạn LLM sinh
+	// (nếu không, "đang tiến hành" của các công cụ như draft_chapter chỉ hiển thị trong vài chục ms của Execute thực sự).
+	// Khi ProgressToolStart thực sự đến nơi, nhận ra toolStarts đã có record, chỉ bổ sung summary.
 	o.ensureSubagentToolStarted(p.Agent, p.Tool)
 	o.updateToolCallSummaryFromDelta(p.Agent, p.Tool, p.Delta)
 
 	cur, ok := o.streamExtractors[p.Agent]
-	// 同工具调用 args 已闭合（顶层 } 命中）后，仍可能收到 trailing delta：
-	// 某些 provider（deepseek-v4-flash 实测）会把单次 args 拆成多个 chunk，
-	// 最末一个 chunk 在 `}` 之后还跟着空白或重复字符。此时若按"工具名匹配 +
-	// Done 即重建"处理，新 extractor 又会 emit 一次 ✻ header 并把尾段 token
-	// 当作新 args 解析。这些 delta 是冗余尾巴，丢弃即可。
+	// Sau khi args của cùng lần gọi công cụ đã đóng (hit } cấp đỉnh), vẫn có thể nhận được trailing delta:
+	// Một số provider (thực đo với deepseek-v4-flash) chia args một lần thành nhiều chunk,
+	// chunk cuối cùng sau `}` còn theo sau bởi khoảng trắng hoặc ký tự lặp. Lúc này nếu xử lý theo "tên công cụ khớp +
+	// Done thì xây lại", extractor mới lại emit thêm một lần ✻ header và parse phần đuôi token như args mới.
+	// Những delta này là đuôi thừa, bỏ đi là được.
 	if ok && cur.tool == p.Tool && cur.ext.Done() {
 		return
 	}
-	// 工具名变了或还没建过：新建。
+	// Tên công cụ thay đổi hoặc chưa từng tạo: tạo mới.
 	if !ok || cur.tool != p.Tool {
 		ext := newToolExtractor(p.Tool)
 		if ext == nil {
@@ -47,16 +48,16 @@ func (o *observer) handleSubagentDelta(p *agentcore.ProgressPayload) {
 	if emitted := cur.ext.Feed(p.Delta); emitted != "" {
 		if !cur.emittedAny {
 			cur.emittedAny = true
-			// streamClear 让 extractor 的 ✻ header 落在新 round 起点，配合
-			// renderStreamContent 的 HasPrefix("✻") 检查走 renderAgentBlock 高亮
-			// 路径；用 ensureStreamParagraphBreak 只插空行不开 round，✻ 仍会被
-			// 前面的 thinking/正文包住，落到 renderChapterBlock 用默认色画掉。
+			// streamClear cho ✻ header của extractor rơi vào điểm bắt đầu round mới, phối hợp
+			// kiểm tra HasPrefix("✻") của renderStreamContent để đi đường renderAgentBlock highlight;
+			// dùng ensureStreamParagraphBreak chỉ chèn dòng trống không mở round, ✻ vẫn bị
+			// thinking/chính văn phía trước bao bọc, rơi vào renderChapterBlock dùng màu mặc định vẽ mất.
 			o.streamClear()
-			// streamClear 防御性清空了 streamExtractors。当前 cur 还要继续 Feed
-			// 本工具调用后续的 delta，必须立刻把它重新登记回去；否则下一段 delta
-			// 来时会新建 extractor，从 args 中段开始解析（在嵌套对象的 `{` 处
-			// 才进入 psBeforeKey），把 timeline_events.time / foreshadow_updates.id
-			// 等当成顶层字段，TUI 上重复出现 ✻ header。
+			// streamClear đã phòng thủ xóa sạch streamExtractors. cur hiện tại vẫn cần tiếp tục Feed
+			// các delta tiếp theo của lần gọi công cụ này, phải lập tức đăng ký lại ngay;
+			// nếu không khi delta đoạn tiếp theo đến sẽ tạo extractor mới, parse từ giữa chừng args
+			// (vào psBeforeKey tại `{` của object lồng nhau), coi timeline_events.time / foreshadow_updates.id
+			// v.v. như trường cấp đỉnh, TUI xuất hiện ✻ header lặp lại.
 			o.streamExtractors[p.Agent] = cur
 		}
 		o.emitStreamDelta(emitted, false)
@@ -102,23 +103,23 @@ func (o *observer) emitStreamDelta(delta string, thinking bool) {
 	o.streamLastByte = delta[len(delta)-1]
 }
 
-// ensureSubagentToolStarted 在流式识别到 tool_call 首次出现时，提前为该 agent
-// 登记一次进行中的 TOOL 调用，使事件流的 spinner 覆盖"LLM 流式生成 tool_call
-// 参数"这一段时间（通常占调用总耗时的 99%）。args 此时尚不完整，暂以纯工具名
-// 为 summary；等真正的 ProgressToolStart 到来时会补齐带参数的 summary。
+// ensureSubagentToolStarted đăng ký sớm một lần gọi TOOL đang tiến hành cho agent khi lần đầu nhận diện tool_call
+// qua luồng, để spinner của luồng sự kiện bao phủ giai đoạn "LLM sinh tham số tool_call theo luồng"
+// (thường chiếm 99% tổng thời gian gọi). args lúc này chưa hoàn chỉnh, tạm dùng tên công cụ thuần làm
+// summary; đến khi ProgressToolStart thực sự đến sẽ bổ sung summary kèm tham số.
 func (o *observer) ensureSubagentToolStarted(agent, tool string) {
 	if agent == "" || tool == "" {
 		return
 	}
 	if _, ok := o.toolStarts[agent]; ok {
-		return // 已有进行中调用，幂等
+		return // Đã có lần gọi đang tiến hành, idempotent
 	}
 	o.resetStreamArgLabel(agent, tool)
 	id := nextEventID()
 	o.toolStarts[agent] = &activeCall{
 		id:      id,
 		start:   time.Now(),
-		summary: tool, // 先用纯工具名，ProgressToolStart 到来时可能更新为 tool(第N章)
+		summary: tool, // Dùng tên công cụ thuần trước, khi ProgressToolStart đến có thể cập nhật thành tool(chương N)
 		depth:   1,
 	}
 	o.emitAndLog(Event{
@@ -143,50 +144,51 @@ func (o *observer) resetStreamArgLabel(agent, tool string) {
 	delete(o.streamArgLabels, key)
 }
 
-// emitFallbackStreamHeader 给未配置 extractor 的工具补一行 ✻ 标题到流面板。
-// 三条路径都要调用以保证一致：
-//  1. ensureSubagentToolStarted —— subagent 流式 tool args（DeltaToolCall）
-//  2. handleToolUpdate ProgressToolStart —— subagent 非流式 tool args
-//  3. handleToolStart —— coordinator 自身工具
+// emitFallbackStreamHeader bổ sung một dòng ✻ tiêu đề vào bảng luồng cho các công cụ chưa cấu hình extractor.
+// Ba đường dẫn đều phải gọi để đảm bảo nhất quán:
+//  1. ensureSubagentToolStarted —— subagent tool args theo luồng (DeltaToolCall)
+//  2. handleToolUpdate ProgressToolStart —— subagent tool args không theo luồng
+//  3. handleToolStart —— công cụ của chính coordinator
 //
-// 缺任何一条，同一个工具就会"writer 调有 ✻、coordinator 调没 ✻"或反过来。
+// Thiếu bất kỳ đường nào, cùng một công cụ sẽ "gọi từ writer có ✻, gọi từ coordinator không có ✻" hoặc ngược lại.
 func (o *observer) emitFallbackStreamHeader(tool string) {
 	if _, has := toolDisplays[tool]; has {
-		return // 有 extractor，header 由 extractor 自行输出
+		return // Đã có extractor, header do extractor tự xuất
 	}
 	o.streamClear()
 	o.emitStreamDelta(streamHeaderFallback(tool)+"\n", false)
 }
 
-// streamHeaderFallback 为未配置 extractor 的工具生成流式 header 文本，
-// 让用户即使对轻量读取类工具也能看到"在调用什么"。
+// streamHeaderFallback sinh văn bản header luồng cho các công cụ chưa cấu hình extractor,
+// để người dùng có thể thấy "đang gọi cái gì" ngay cả với các công cụ đọc nhẹ.
 //
-// 前缀 "✻ " 是约定的"agent 调度块"标记 — TUI 的 renderStreamContent 见到这个
-// 前缀会走 renderAgentBlock 路径渲染（图标 + 高亮 label + 分隔线），
-// 否则会落到正文块路径用终端默认色，header 看起来就是普通正文不醒目。
+// Tiền tố "✻ " là ký hiệu quy ước "khối agent dispatch" — renderStreamContent của TUI khi thấy
+// tiền tố này sẽ đi đường renderAgentBlock để render (icon + label highlight + đường kẻ phân cách),
+// nếu không sẽ rơi vào đường khối chính văn dùng màu mặc định terminal, header trông như văn bản thường không nổi bật.
 func streamHeaderFallback(tool string) string {
 	label := tool
 	switch tool {
 	case "ask_user":
-		label = "向用户提问"
+		label = "Hỏi người dùng"
 	}
 	return "✻ " + label
 }
 
-// streamClear 通知 TUI 开启新一轮 streamRound，同时重置与段落分隔相关的状态。
-// 逻辑上新 round 是"空 stream"，否则下一次首个 extractor emit 会误补前导空行。
+// streamClear thông báo TUI bắt đầu một streamRound mới, đồng thời reset trạng thái liên quan đến ngăn cách đoạn.
+// Về mặt logic round mới là "stream rỗng", nếu không lần emit đầu tiên của extractor tiếp theo sẽ bổ sung nhầm dòng trống đầu.
 //
-// streamThinking 必须一并重置：emitStreamDelta 用 streamThinking 跨调用追踪
-// 上一段是不是思考。新 round 内还没输出过任何内容，下一次 emit(thinking=false)
-// 不应该再插入 ThinkingSep。否则 fallback header（如 ✻ 读章节）会被 \x02
-// 抢先占头，renderStreamContent 的 HasPrefix("✻") 失配，整段落到正文路径
-// 再被 ThinkingSep 切分为思考段，title 颜色被画成思考色。
+// streamThinking phải được reset cùng: emitStreamDelta dùng streamThinking để theo dõi liên gọi
+// xem đoạn trước có phải thinking không. Trong round mới chưa xuất bất kỳ nội dung nào,
+// lần emit(thinking=false) tiếp theo không nên chèn ThinkingSep nữa.
+// Nếu không fallback header (như ✻ đọc chương) sẽ bị \x02 chiếm đầu,
+// HasPrefix("✻") của renderStreamContent không khớp, toàn đoạn rơi vào đường chính văn
+// rồi bị ThinkingSep cắt thành đoạn thinking, màu title bị vẽ thành màu thinking.
 func (o *observer) streamClear() {
 	o.emitC()
 	o.streamHasContent = false
 	o.streamLastByte = 0
 	o.streamThinking = false
-	// 上一轮的 subagent 结束前 ProgressToolEnd 已 delete，这里防御性清空。
+	// ProgressToolEnd của subagent vòng trước đã delete trước khi kết thúc, đây là phòng thủ xóa sạch.
 	if len(o.streamExtractors) > 0 {
 		o.streamExtractors = make(map[string]*agentExtractor)
 	}

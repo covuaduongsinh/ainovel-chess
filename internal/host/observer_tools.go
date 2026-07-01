@@ -16,7 +16,7 @@ func (o *observer) handleToolStart(ev agentcore.Event) {
 	}
 	agent := agentFromEvent(ev)
 
-	// subagent 调用 → DISPATCH 事件（进行中）
+	// subagent gọi → sự kiện DISPATCH (đang tiến hành)
 	if ev.Tool == "subagent" {
 		sub := parseSubagentArgs(ev.Args)
 		target := sub.agent
@@ -49,7 +49,7 @@ func (o *observer) handleToolStart(ev agentcore.Event) {
 		return
 	}
 
-	// coordinator 自身工具（进行中）
+	// Công cụ của chính coordinator (đang tiến hành)
 	toolName := displayToolName(ev.Tool, ev.Args)
 	if _, ok := o.toolStarts[agent]; ok {
 		o.updateToolCallSummary(agent, ev.Tool, toolName)
@@ -83,9 +83,9 @@ func (o *observer) handleToolUpdate(ev agentcore.Event) {
 			o.handleSubagentDelta(ev.Progress)
 		}
 	case agentcore.ProgressToolStart:
-		// 子代理内部的工具调用（如 writer → draft_chapter）。
-		// 注意：TOOL 行可能已经在流式识别阶段被 handleSubagentDelta 提前发出。
-		// 此处：若已发 → 只更新 summary（args 此时完整，能显示 "tool(第N章)"）；否则正常发。
+		// Gọi công cụ nội bộ của subagent (ví dụ: writer → draft_chapter).
+		// Lưu ý: dòng TOOL có thể đã được handleSubagentDelta phát sớm trong giai đoạn nhận diện luồng.
+		// Ở đây: nếu đã phát → chỉ cập nhật summary (args lúc này đầy đủ, có thể hiển thị "tool(chương N)"); nếu chưa thì phát bình thường.
 		if ev.Progress.Agent == "" || ev.Progress.Tool == "" {
 			break
 		}
@@ -99,10 +99,10 @@ func (o *observer) handleToolUpdate(ev agentcore.Event) {
 			})
 			break
 		}
-		// 未提前发过 → 正常流程
-		// （非流式 tool args 的模型不会触发 ensureSubagentToolStarted，
-		// fallback header 必须在这条路径上补一次，否则 read_chapter 这类
-		// 无 extractor 的工具流式面板上就没有 ✻ 头部，紧贴前面思考一段。）
+		// Chưa từng phát sớm → luồng bình thường
+		// (Mô hình với tool args không theo luồng sẽ không kích hoạt ensureSubagentToolStarted,
+		// fallback header phải được bổ sung trên đường dẫn này, nếu không các công cụ như read_chapter
+		// không có extractor sẽ không có ✻ đầu trang trên bảng luồng, dính liền với đoạn thinking phía trước.)
 		id := nextEventID()
 		o.toolStarts[ev.Progress.Agent] = &activeCall{id: id, start: time.Now(), summary: toolName, depth: 1}
 		o.emitAndLog(Event{
@@ -130,8 +130,8 @@ func (o *observer) handleToolUpdate(ev agentcore.Event) {
 			return
 		}
 		delete(o.toolStarts, ev.Progress.Agent)
-		// 同 ID 更新事件：TUI 按 ID 定位原 TOOL 行，回填 FinishedAt / Duration。
-		// Summary / Depth 也带上，保证 runtime queue replay 时能还原完整行。
+		// Sự kiện cập nhật cùng ID: TUI định vị dòng TOOL gốc theo ID, điền lại FinishedAt / Duration.
+		// Summary / Depth cũng được gửi kèm, đảm bảo runtime queue replay có thể khôi phục dòng đầy đủ.
 		finishEv := Event{
 			ID:         call.id,
 			Time:       call.start,
@@ -168,7 +168,7 @@ func (o *observer) handleToolUpdate(ev agentcore.Event) {
 		if msg == "" {
 			msg = "unknown error"
 		}
-		// 如果有进行中的 TOOL 行，原地标记为失败；否则独立追加 ERROR 行。
+		// Nếu có dòng TOOL đang tiến hành, đánh dấu tại chỗ là thất bại; nếu không thì thêm dòng ERROR độc lập.
 		if call, ok := o.toolStarts[ev.Progress.Agent]; ok {
 			delete(o.toolStarts, ev.Progress.Agent)
 			finishEv := Event{
@@ -186,13 +186,13 @@ func (o *observer) handleToolUpdate(ev agentcore.Event) {
 			o.emitEv(finishEv)
 			o.persistEvent(finishEv)
 		}
-		// 附加 ERROR 详情行（补充错误信息，便于排查）
+		// Thêm dòng chi tiết ERROR (bổ sung thông tin lỗi, tiện tra cứu)
 		errEv := Event{
 			Time:     time.Now(),
 			Category: "ERROR",
 			Agent:    ev.Progress.Agent,
-			Summary:  fmt.Sprintf("%s 错误: %s", ev.Progress.Tool, truncate(msg, 100)),
-			Detail:   fmt.Sprintf("%s 错误: %s", ev.Progress.Tool, msg),
+			Summary:  fmt.Sprintf("%s lỗi: %s", ev.Progress.Tool, truncate(msg, 100)),
+			Detail:   fmt.Sprintf("%s lỗi: %s", ev.Progress.Tool, msg),
 			Kind:     errorKind(nil, msg),
 			Level:    "error",
 			Depth:    1,
@@ -446,15 +446,15 @@ func (o *observer) flushActiveCalls(failed bool) {
 
 func (o *observer) handleToolEnd(ev agentcore.Event) {
 	agent := agentFromEvent(ev)
-	// 工具结束：把状态切回 idle，否则侧边栏会永远停在 working。
-	// 子代理派遣结束时 dispatchTarget 的状态会在下方另行清除。
+	// Công cụ kết thúc: chuyển trạng thái về idle, nếu không thanh bên sẽ mãi ở working.
+	// Trạng thái của dispatchTarget khi kết thúc dispatch subagent sẽ được xóa riêng ở bên dưới.
 	o.updateAgent(agent, func(a *agentState) {
 		a.tool = ""
 		a.state = "idle"
 	})
 	delete(o.lastThinkingByAgent, agent)
 
-	// 取出进行中的 DISPATCH 记录（handleToolEnd 的 ev.Args 可能为空，从 currentDispatchTarget 取）
+	// Lấy bản ghi DISPATCH đang tiến hành (ev.Args của handleToolEnd có thể rỗng, lấy từ currentDispatchTarget)
 	var dispatchCall *activeCall
 	var dispatchTarget string
 	if ev.Tool == "subagent" {
@@ -472,7 +472,7 @@ func (o *observer) handleToolEnd(ev agentcore.Event) {
 			dispatchCall = call
 			delete(o.dispatchStarts, dispatchTarget)
 		}
-		// 派遣结束：把子代理状态复位为 idle（成功/失败/错误路径都需要此清理）
+		// Dispatch kết thúc: reset trạng thái subagent về idle (tất cả đường thành công/thất bại/lỗi đều cần dọn dẹp này)
 		if dispatchTarget != "subagent" {
 			o.updateAgent(dispatchTarget, func(a *agentState) {
 				a.state = "idle"
@@ -481,7 +481,7 @@ func (o *observer) handleToolEnd(ev agentcore.Event) {
 		}
 	}
 
-	// 取出 coordinator 直接工具（非 subagent）的进行中记录（罕见，但保证一致性）
+	// Lấy bản ghi đang tiến hành của công cụ trực tiếp coordinator (không phải subagent) (hiếm, nhưng đảm bảo nhất quán)
 	var toolCall *activeCall
 	if ev.Tool != "subagent" {
 		if call, ok := o.toolStarts[agent]; ok {
@@ -490,7 +490,7 @@ func (o *observer) handleToolEnd(ev agentcore.Event) {
 		}
 	}
 
-	// 统一的调用完成态（成功/失败），通过同 ID 更新原行
+	// Trạng thái hoàn thành gọi thống nhất (thành công/thất bại), cập nhật dòng gốc thông qua cùng ID
 	emitFinish := func(call *activeCall, category, agentName string, failed bool) {
 		o.emitCallFinish(call, category, agentName, failed)
 	}
@@ -500,9 +500,10 @@ func (o *observer) handleToolEnd(ev agentcore.Event) {
 	emitToolFinish := func(failed bool) {
 		emitFinish(toolCall, "TOOL", agent, failed)
 	}
-	// 兜底：若 subagent 结束时，该 subagent 内部还有未完成的 TOOL 调用（比如 ensureSubagentToolStarted
-	// 提前发了进行中事件，但随后 abort/context cancel 让 ProgressToolEnd 没来），
-	// 在这里强制发 finish，避免 TOOL 行永远"进行中"。状态跟随 dispatch 同步。
+	// Phòng thủ cuối: nếu khi subagent kết thúc, bên trong subagent đó còn có lần gọi TOOL chưa hoàn thành
+	// (ví dụ ensureSubagentToolStarted đã phát sự kiện đang tiến hành sớm, nhưng sau đó abort/context cancel
+	// khiến ProgressToolEnd không đến), ở đây cưỡng chế phát finish, tránh dòng TOOL mãi "đang tiến hành".
+	// Trạng thái theo sau dispatch đồng bộ.
 	flushOrphanSubagentTool := func(failed bool) {
 		if dispatchTarget == "" {
 			return
@@ -525,8 +526,8 @@ func (o *observer) handleToolEnd(ev agentcore.Event) {
 		if len(ev.Result) > 0 {
 			errText = string(ev.Result)
 		}
-		// 用户主动 abort 衍生的 ctx-cancel：状态清理仍要走（dispatch / tool 行必须落回完成态），
-		// 但跳过独立 ERROR 行 + 错误日志，与 EventError 路径保持一致。
+		// ctx-cancel dẫn xuất từ người dùng chủ động abort: vẫn phải dọn dẹp trạng thái (dòng dispatch / tool phải về hoàn thành),
+		// nhưng bỏ qua dòng ERROR độc lập + log lỗi, giữ nhất quán với đường EventError.
 		if o.isCancellationNoise(nil, errText) {
 			slog.Debug("suppressed cancel-derived tool error", "module", "agent", "tool", ev.Tool, "msg", errText)
 			flushOrphanSubagentTool(true)
@@ -534,7 +535,7 @@ func (o *observer) handleToolEnd(ev agentcore.Event) {
 			emitToolFinish(true)
 			return
 		}
-		summary := fmt.Sprintf("%s 失败", ev.Tool)
+		summary := fmt.Sprintf("%s thất bại", ev.Tool)
 		detail := summary
 		kind := ""
 		if errText != "" {
@@ -577,14 +578,14 @@ func (o *observer) handleToolEnd(ev agentcore.Event) {
 		return
 	}
 
-	// subagent 成功完成 → 更新原 DISPATCH 行为完成态（带耗时）
+	// subagent hoàn thành thành công → cập nhật dòng DISPATCH gốc thành trạng thái hoàn thành (kèm thời gian)
 	if ev.Tool == "subagent" {
 		flushOrphanSubagentTool(false)
 		emitDispatchFinish(false)
 		return
 	}
 
-	// coordinator 直接工具成功完成
+	// Công cụ trực tiếp coordinator hoàn thành thành công
 	emitToolFinish(false)
 }
 
@@ -602,12 +603,12 @@ func (o *observer) subagentResultErrorEvent(ev agentcore.Event) (*Event, string)
 	if sub.agent != "" {
 		target = sub.agent
 	}
-	fullErr := fmt.Sprintf("%s 失败: %s", target, errMsg)
+	fullErr := fmt.Sprintf("%s thất bại: %s", target, errMsg)
 	return &Event{
 		Time:     time.Now(),
 		Category: "ERROR",
 		Agent:    "coordinator",
-		Summary:  fmt.Sprintf("%s 失败: %s", target, truncate(errMsg, 120)),
+		Summary:  fmt.Sprintf("%s thất bại: %s", target, truncate(errMsg, 120)),
 		Detail:   fullErr,
 		Kind:     errorKind(nil, errMsg),
 		Level:    "error",
@@ -631,7 +632,7 @@ func displayToolName(tool string, args json.RawMessage) string {
 			Chapter int `json:"chapter"`
 		}
 		if json.Unmarshal(args, &p) == nil && p.Chapter > 0 {
-			return fmt.Sprintf("%s(第%d章)", tool, p.Chapter)
+			return fmt.Sprintf("%s(chương%d)", tool, p.Chapter)
 		}
 	case "save_review":
 		var p struct {
@@ -643,12 +644,12 @@ func displayToolName(tool string, args json.RawMessage) string {
 			label := ""
 			switch p.Scope {
 			case "arc":
-				label = "本弧"
+				label = "cung này"
 			case "global":
-				label = "全局"
+				label = "toàn cục"
 			default:
 				if p.Chapter > 0 {
-					label = fmt.Sprintf("第%d章", p.Chapter)
+					label = fmt.Sprintf("chương%d", p.Chapter)
 				}
 			}
 			if label == "" {
@@ -664,7 +665,7 @@ func displayToolName(tool string, args json.RawMessage) string {
 			Chapter int `json:"chapter"`
 		}
 		if json.Unmarshal(args, &p) == nil && p.Chapter > 0 {
-			return fmt.Sprintf("%s(第%d章)", tool, p.Chapter)
+			return fmt.Sprintf("%s(chương%d)", tool, p.Chapter)
 		}
 	case "read_chapter":
 		var p struct {
@@ -675,11 +676,11 @@ func displayToolName(tool string, args json.RawMessage) string {
 		if json.Unmarshal(args, &p) == nil && p.Chapter > 0 {
 			suffix := ""
 			if p.Character != "" {
-				suffix = "·" + p.Character + "对话"
+				suffix = "·" + p.Character + "hội thoại"
 			} else if p.Source == "draft" {
-				suffix = "·草稿"
+				suffix = "·bản nháp"
 			}
-			return fmt.Sprintf("%s(第%d章%s)", tool, p.Chapter, suffix)
+			return fmt.Sprintf("%s(chương%d%s)", tool, p.Chapter, suffix)
 		}
 	}
 	return tool
@@ -694,16 +695,16 @@ func parseSubagentResultError(result json.RawMessage) string {
 	if len(result) == 0 {
 		return ""
 	}
-	// 主流错误：{"error": "..."} 对象（unknown agent / invalid model / 子代理执行失败）
+	// Lỗi chính: đối tượng {"error": "..."} (unknown agent / invalid model / subagent thực thi thất bại)
 	var obj struct {
 		Error string `json:"error"`
 	}
 	if err := json.Unmarshal(result, &obj); err == nil && obj.Error != "" {
 		return obj.Error
 	}
-	// 兼容 agentcore SubAgentTool 的裸字符串错误返回：
+	// Tương thích với trả về lỗi chuỗi thuần của agentcore SubAgentTool:
 	// "Invalid parameters: ..." / "background mode requires ..." / "Too many parallel tasks ..."
-	// 这些是 tool 层参数校验失败，is_error=false 但内容是错误说明，需识别为错误避免误判为成功。
+	// Đây là kiểm tra tham số tầng tool thất bại, is_error=false nhưng nội dung là mô tả lỗi, cần nhận diện là lỗi để tránh nhầm thành công.
 	var s string
 	if json.Unmarshal(result, &s) == nil && isSubagentErrorString(s) {
 		return s

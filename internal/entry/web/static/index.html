@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ainovel — Xưởng sáng tác AI</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <!-- Thanh trên cùng -->
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">✦</span>
+      <span class="novel-name" id="novelName">Chưa có tác phẩm</span>
+      <span class="status-badge" id="statusBadge">SẴN SÀNG</span>
+    </div>
+    <div class="topbar-meta">
+      <div class="meta-item" id="modelMeta" title="Mô hình hiện tại">
+        <span class="meta-label">Mô hình</span>
+        <span class="meta-value" id="modelValue">—</span>
+      </div>
+      <div class="meta-item" id="costMeta" title="Chi phí API tích lũy">
+        <span class="meta-label">Chi phí</span>
+        <span class="meta-value" id="costValue">$0.00</span>
+      </div>
+      <div class="meta-item ctx" title="Sức khỏe ngữ cảnh của Điều phối">
+        <span class="meta-label">Ngữ cảnh</span>
+        <div class="ctx-bar"><div class="ctx-fill" id="ctxFill"></div></div>
+        <span class="meta-value" id="ctxValue">0%</span>
+      </div>
+      <button class="btn ghost" id="btnModels" title="Đổi mô hình / mức suy luận">⚙ Mô hình</button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <!-- Cột trái -->
+    <aside class="sidebar">
+      <section class="card">
+        <h3>Tiến độ</h3>
+        <div class="progress-grid">
+          <div><span class="big" id="pgChapter">0</span><span class="sub">Chương hiện tại</span></div>
+          <div><span class="big" id="pgDone">0</span><span class="sub">Đã hoàn thành</span></div>
+          <div><span class="big" id="pgTotal">0</span><span class="sub">Tổng chương</span></div>
+          <div><span class="big" id="pgWords">0</span><span class="sub">Tổng số chữ</span></div>
+        </div>
+        <div class="meta-line" id="volumeLine" hidden></div>
+        <div class="meta-line" id="recoveryLine" hidden></div>
+      </section>
+
+      <section class="card">
+        <h3>Tác nhân (Agents)</h3>
+        <div id="agents" class="agents"></div>
+      </section>
+    </aside>
+
+    <!-- Khu giữa -->
+    <section class="center">
+      <div class="panel writing">
+        <div class="panel-head">
+          <h3>AI đang viết</h3>
+          <span class="hint" id="writingHint"></span>
+        </div>
+        <pre class="stream" id="stream"></pre>
+      </div>
+      <div class="panel activity">
+        <div class="panel-head"><h3>Nhật ký hoạt động</h3></div>
+        <div class="events" id="events"></div>
+      </div>
+    </section>
+
+    <!-- Cột phải -->
+    <aside class="rightbar">
+      <div class="tabs">
+        <button class="tab active" data-tab="outline">Đại cương</button>
+        <button class="tab" data-tab="characters">Nhân vật</button>
+        <button class="tab" data-tab="detail">Chi tiết</button>
+      </div>
+      <div class="tab-body">
+        <div class="tab-pane active" id="pane-outline"></div>
+        <div class="tab-pane" id="pane-characters"></div>
+        <div class="tab-pane" id="pane-detail"></div>
+      </div>
+    </aside>
+  </main>
+
+  <!-- Thanh thao tác dưới cùng -->
+  <footer class="actionbar">
+    <div class="cmd-row">
+      <button class="btn" data-cmd="cocreate">✧ Cộng tác</button>
+      <button class="btn" data-cmd="import">⇲ Nhập truyện</button>
+      <button class="btn" data-cmd="simulate">⟲ Phỏng tác</button>
+      <button class="btn" data-cmd="diag">⚕ Chẩn đoán</button>
+      <button class="btn" data-cmd="export">⬇ Xuất file</button>
+      <button class="btn warn" id="btnAbort" data-cmd="abort" hidden>⏸ Tạm dừng</button>
+    </div>
+    <div class="input-row">
+      <textarea id="mainInput" rows="1" placeholder="Nhập một câu yêu cầu sáng tác rồi nhấn Bắt đầu…"></textarea>
+      <button class="btn primary" id="btnPrimary">Bắt đầu</button>
+    </div>
+    <div class="toast" id="toast" hidden></div>
+  </footer>
+
+  <!-- Lớp phủ modal -->
+  <div class="overlay" id="overlay" hidden>
+    <div class="modal" id="modal"></div>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>

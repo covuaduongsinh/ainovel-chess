@@ -9,7 +9,7 @@
 ## Căng thẳng quan hệ
 
 - Giữa cặp đôi chính phải có nguồn lực cản liên tục (tính cách, danh tính, hiểu lầm, bên ngoài)
-- Lực cản phải hợp lý và khó giải quyết dễ dàng, không 虐 mà 虐 (không hành hạ nhân vật vô lý)
+- Lực cản phải hợp lý và khó giải quyết dễ dàng, không bạo tàn vô lý (không hành hạ nhân vật không có lý do)
 - Tuyến tình cảm nhân vật phụ không được chiếm quá nhiều dung lượng tuyến chính, mỗi chương tương tác nhân vật phụ không quá 20%
 
 ## Chất lượng hội thoại

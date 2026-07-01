@@ -1,6 +1,6 @@
-# 仅有正文
+# Chỉ có phần thân
 
-文件没有 front matter，整篇都是偏好。
+Tệp không có front matter, toàn bộ là sở thích.
 
-- 避免破折号。
-- 章末钩子多样化。
+- Tránh dùng dấu gạch ngang.
+- Đa dạng hóa móc câu cuối chương.

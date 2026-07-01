@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ainovel — Thiết lập lần đầu</title>
+  <link rel="stylesheet" href="/styles.css" />
+  <style>
+    body { align-items: center; justify-content: center; }
+    .setup { width: min(560px, 92vw); background: var(--bg-2); border: 1px solid var(--border);
+      border-radius: 16px; padding: 30px; margin: 40px auto; box-shadow: 0 20px 60px rgba(0,0,0,.4); }
+    .setup h1 { color: var(--accent); font-size: 22px; margin: 0 0 6px; }
+    .setup p.lead { color: var(--muted); margin: 0 0 22px; font-size: 14px; }
+    .setup label { display: block; font-size: 12px; color: var(--muted); margin: 16px 0 6px; text-transform: uppercase; letter-spacing: .4px; }
+    .setup input, .setup select { width: 100%; background: var(--bg); color: var(--text); border: 1px solid var(--border);
+      border-radius: 8px; padding: 10px 12px; font-size: 14px; }
+    .setup input:focus, .setup select:focus { outline: none; border-color: var(--accent); }
+    .setup .hint { font-size: 12px; color: var(--dim); margin-top: 4px; }
+    .setup button { width: 100%; margin-top: 24px; background: var(--accent); color: #1c1a14; font-weight: 700;
+      border: none; border-radius: 8px; padding: 13px; font-size: 15px; cursor: pointer; }
+    .setup button:disabled { opacity: .5; cursor: not-allowed; }
+    .setup .err { color: var(--err); font-size: 13px; margin-top: 12px; }
+    .setup .ok { color: var(--ok); font-size: 14px; margin-top: 12px; text-align: center; }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <div class="setup">
+    <h1>✦ Chào mừng đến với ainovel</h1>
+    <p class="lead">Thiết lập lần đầu: chọn nhà cung cấp AI và nhập thông tin để bắt đầu sáng tác.</p>
+    <form id="form">
+      <label>Nhà cung cấp (Provider)</label>
+      <select id="provider"></select>
+
+      <div id="customWrap" class="hidden">
+        <label>Tên nhà cung cấp tùy chỉnh</label>
+        <input type="text" id="customName" placeholder="vd: my-proxy" />
+        <label>Giao thức API</label>
+        <select id="type">
+          <option value="openai">Tương thích OpenAI</option>
+          <option value="anthropic">Tương thích Anthropic</option>
+          <option value="gemini">Tương thích Gemini</option>
+        </select>
+      </div>
+
+      <label id="keyLabel">API Key</label>
+      <input type="password" id="apiKey" placeholder="sk-..." />
+
+      <label>Base URL <span style="text-transform:none;color:var(--dim)">(để trống dùng mặc định)</span></label>
+      <input type="text" id="baseURL" placeholder="" />
+
+      <label>Tên mô hình</label>
+      <input type="text" id="model" placeholder="vd: gemini-2.5-flash" />
+      <div class="hint" id="modelHint"></div>
+
+      <button type="submit" id="submit">Lưu &amp; bắt đầu</button>
+      <div class="err hidden" id="err"></div>
+      <div class="ok hidden" id="ok"></div>
+    </form>
+  </div>
+
+  <script>
+    let catalog = [];
+    const $ = (id) => document.getElementById(id);
+
+    fetch('/api/setup/providers').then((r) => r.json()).then((list) => {
+      catalog = list;
+      $('provider').innerHTML = list.map((p) => `<option value="${p.name}">${p.label}</option>`).join('');
+      onProvider();
+    });
+
+    function current() { return catalog.find((p) => p.name === $('provider').value) || {}; }
+    function onProvider() {
+      const p = current();
+      $('customWrap').classList.toggle('hidden', !p.needType);
+      $('baseURL').placeholder = p.baseURL || 'mặc định của nhà cung cấp';
+      $('keyLabel').textContent = p.apiKeyOptional ? 'API Key (có thể để trống)' : 'API Key';
+      // Tên mô hình đúng theo từng nhà cung cấp: provider gốc dùng tên "trần"
+      // (vd gemini-2.5-flash), chỉ OpenRouter mới dùng tiền tố "hãng/mô-hình".
+      if (p.sampleModel) $('model').placeholder = 'vd: ' + p.sampleModel;
+      const isRouter = p.name === 'openrouter';
+      $('modelHint').textContent = isRouter
+        ? 'OpenRouter dùng dạng "hãng/mô-hình", vd: google/gemini-2.5-flash'
+        : 'Dùng tên mô hình gốc của nhà cung cấp (KHÔNG thêm tiền tố như "google/").';
+    }
+    $('provider').addEventListener('change', onProvider);
+
+    $('form').addEventListener('submit', (e) => {
+      e.preventDefault();
+      $('err').classList.add('hidden');
+      const body = {
+        provider: $('provider').value,
+        customName: $('customName').value.trim(),
+        type: $('type').value,
+        apiKey: $('apiKey').value,
+        baseURL: $('baseURL').value.trim(),
+        model: $('model').value.trim(),
+      };
+      $('submit').disabled = true;
+      $('submit').textContent = 'Đang lưu...';
+      fetch('/api/setup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+        .then(async (r) => {
+          const d = await r.json().catch(() => ({}));
+          if (!r.ok) throw new Error(d.error || 'Lỗi lưu cấu hình');
+          $('ok').textContent = '✓ Đã lưu cấu hình. Đang khởi động xưởng sáng tác...';
+          $('ok').classList.remove('hidden');
+          waitForApp();
+        })
+        .catch((err) => {
+          $('err').textContent = err.message;
+          $('err').classList.remove('hidden');
+          $('submit').disabled = false;
+          $('submit').textContent = 'Lưu & bắt đầu';
+        });
+    });
+
+    // Đợi máy chủ chuyển sang chế độ làm việc (có /api/meta) rồi tải lại.
+    function waitForApp() {
+      let tries = 0;
+      const timer = setInterval(() => {
+        tries++;
+        fetch('/api/meta').then((r) => { if (r.ok) { clearInterval(timer); location.reload(); } }).catch(() => {});
+        if (tries > 40) clearInterval(timer);
+      }, 500);
+    }
+  </script>
+</body>
+</html>

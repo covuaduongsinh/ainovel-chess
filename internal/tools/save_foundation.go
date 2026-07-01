@@ -11,7 +11,7 @@ import (
 	"github.com/voocel/ainovel-cli/internal/store"
 )
 
-// SaveFoundationTool 保存基础设定（premise/outline/characters），Architect 专用。
+// SaveFoundationTool lưu thiết lập nền tảng (premise/outline/characters), chỉ dành cho Architect.
 type SaveFoundationTool struct {
 	store *store.Store
 }
@@ -22,23 +22,23 @@ func NewSaveFoundationTool(store *store.Store) *SaveFoundationTool {
 
 func (t *SaveFoundationTool) Name() string { return "save_foundation" }
 func (t *SaveFoundationTool) Description() string {
-	return "保存小说基础设定（premise/outline/characters/world_rules/compass 等）。**这是唯一持久化入口**：未经此工具调用保存的内容不会进入 store，只在消息里输出 Markdown/JSON 等于丢失。参数固定为 {type, content, scale?, volume?, arc?}。type 可选 premise / outline / layered_outline / characters / world_rules / expand_arc / append_volume / update_compass / complete_book。premise 时 content 必须是 Markdown 字符串；其他类型 content 优先直接传 JSON 数组或对象。expand_arc 展开骨架弧的详细章节（需 volume + arc）；append_volume 追加新卷（content 为完整 VolumeOutline JSON，含弧结构）；update_compass 更新终局方向（content 为 StoryCompass JSON）；complete_book 宣告全书完结（content 传空对象 {}，直接推 Phase=Complete；调用前必须先通过终卷判定清单，且无返工队列）。scale 可选，仅允许 short / mid / long。"
+	return "Lưu thiết lập nền tảng tiểu thuyết (premise/outline/characters/world_rules/compass v.v.). **Đây là điểm vào bền vững duy nhất**: nội dung không được lưu qua công cụ này sẽ không vào store, chỉ xuất Markdown/JSON trong tin nhắn đồng nghĩa với mất dữ liệu. Tham số cố định là {type, content, scale?, volume?, arc?}. type có thể là premise / outline / layered_outline / characters / world_rules / expand_arc / append_volume / update_compass / complete_book. Khi type là premise, content phải là chuỗi Markdown; các loại khác content ưu tiên truyền trực tiếp mảng hoặc đối tượng JSON. expand_arc mở rộng các chương chi tiết của cung khung xương (cần volume + arc); append_volume thêm tập mới (content là VolumeOutline JSON đầy đủ, bao gồm cấu trúc cung); update_compass cập nhật hướng kết thúc (content là StoryCompass JSON); complete_book tuyên bố hoàn thành toàn bộ cuốn sách (content truyền đối tượng rỗng {}, đẩy trực tiếp Phase=Complete; phải vượt qua danh sách kiểm tra kết thúc tập trước khi gọi, và không có hàng đợi trả lại). scale là tùy chọn, chỉ cho phép short / mid / long."
 }
-func (t *SaveFoundationTool) Label() string { return "保存设定" }
+func (t *SaveFoundationTool) Label() string { return "Lưu thiết lập" }
 
-// 写工具（跨域更新 Outline/Progress/Characters），禁止并发。
+// Công cụ ghi (cập nhật đa miền Outline/Progress/Characters), cấm song song.
 func (t *SaveFoundationTool) ReadOnly(_ json.RawMessage) bool        { return false }
 func (t *SaveFoundationTool) ConcurrencySafe(_ json.RawMessage) bool { return false }
 
 func (t *SaveFoundationTool) Schema() map[string]any {
 	return schema.Object(
-		schema.Property("type", schema.Enum("设定类型", "premise", "outline", "layered_outline", "characters", "world_rules", "expand_arc", "append_volume", "update_compass", "complete_book")).Required(),
+		schema.Property("type", schema.Enum("loại thiết lập", "premise", "outline", "layered_outline", "characters", "world_rules", "expand_arc", "append_volume", "update_compass", "complete_book")).Required(),
 		schema.Property("content", map[string]any{
-			"description": "内容。premise 传 Markdown 字符串；其他类型直接传 JSON 数组或对象即可，也兼容传 JSON 字符串。expand_arc 时传章节数组。",
+			"description": "Nội dung. premise truyền chuỗi Markdown; các loại khác truyền trực tiếp mảng hoặc đối tượng JSON, cũng tương thích truyền chuỗi JSON. Khi expand_arc truyền mảng chương.",
 		}).Required(),
-		schema.Property("scale", schema.Enum("规划级别", "short", "mid", "long")),
-		schema.Property("volume", schema.Int("目标卷序号（仅 expand_arc 时必传）")),
-		schema.Property("arc", schema.Int("目标弧序号（仅 expand_arc 时必传）")),
+		schema.Property("scale", schema.Enum("cấp độ hoạch định", "short", "mid", "long")),
+		schema.Property("volume", schema.Int("số thứ tự tập đích (chỉ bắt buộc khi expand_arc)")),
+		schema.Property("arc", schema.Int("số thứ tự cung đích (chỉ bắt buộc khi expand_arc)")),
 	)
 }
 
@@ -70,10 +70,10 @@ func (t *SaveFoundationTool) Execute(_ context.Context, args json.RawMessage) (j
 
 	result := map[string]any{"saved": true, "type": a.Type, "scale": a.Scale}
 
-	// 写作阶段禁止全量覆盖大纲，只允许增量操作（expand_arc / append_volume）
+	// Giai đoạn viết cấm phủ toàn bộ dàn ý, chỉ cho phép thao tác tăng dần (expand_arc / append_volume)
 	if (a.Type == "outline" || a.Type == "layered_outline") && t.isWriting() {
 		return nil, fmt.Errorf(
-			"写作阶段禁止使用 %s 全量覆盖大纲。请使用 expand_arc 展开骨架弧，或 append_volume 追加新卷: %w", a.Type, errs.ErrToolPrecondition)
+			"giai đoạn viết cấm dùng %s để phủ toàn bộ dàn ý. Hãy dùng expand_arc mở rộng cung khung xương, hoặc append_volume thêm tập mới: %w", a.Type, errs.ErrToolPrecondition)
 	}
 
 	decode := func(typeName string, out any) error {
@@ -168,7 +168,7 @@ func (t *SaveFoundationTool) Execute(_ context.Context, args json.RawMessage) (j
 
 	case "append_volume":
 		if p, _ := t.store.Progress.Load(); p != nil && p.Phase == domain.PhaseComplete {
-			return nil, fmt.Errorf("全书已完结（phase=complete），不允许追加新卷: %w", errs.ErrToolPrecondition)
+			return nil, fmt.Errorf("toàn bộ cuốn sách đã hoàn thành (phase=complete), không cho phép thêm tập mới: %w", errs.ErrToolPrecondition)
 		}
 		var vol domain.VolumeOutline
 		if err := decode("append_volume", &vol); err != nil {
@@ -188,21 +188,21 @@ func (t *SaveFoundationTool) Execute(_ context.Context, args json.RawMessage) (j
 		}
 
 	case "complete_book":
-		// 全书完结的唯一入口：直接推 Phase=Complete。
-		// 仅 Writing 阶段允许，防止规划阶段误调跳过整本写作。
-		// 拒绝有返工队列时调用——保证 PendingRewrites 跑完才能结束。
+		// Điểm vào duy nhất để hoàn thành toàn bộ cuốn sách: đẩy trực tiếp Phase=Complete.
+		// Chỉ cho phép ở giai đoạn Writing, ngăn giai đoạn hoạch định gọi nhầm bỏ qua toàn bộ quá trình viết.
+		// Từ chối gọi khi có hàng đợi trả lại — đảm bảo PendingRewrites chạy xong mới được kết thúc.
 		progress, perr := t.store.Progress.Load()
 		if perr != nil {
 			return nil, fmt.Errorf("load progress: %w: %w", errs.ErrStoreRead, perr)
 		}
 		if progress == nil {
-			return nil, fmt.Errorf("progress 未初始化: %w", errs.ErrToolPrecondition)
+			return nil, fmt.Errorf("progress chưa khởi tạo: %w", errs.ErrToolPrecondition)
 		}
 		if progress.Phase != domain.PhaseWriting {
-			return nil, fmt.Errorf("complete_book 仅在 writing 阶段可调用（当前 phase=%s）: %w", progress.Phase, errs.ErrToolPrecondition)
+			return nil, fmt.Errorf("complete_book chỉ có thể gọi ở giai đoạn writing (phase hiện tại=%s): %w", progress.Phase, errs.ErrToolPrecondition)
 		}
 		if len(progress.PendingRewrites) > 0 {
-			return nil, fmt.Errorf("还有 %d 章在返工队列中，处理完再调 complete_book: %w", len(progress.PendingRewrites), errs.ErrToolPrecondition)
+			return nil, fmt.Errorf("còn %d chương trong hàng đợi trả lại, xử lý xong rồi gọi complete_book: %w", len(progress.PendingRewrites), errs.ErrToolPrecondition)
 		}
 		if err := t.store.Progress.MarkComplete(); err != nil {
 			return nil, fmt.Errorf("mark complete: %w: %w", errs.ErrStoreWrite, err)
@@ -215,8 +215,8 @@ func (t *SaveFoundationTool) Execute(_ context.Context, args json.RawMessage) (j
 		if err := decode("compass", &compass); err != nil {
 			return nil, err
 		}
-		// 工具层强制覆盖 LastUpdated 为当前已完成章节数，不信任 LLM 自填。
-		// LLM 通常忘填或留 0，会让 diag.CompassDrift 误报、Router 路由失真。
+		// Lớp công cụ bắt buộc ghi đè LastUpdated bằng số chương đã hoàn thành hiện tại, không tin LLM tự điền.
+		// LLM thường quên điền hoặc để 0, sẽ khiến diag.CompassDrift báo nhầm, Router định tuyến sai.
 		if p, _ := t.store.Progress.Load(); p != nil {
 			compass.LastUpdated = p.LatestCompleted()
 		}
@@ -241,8 +241,8 @@ func (t *SaveFoundationTool) Execute(_ context.Context, args json.RawMessage) (j
 		return nil, fmt.Errorf("checkpoint foundation %s: %w: %w", a.Type, errs.ErrStoreWrite, err)
 	}
 
-	// 返回剩余未完成项，引导 Architect 继续或结束；
-	// 齐全时一次性把 phase 推进到 writing，避免 Coordinator 再回来派单。
+	// Trả về các mục chưa hoàn thành còn lại, hướng dẫn Architect tiếp tục hoặc kết thúc;
+	// khi đủ, đẩy phase lên writing một lần, tránh Coordinator quay lại phân công thêm.
 	remaining := t.store.FoundationMissing()
 	ready := len(remaining) == 0
 	result["remaining"] = remaining
@@ -278,14 +278,14 @@ func foundationArtifact(t string) string {
 	}
 }
 
-// decodeFoundationJSON 解析 save_foundation 的 content 字段，失败时附上行列位置
-// 和最常见的修复提示，让 LLM 下一次重试能直接定位而不是盲猜。
+// decodeFoundationJSON phân tích trường content của save_foundation, khi thất bại đính kèm vị trí dòng/cột
+// và gợi ý sửa phổ biến nhất, để LLM lần thử tiếp theo có thể định vị trực tiếp thay vì đoán mò.
 func decodeFoundationJSON(typeName, content string, out any) error {
 	err := json.Unmarshal([]byte(content), out)
 	if err == nil {
 		return nil
 	}
-	hint := `常见原因：字符串值中的双引号未转义为 \", 换行未转义为 \n, 或对象字段间漏了逗号。请整段重新生成一次。`
+	hint := `Nguyên nhân thường gặp: dấu nháy kép trong giá trị chuỗi chưa được escape thành \", xuống dòng chưa escape thành \n, hoặc thiếu dấu phẩy giữa các trường đối tượng. Vui lòng tạo lại toàn bộ đoạn một lần nữa.`
 	if se, ok := err.(*json.SyntaxError); ok {
 		line, col := offsetToLineCol(content, int(se.Offset))
 		return fmt.Errorf("parse %s JSON (line %d col %d): %w — %s", typeName, line, col, err, hint)

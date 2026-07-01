@@ -1,8 +1,8 @@
 ---
 fatigue_words:
-  - 不禁
-  - 竟然
-  - 仿佛
+  - không khỏi
+  - bỗng nhiên
+  - tựa như
 ---
 
-list 形式的 fatigue_words 应默认每词阈值 1。
+Fatigue_words dạng danh sách nên mặc định ngưỡng mỗi từ là 1.

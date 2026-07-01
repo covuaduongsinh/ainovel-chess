@@ -10,8 +10,8 @@ import (
 	"github.com/voocel/agentcore"
 )
 
-// TestSessionStore_MetaInjected_AssistantWithUsage 验证只有"assistant + has Usage"
-// 的消息才被附加 _meta，这是 replay 路径精确算价的前提。
+// TestSessionStore_MetaInjected_AssistantWithUsage xac nhan chi co tin nhan "assistant + co Usage"
+// moi duoc gan them _meta, day la dieu kien tien quyet de tinh gia chinh xac tren duong dan replay.
 func TestSessionStore_MetaInjected_AssistantWithUsage(t *testing.T) {
 	dir := t.TempDir()
 	s := NewSessionStore(newIO(dir))
@@ -20,19 +20,19 @@ func TestSessionStore_MetaInjected_AssistantWithUsage(t *testing.T) {
 	})
 	logger := s.SubAgentLogger(lookup)
 
-	logger("writer", "写第 1 章", agentcore.Message{
+	logger("writer", "viet chuong 1", agentcore.Message{
 		Role:  agentcore.RoleUser,
 		Usage: nil,
 	})
-	logger("writer", "写第 1 章", agentcore.Message{
+	logger("writer", "viet chuong 1", agentcore.Message{
 		Role: agentcore.RoleAssistant,
 		Usage: &agentcore.Usage{
 			Input: 1000, Output: 200, CacheRead: 800, TotalTokens: 1200,
 		},
 	})
-	logger("writer", "写第 1 章", agentcore.Message{
+	logger("writer", "viet chuong 1", agentcore.Message{
 		Role:  agentcore.RoleAssistant,
-		Usage: nil, // assistant 但无 usage（流式未带 final usage chunk）
+		Usage: nil, // assistant nhung khong co usage (luong phat truc tuyen chua mang final usage chunk)
 	})
 
 	entries := readJSONL(t, filepath.Join(dir, "meta/sessions/agents/writer-ch01.jsonl"))
@@ -54,8 +54,9 @@ func TestSessionStore_MetaInjected_AssistantWithUsage(t *testing.T) {
 	}
 }
 
-// TestSessionStore_MetaModelSwitch 验证运行中切换模型后，后续消息的 _meta 也跟着变。
-// 这是 B 方案对"同进程内 /model 切换"的精确支持。
+// TestSessionStore_MetaModelSwitch xac nhan sau khi chuyen doi mo hinh trong qua trinh chay,
+// _meta cua cac tin nhan tiep theo cung thay doi theo. Day la ho tro chinh xac cua phuong an B
+// cho viec "chuyen doi /model trong cung tien trinh".
 func TestSessionStore_MetaModelSwitch(t *testing.T) {
 	dir := t.TempDir()
 	s := NewSessionStore(newIO(dir))
@@ -66,9 +67,9 @@ func TestSessionStore_MetaModelSwitch(t *testing.T) {
 	})
 	logger := s.SubAgentLogger(lookup)
 
-	logger("writer", "写第 1 章", makeAssistantWithUsage())
-	current = "model-b" // 模拟 /model 切换
-	logger("writer", "写第 1 章", makeAssistantWithUsage())
+	logger("writer", "viet chuong 1", makeAssistantWithUsage())
+	current = "model-b" // mo phong chuyen doi /model
+	logger("writer", "viet chuong 1", makeAssistantWithUsage())
 
 	entries := readJSONL(t, filepath.Join(dir, "meta/sessions/agents/writer-ch01.jsonl"))
 	if len(entries) != 2 {
@@ -85,8 +86,8 @@ func TestSessionStore_MetaModelSwitch(t *testing.T) {
 	}
 }
 
-// TestSessionStore_NilLookup 验证 lookup=nil 时（如 cocreate 路径）写入仍然正常，
-// 只是不带 _meta，保持向后兼容。
+// TestSessionStore_NilLookup xac nhan khi lookup=nil (nhu duong dan cocreate) viec ghi van binh thuong,
+// chi la khong co _meta, giu tuong thich nguoc.
 func TestSessionStore_NilLookup(t *testing.T) {
 	dir := t.TempDir()
 	s := NewSessionStore(newIO(dir))
@@ -100,7 +101,7 @@ func TestSessionStore_NilLookup(t *testing.T) {
 	if _, has := entries[0]["_meta"]; has {
 		t.Errorf("nil lookup should not produce _meta")
 	}
-	// 但其他字段（role/usage）必须正常
+	// Nhung cac truong khac (role/usage) phai binh thuong
 	if entries[0]["role"] != "assistant" {
 		t.Errorf("role lost: %v", entries[0]["role"])
 	}

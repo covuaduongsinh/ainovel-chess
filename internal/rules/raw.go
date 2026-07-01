@@ -8,19 +8,19 @@ import (
 	"strings"
 )
 
-// RawSource 是一个待归一化的原始来源（rules 文件的整段文本）。
+// RawSource là một nguồn thô chờ chuẩn hóa (toàn bộ văn bản của tệp rules).
 //
-// 砍 YAML 后，rules 文件就是普通自然语言提示词；归一化只需要原文，不再做 front matter 解析。
+// Sau khi bỏ YAML, tệp rules chỉ là prompt ngôn ngữ tự nhiên thông thường; chuẩn hóa chỉ cần văn bản gốc, không phân tích front matter nữa.
 type RawSource struct {
-	Label string     // 来源标签，进入 Snapshot.Sources（如 global:my-style.md）
-	Kind  SourceKind // 优先级层级
-	Text  string     // 文件原始内容
+	Label string     // nhãn nguồn, đưa vào Snapshot.Sources (ví dụ global:my-style.md)
+	Kind  SourceKind // cấp ưu tiên
+	Text  string     // nội dung gốc của tệp
 }
 
-// RawFileSources 按 Global → Project 顺序枚举 rules 目录下的 .md 文件并返回原始文本。
+// RawFileSources liệt kê các tệp .md trong thư mục rules theo thứ tự Global → Project và trả về văn bản thô.
 //
-// 与 readDirFromDisk 同样的扫描约定（顶层 .md、字典序、跳过隐藏文件），但不解析 YAML，
-// 整段文本原样交给归一化器。System defaults / 启动 prompt / 运行中要求由 service 另行提供。
+// Cùng quy ước quét với readDirFromDisk (.md cấp đầu, thứ tự từ điển, bỏ qua tệp ẩn), nhưng không phân tích YAML,
+// toàn bộ văn bản được chuyển nguyên vẹn cho bộ chuẩn hóa. System defaults / startup prompt / yêu cầu lúc chạy do service cung cấp riêng.
 func RawFileSources(opts LoadOptions) []RawSource {
 	var out []RawSource
 	out = append(out, rawDir(opts.HomeRulesDir, SourceGlobal)...)
@@ -34,10 +34,10 @@ func rawDir(dir string, kind SourceKind) []RawSource {
 	}
 	entries, err := os.ReadDir(dir)
 	if err != nil {
-		// 目录不存在是常态，静默跳过；但权限/路径其实是文件这类错误必须留痕——
-		// 否则用户写了规则却完全没生效、零反馈，排查成本极高（见 known_rules_path_stale_readme）。
+		// Thư mục không tồn tại là bình thường, bỏ qua lặng lẽ; nhưng lỗi quyền truy cập / đường dẫn thực ra là tệp phải để lại dấu vết —
+		// nếu không người dùng viết quy tắc mà hoàn toàn không có hiệu lực, không phản hồi gì cả, chi phí truy vết rất cao (xem known_rules_path_stale_readme).
 		if !os.IsNotExist(err) {
-			slog.Warn("规则目录读取失败，已跳过", "module", "rules", "dir", dir, "err", err)
+			slog.Warn("Đọc thư mục quy tắc thất bại, đã bỏ qua", "module", "rules", "dir", dir, "err", err)
 		}
 		return nil
 	}
@@ -55,7 +55,7 @@ func rawDir(dir string, kind SourceKind) []RawSource {
 		path := filepath.Join(dir, name)
 		data, err := os.ReadFile(path)
 		if err != nil {
-			slog.Warn("规则文件读取失败，已跳过", "module", "rules", "file", path, "err", err)
+			slog.Warn("Đọc tệp quy tắc thất bại, đã bỏ qua", "module", "rules", "file", path, "err", err)
 			continue
 		}
 		text := strings.TrimSpace(string(data))

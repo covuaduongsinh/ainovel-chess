@@ -1,170 +1,170 @@
-# 观测手册
+# Cẩm Nang Quan Sát Hệ Thống
 
-跑长篇小说时，怎么知道各项机制是不是真的在工作？
+Khi chạy tiểu thuyết dài, làm thế nào để biết các cơ chế có thực sự đang hoạt động đúng không?
 
-本文档不是把 diag 规则照抄一遍，而是面向**实际运行**：你跑到第 N 章了，应该打开哪个文件、看哪个字段、判断健康还是异常。
-
----
-
-## 1. 通用排查流程
-
-```
-1. /diag                       # 自动诊断，看 Findings 区
-2. cd output/{novel}/meta/     # 直接 cat 关键工件
-3. cat meta/sessions/coordinator.jsonl | tail  # 看最近几轮 LLM 行为
-```
-
-`/diag` 覆盖不到的事实（包括本文档列出的"待补诊断"项），需要 step 2-3 手工查。
-
-### 报 issue：脱敏诊断导出
-
-每次 `/diag` 都会额外写出 `output/{novel}/meta/diag-export.md`——一份**已脱敏**的诊断（小说正文 / prompt / 思考已移除，仅保留行为骨架：工具名、错误串、重复次数、phase/flow、卡住的 step、日志错误分类）。遇到死循环 / 中断类问题，把这个文件贴到 GitHub issue 即可，维护者据此定位，无需用户的 `output/` 数据。
+Tài liệu này không phải bản sao lại các quy tắc diag, mà tập trung vào **vận hành thực tế**: khi bạn đang chạy đến chương N, nên mở file nào, xem trường nào, và phán đoán hệ thống đang khỏe hay có vấn đề.
 
 ---
 
-## 2. 关键工件速查表
+## 1. Quy trình kiểm tra chung
 
-按"出问题时最常见排查路径"排序：
+```
+1. /diag                       # Tự động chẩn đoán, xem phần Findings
+2. cd output/{novel}/meta/     # Trực tiếp cat các artifact quan trọng
+3. cat meta/sessions/coordinator.jsonl | tail  # Xem hành vi LLM vài vòng gần nhất
+```
 
-| 工件 | 路径 | 看什么 | 健康 | 不健康 |
+Những điều `/diag` chưa bao phủ (bao gồm các mục "chưa có chẩn đoán" liệt kê trong tài liệu này) cần kiểm tra thủ công theo bước 2-3.
+
+### Báo issue: Xuất chẩn đoán đã ẩn danh
+
+Mỗi lần chạy `/diag` sẽ tự động ghi thêm file `output/{novel}/meta/diag-export.md` — một bản chẩn đoán **đã được ẩn danh** (nội dung tiểu thuyết / prompt / quá trình suy nghĩ đã được loại bỏ, chỉ giữ lại khung hành vi: tên công cụ, chuỗi lỗi, số lần lặp, phase/flow, bước bị kẹt, phân loại lỗi log). Khi gặp vòng lặp vô tận hoặc sự cố gián đoạn, chỉ cần đính kèm file này lên GitHub issue; người bảo trì có thể định vị vấn đề mà không cần dữ liệu `output/` của bạn.
+
+---
+
+## 2. Bảng tra cứu nhanh các artifact quan trọng
+
+Sắp xếp theo "đường kiểm tra phổ biến nhất khi có sự cố":
+
+| Artifact | Đường dẫn | Xem gì | Bình thường | Bất thường |
 |---|---|---|---|---|
-| 进度 | `meta/progress.json` | `phase` / `flow` / `completed_chapters` | phase 单调前进，flow 在合法集合内 | phase 倒退 / flow 卡在某状态 |
-| 指南针 | `meta/compass.json` | `last_updated` 与最新章节差距 | gap < 15 章 | gap > 15 章（CompassDrift 命中） |
-| 配角名册 | `meta/cast_ledger.json` | 条目数 / brief_role 填写率 / 名字一致性 | 见 §4 | 见 §4 |
-| 伏笔台账 | `meta/foreshadow.json` | `status="planted"` 的最长停滞章数 | < 章数/3 | > 章数/3（StaleForeshadow 命中） |
-| 大纲 | `meta/layered_outline.json` | 当前卷剩余未写章数 | 提前 1-2 章已展开 | 写到当前章但下一章无 outline（OutlineExhausted） |
-| 角色档案 | `meta/characters.json` | 是否能在最近 N 章摘要里找到 core/important 角色 | 都能找到 | 缺席（GhostCharacter 命中） |
-| 检查点 | `meta/checkpoints.jsonl` | 最近一行的 `step` 是否对应 progress | 一致 | 不一致（崩溃恢复未自愈） |
-| Coordinator 会话 | `meta/sessions/coordinator.jsonl` | 最近 5-10 轮的 tool_call 模式 | 单轮快速推进 | 同一工具空调多次（卡死循环） |
+| Tiến độ | `meta/progress.json` | `phase` / `flow` / `completed_chapters` | phase tiến đơn điệu, flow nằm trong tập hợp hợp lệ | phase thụt lùi / flow kẹt ở một trạng thái |
+| La bàn | `meta/compass.json` | `last_updated` và khoảng cách với chương mới nhất | gap < 15 chương | gap > 15 chương (CompassDrift kích hoạt) |
+| Danh sách nhân vật phụ | `meta/cast_ledger.json` | Số mục / tỷ lệ điền brief_role / tính nhất quán tên | Xem §4 | Xem §4 |
+| Bảng theo dõi foreshadow | `meta/foreshadow.json` | Số chương đình trệ lâu nhất của `status="planted"` | < số_chương/3 | > số_chương/3 (StaleForeshadow kích hoạt) |
+| Đại cương | `meta/layered_outline.json` | Số chương còn chưa viết trong tập hiện tại | Đã mở rộng trước 1-2 chương | Đã viết đến chương hiện tại nhưng chương tiếp theo không có outline (OutlineExhausted) |
+| Hồ sơ nhân vật | `meta/characters.json` | Có tìm được nhân vật core/important trong tóm tắt N chương gần nhất không | Tìm được tất cả | Vắng mặt (GhostCharacter kích hoạt) |
+| Checkpoint | `meta/checkpoints.jsonl` | `step` ở dòng cuối có khớp với progress không | Khớp | Không khớp (khôi phục sau crash chưa tự phục hồi) |
+| Phiên Coordinator | `meta/sessions/coordinator.jsonl` | Mẫu tool_call trong 5-10 vòng gần nhất | Mỗi vòng tiến nhanh | Cùng một công cụ gọi nhiều lần trống (kẹt vòng lặp) |
 
 ---
 
-## 3. 指南针（compass）观测
+## 3. Quan sát La Bàn (compass)
 
-**修复时间**：2026-05-08（commit `fix: update_compass 工具自动填 last_updated`）
+**Thời điểm sửa**: 2026-05-08 (commit `fix: update_compass 工具自动填 last_updated`)
 
-### 看什么
+### Xem gì
 
 ```bash
 cat output/{novel}/meta/compass.json
 ```
 
-字段语义：
-- `ending_direction`：终局方向（应该和 `premise.md` "终局方向"段一致）
-- `open_threads`：活跃长线（每卷边界由 architect 增删）
-- `estimated_scale`：预估规模（如"4-6 卷"，每卷边界更新）
-- `last_updated`：**工具自动填**为更新时的最大已完成章号（不再依赖 LLM 自填）
+Ý nghĩa các trường:
+- `ending_direction`: Hướng kết truyện (phải khớp với phần "hướng kết truyện" trong `premise.md`)
+- `open_threads`: Các mạch truyện dài đang mở (architect thêm/bớt tại ranh giới mỗi tập)
+- `estimated_scale`: Quy mô dự kiến (ví dụ "4-6 tập", cập nhật tại ranh giới mỗi tập)
+- `last_updated`: **Công cụ tự điền** bằng số chương đã hoàn thành lớn nhất tại thời điểm cập nhật (không còn phụ thuộc LLM tự điền)
 
-### 健康度判断
+### Đánh giá độ khỏe
 
-| 信号 | 判断 |
+| Tín hiệu | Đánh giá |
 |---|---|
-| `last_updated` 在 `[latest-15, latest]` 范围 | 健康 |
-| `last_updated` 滞后 latest 超过 15 章 | architect 没在弧/卷边界更新——查 architect-long.md prompt |
-| `last_updated == 0` | **本次修复前的脏数据**，下次 update_compass 会自愈 |
-| `ending_direction` 和 premise.md "终局方向"段对不上 | architect 偷偷改了用户意图——记录下来，决定要不要冻结字段（设计议题，见 todo.md） |
+| `last_updated` nằm trong khoảng `[latest-15, latest]` | Bình thường |
+| `last_updated` chậm hơn latest quá 15 chương | architect chưa cập nhật tại ranh giới arc/tập — kiểm tra prompt architect-long.md |
+| `last_updated == 0` | **Dữ liệu cũ trước khi sửa lỗi**, lần gọi `update_compass` tiếp theo sẽ tự phục hồi |
+| `ending_direction` không khớp với phần "hướng kết truyện" trong premise.md | architect đã âm thầm thay đổi ý định của người dùng — ghi lại và cân nhắc có nên đóng băng trường này không (vấn đề thiết kế, xem todo.md) |
 
-### 怎么验证修复有效
+### Cách xác minh bản sửa có hiệu lực
 
-跑长篇前后对比：
-- **修复前**：跑 30+ 章后 `compass.last_updated` 大概率是 `0` 或某个早期章号
-- **修复后**：每次 architect 调 `update_compass`，`last_updated` 都被工具层覆盖为当前 latest
+So sánh trước và sau khi chạy truyện dài:
+- **Trước khi sửa**: Sau 30+ chương, `compass.last_updated` rất có thể là `0` hoặc một số chương từ đầu
+- **Sau khi sửa**: Mỗi lần architect gọi `update_compass`, `last_updated` đều được công cụ ghi đè bằng giá trị latest hiện tại
 
 ---
 
-## 4. 配角名册（cast_ledger）观测
+## 4. Quan sát Danh Sách Nhân Vật Phụ (cast_ledger)
 
-**功能落地**：2026-05-08（commit `feat: 新增配角名册自动追踪次要角色`）
+**Tính năng triển khai**: 2026-05-08 (commit `feat: 新增配角名册自动追踪次要角色`)
 
-### 看什么
+### Xem gì
 
 ```bash
-cat output/{novel}/meta/cast_ledger.json | jq 'length'                     # 条目总数
-cat output/{novel}/meta/cast_ledger.json | jq '[.[] | select(.brief_role == "" or .brief_role == null)] | length'  # 缺 brief_role 数
-cat output/{novel}/meta/cast_ledger.json | jq '[.[] | select(.appearance_count >= 3)] | length'   # 频繁出场（≥3 次）数
-cat output/{novel}/meta/cast_ledger.json | jq 'sort_by(-.appearance_count) | .[:10]'  # 出场最多的 10 个
+cat output/{novel}/meta/cast_ledger.json | jq 'length'                     # Tổng số mục
+cat output/{novel}/meta/cast_ledger.json | jq '[.[] | select(.brief_role == "" or .brief_role == null)] | length'  # Số mục thiếu brief_role
+cat output/{novel}/meta/cast_ledger.json | jq '[.[] | select(.appearance_count >= 3)] | length'   # Số nhân vật xuất hiện nhiều (≥3 lần)
+cat output/{novel}/meta/cast_ledger.json | jq 'sort_by(-.appearance_count) | .[:10]'  # 10 nhân vật xuất hiện nhiều nhất
 ```
 
-### 健康度判断
+### Đánh giá độ khỏe
 
-| 维度 | 健康 | 异常 | 应对 |
+| Chiều | Bình thường | Bất thường | Cách xử lý |
 |---|---|---|---|
-| **条目数 vs 已完成章数** | ledger 条目数 ≈ 已完成章数 × 0.3-0.6 | > 章数 × 0.8（过场角色被错误入册） | 查 writer.md 的 `cast_intros` 段是否够明确 |
-| **brief_role 填写率** | 缺失 < 30% | 缺失 > 50% | Writer 漏填严重——prompt 引导不足 |
-| **同名相似度** | 没有疑似同人多名 | 同时出现 "李X" / "老李" / "X掌柜" | LLM 名字漂移——prompt 加约束"用一致名字"或加用户 steer 合并工具 |
-| **频繁出场角色** | `appearance_count >= 5` 的条目稀少 | 大量条目跨弧高频出场 | 该考虑升格到核心档案（阶段 3 升格通道） |
-| **召回是否被消费** | Writer 写到旧角色时，commit_chapter 的 characters 字段里包含 ledger 已有名字 | Writer 重复发明同一个名字（出现"老周A"和"老周B"） | recent_cast 召回未被消费——检查 writer.md "配角连续性"段 |
+| **Số mục vs số chương đã hoàn thành** | Số mục ledger ≈ số chương × 0.3-0.6 | > số chương × 0.8 (nhân vật thoáng qua bị đăng ký nhầm) | Kiểm tra phần `cast_intros` trong prompt writer.md có đủ rõ ràng không |
+| **Tỷ lệ điền brief_role** | Thiếu < 30% | Thiếu > 50% | Writer bỏ điền nhiều — hướng dẫn trong prompt chưa đủ |
+| **Độ tương đồng tên trùng nhau** | Không có tên nghi ngờ trùng người | Cùng xuất hiện "Lý X" / "Bác Lý" / "Chưởng quầy X" | LLM viết tên không nhất quán — thêm ràng buộc "dùng tên nhất quán" vào prompt hoặc thêm công cụ gộp tên theo yêu cầu người dùng |
+| **Nhân vật xuất hiện nhiều** | Ít mục có `appearance_count >= 5` | Nhiều mục xuất hiện cao xuyên arc | Nên cân nhắc nâng cấp lên hồ sơ nhân vật chính (kênh thăng cấp giai đoạn 3) |
+| **Có sử dụng kết quả recent_cast không** | Khi Writer viết nhân vật cũ, trường `characters` của `commit_chapter` chứa tên đã có trong ledger | Writer phát minh lại tên đã có (xuất hiện "Bác Châu A" và "Bác Châu B") | recent_cast chưa được tiêu thụ — kiểm tra phần "tính liên tục nhân vật phụ" trong writer.md |
 
-### 数据流验证（端到端）
+### Xác minh luồng dữ liệu (đầu cuối)
 
-跑 5 章后：
-1. `cat meta/cast_ledger.json` 应该不为空（除非每章都只用核心角色）
-2. 如果 Writer 在第 1 章引入了"老周"：
-   - `cast_ledger` 中应有 `老周` 条目，`appearance_count=1`
-3. 如果第 5 章再写老周：
-   - `老周.appearance_count=2`，`last_seen_chapter=5`
-4. `meta/sessions/agents/writer-*.jsonl` 中第 5 章的 novel_context 返回值，应该在 `episodic_memory.recent_cast` 里看到老周
-5. 如果上一步看到了但 Writer 没消费（写出来的老周和第 1 章对不上）—— 这是 prompt 问题
+Sau 5 chương:
+1. `cat meta/cast_ledger.json` phải không rỗng (trừ khi mỗi chương chỉ dùng nhân vật chính)
+2. Nếu Writer đã giới thiệu "Bác Châu" ở chương 1:
+   - `cast_ledger` phải có mục `Bác Châu`, `appearance_count=1`
+3. Nếu chương 5 viết thêm về Bác Châu:
+   - `Bác Châu.appearance_count=2`, `last_seen_chapter=5`
+4. Trong `meta/sessions/agents/writer-*.jsonl` của chương 5, giá trị trả về của `novel_context` phải có Bác Châu trong `episodic_memory.recent_cast`
+5. Nếu bước trên thấy có mà Writer không sử dụng (nhân vật Bác Châu viết ra không khớp với chương 1) — đây là vấn đề prompt
 
-### 当前没有自动诊断（但 snapshot 已加载）
+### Hiện chưa có chẩn đoán tự động (nhưng snapshot đã được tải)
 
-`diag.Snapshot.CastLedger` 已经在 `Load()` 里被读取，可以被规则直接消费——但当前还没写任何规则。验证仍靠上面的 `jq` 命令手工查。
+`diag.Snapshot.CastLedger` đã được đọc trong `Load()`, các quy tắc có thể tiêu thụ trực tiếp — nhưng hiện chưa có quy tắc nào được viết. Việc xác minh vẫn phải dùng lệnh `jq` thủ công ở trên.
 
-后续如果要补诊断规则（候选）：
-- `CastBriefRoleMissing`：缺失率 > 50% 告警
-- `CastBloat`：条目数 > 章数 × 0.8 告警
-- `CastPromotionCandidate`：appearance_count ≥ 5 且跨弧 → 建议升格
+Các quy tắc chẩn đoán có thể bổ sung sau (danh sách ứng viên):
+- `CastBriefRoleMissing`: Cảnh báo khi tỷ lệ thiếu > 50%
+- `CastBloat`: Cảnh báo khi số mục > số chương × 0.8
+- `CastPromotionCandidate`: appearance_count ≥ 5 và xuất hiện xuyên arc → đề xuất thăng cấp
 
-阈值不要现在拍——等长篇数据出来后，看真实分布再定。规则代码本身只需要 30-50 行。
+Chưa chốt ngưỡng ngay — đợi có dữ liệu truyện dài thực tế, xem phân phối thực rồi mới định. Bản thân code quy tắc chỉ cần 30-50 dòng.
 
 ---
 
-## 5. Writer 是否在按预期工作
+## 5. Writer có đang hoạt động đúng kỳ vọng không
 
-跑长篇时最关心的是 **Writer 真的在按 prompt 行事吗**。最直接的观测是 session log：
+Khi chạy truyện dài, điều quan tâm nhất là **Writer có thực sự tuân theo prompt không**. Cách quan sát trực tiếp nhất là xem session log:
 
 ```bash
-ls output/{novel}/meta/sessions/agents/    # 每个子代理一份 jsonl
+ls output/{novel}/meta/sessions/agents/    # Mỗi sub-agent một file jsonl
 tail -50 output/{novel}/meta/sessions/agents/writer-*.jsonl
 ```
 
-看几个特定行为：
+Kiểm tra một số hành vi cụ thể:
 
-| 期望行为 | 在 jsonl 中体现 |
+| Hành vi mong đợi | Biểu hiện trong jsonl |
 |---|---|
-| Writer 看了 recent_cast | novel_context 工具返回值里 `episodic_memory.recent_cast` 字段非空 |
-| Writer 在 commit_chapter 填了 cast_intros | tool_call 参数 `cast_intros` 数组非空（仅在引入新角色的章节） |
-| Writer 用了相关章节推荐 | `read_chapter` 调用次数 > 1（默认 1 次，超过说明回查了） |
-| Writer 没违反工具顺序 | tool_call 序列严格 `novel_context → read_chapter → plan_chapter → draft_chapter → check_consistency → commit_chapter` |
+| Writer đã đọc recent_cast | Giá trị trả về của công cụ `novel_context` có trường `episodic_memory.recent_cast` không rỗng |
+| Writer điền cast_intros trong commit_chapter | Tham số tool_call `cast_intros` là mảng không rỗng (chỉ ở chương giới thiệu nhân vật mới) |
+| Writer dùng gợi ý chương liên quan | Số lần gọi `read_chapter` > 1 (mặc định 1 lần, nhiều hơn là có tra cứu lại) |
+| Writer không vi phạm thứ tự công cụ | Chuỗi tool_call phải đúng thứ tự `novel_context → read_chapter → plan_chapter → draft_chapter → check_consistency → commit_chapter` |
 
-如果 jsonl 里看到 Writer 多次空调 novel_context、或 commit_chapter 之后又调其他工具——是 prompt 没收住。
-
----
-
-## 6. 长跑场景红线
-
-跑 100+ 章长篇时，下面任何一条命中就该停下来排查：
-
-- [ ] CompassDrift 命中且持续 2 个弧未消除
-- [ ] cast_ledger 条目数 > 已完成章数 × 0.8
-- [ ] cast_ledger 中 brief_role 填写率 < 30%
-- [ ] 同一角色出现疑似多名（"老李" / "李掌柜" 共存）
-- [ ] Writer 写新章时不读 recent_cast 中已有的旧角色（重复发明）
-- [ ] Coordinator session 中出现连续 ≥ 5 次空调 novel_context
-- [ ] 任意章节 commit 后 `meta/checkpoints.jsonl` 没有对应 `commit_chapter` step
-
-前 4 条是本次新机制的健康度；后 3 条是已有机制的稳定性。
+Nếu trong jsonl thấy Writer gọi novel_context nhiều lần trống, hoặc sau commit_chapter lại gọi thêm công cụ khác — đây là dấu hiệu prompt chưa kiểm soát được hành vi.
 
 ---
 
-## 7. 文档维护规范
+## 6. Ngưỡng đỏ cho truyện chạy dài
 
-**新增事实层工件时（新建一个 `meta/*.json` / `meta/*.jsonl`），同步：**
+Khi chạy truyện 100+ chương, nếu bất kỳ điều nào dưới đây xảy ra hãy dừng lại để kiểm tra:
 
-1. 在本文档 §2 加一行速查
-2. 如果工件需要专项观测（不是简单的"存在/不存在"判断），加 §X 专题段
-3. 如果想要自动诊断，在 `internal/diag/snapshot.go::Load` 中加载，并在 `internal/diag/rules_*.go` 加规则
+- [ ] CompassDrift kích hoạt và kéo dài qua 2 arc mà không được giải quyết
+- [ ] Số mục cast_ledger > số chương đã hoàn thành × 0.8
+- [ ] Tỷ lệ điền brief_role trong cast_ledger < 30%
+- [ ] Cùng một nhân vật xuất hiện với tên nghi ngờ trùng ("Bác Lý" / "Lý chưởng quầy" cùng tồn tại)
+- [ ] Writer viết chương mới mà không đọc nhân vật cũ đã có trong recent_cast (phát minh lại)
+- [ ] Trong phiên Coordinator xuất hiện ≥ 5 lần gọi novel_context trống liên tiếp
+- [ ] Sau khi commit bất kỳ chương nào, `meta/checkpoints.jsonl` không có step `commit_chapter` tương ứng
 
-**不要：**
-- 不要把 `internal/diag/` 里所有规则照抄到本文档（那是规则参考，不是观测手册）
-- 不要为每个机制都写诊断规则——阈值靠拍脑袋会错，先观察再补
+4 điều đầu là chỉ số sức khỏe của các cơ chế mới; 3 điều sau là sự ổn định của các cơ chế đã có.
+
+---
+
+## 7. Quy chuẩn bảo trì tài liệu
+
+**Khi thêm artifact mới ở tầng dữ liệu (tạo `meta/*.json` / `meta/*.jsonl` mới), đồng thời:**
+
+1. Thêm một dòng vào bảng tra cứu nhanh §2 trong tài liệu này
+2. Nếu artifact cần quan sát chuyên biệt (không chỉ đơn giản là "có / không"), thêm mục §X riêng
+3. Nếu muốn chẩn đoán tự động, tải vào `internal/diag/snapshot.go::Load` và thêm quy tắc trong `internal/diag/rules_*.go`
+
+**Không nên:**
+- Không sao chép toàn bộ quy tắc trong `internal/diag/` vào tài liệu này (đó là tài liệu tham chiếu quy tắc, không phải cẩm nang quan sát)
+- Không viết quy tắc chẩn đoán cho mọi cơ chế — ngưỡng tùy tiện sẽ sai, hãy quan sát trước rồi mới bổ sung

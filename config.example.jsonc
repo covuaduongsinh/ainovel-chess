@@ -1,30 +1,30 @@
 {
-  // 默认使用的 provider、model 和推理强度。
-  // ★ provider 的值是下面 providers 里的一个 key 名（一根“指针”），不是协议名——
-  //   改 provider 必须保证 providers 里有同名条目，否则启动会报“未配置凭证”。
-  //   运行时用 /model 面板切换会写回全局配置 ~/.ainovel/config.json。
+  // Provider, model và mức độ suy luận mặc định sử dụng.
+  // ★ Giá trị provider là tên key trong mục providers bên dưới (một "con trỏ"), không phải tên giao thức——
+  //   Đổi provider phải đảm bảo providers có mục cùng tên, không thì khởi động sẽ báo "chưa cấu hình thông tin xác thực".
+  //   Chuyển đổi qua panel /model trong lúc chạy sẽ ghi lại vào cấu hình toàn cục ~/.ainovel/config.json.
   "provider": "openrouter",
   "model": "google/gemini-2.5-flash",
-  // 可选。默认推理强度：off / low / medium / high / xhigh / max。
-  // 省略或空字符串 = 不覆盖，沿用模型/provider 默认。
+  // Tùy chọn. Mức độ suy luận mặc định: off / low / medium / high / xhigh / max.
+  // Bỏ qua hoặc chuỗi rỗng = không ghi đè, giữ nguyên mặc định của model/provider.
   "reasoning_effort": "medium",
 
-  // Provider 凭证库。key 自定义，用作上面 provider 字段引用的目标。
-  // 已知 provider（openai/anthropic/gemini/openrouter/deepseek/qwen/glm/grok/mimo/ollama/bedrock）
-  // 可省略 type；自定义代理必须显式声明 type 指明 API 协议。
+  // Kho thông tin xác thực provider. Key tự đặt, dùng làm đích cho trường provider ở trên.
+  // Provider đã biết (openai/anthropic/gemini/openrouter/deepseek/qwen/glm/grok/mimo/ollama/bedrock)
+  // có thể bỏ qua type; proxy tùy chỉnh phải khai báo type để chỉ định giao thức API.
   "providers": {
     "openrouter": {
       "api_key": "sk-or-v1-xxx",
       "base_url": "https://openrouter.ai/api/v1",
-      // 可选。声明 /model 面板候选；省略时回退到配置中已出现过的同 provider 模型。
+      // Tùy chọn. Khai báo danh sách model cho panel /model; bỏ qua thì fallback về các model cùng provider đã dùng trong config.
       "models": ["google/gemini-3.0-flash", "google/gemini-3.1-pro"],
-      // 可选。透传给该 provider 每次请求的额外参数（采样参数如 temperature/top_p/
-      // min_p，或厂商特有键如 nvidia 开 think 的 chat_template_kwargs），逐字并入请求体。
-      // 仅对 OpenAI 兼容类 provider 生效（openrouter/deepseek/qwen/glm/grok/ollama…）；
-      // type:"openai" 会按官方参数白名单过滤。值由用户自负其责。
+      // Tùy chọn. Tham số bổ sung truyền thẳng vào mỗi request của provider (tham số sampling như temperature/top_p/
+      // min_p, hoặc key riêng của nhà cung cấp như chat_template_kwargs để bật think của nvidia), gộp vào request body.
+      // Chỉ có tác dụng với provider tương thích OpenAI (openrouter/deepseek/qwen/glm/grok/ollama…);
+      // type:"openai" sẽ lọc theo danh sách tham số chính thức. Giá trị do người dùng tự chịu trách nhiệm.
       "extra_body": { "temperature": 0.8, "min_p": 0.05 },
-      // 可选。provider 级配置，透传给 HTTP 客户端层（不是请求体），用于需要
-      // 自定义 User-Agent / headers / anthropic_beta 的代理。
+      // Tùy chọn. Cấu hình cấp provider, truyền thẳng vào lớp HTTP client (không phải request body), dùng khi cần
+      // tùy chỉnh User-Agent / headers / anthropic_beta cho proxy.
       "extra": {
         "user_agent": "my-client/1.0",
         "headers": { "X-Custom-Client": "my-client" }
@@ -35,15 +35,15 @@
       "models": ["claude-sonnet-4", "claude-opus-4"]
     },
     "ollama": {
-      // ollama / bedrock / 显式 type 的自定义代理可以省略 api_key
-      // base_url 需带 /v1（ollama 的 OpenAI 兼容端点在 /v1 下）
+      // ollama / bedrock / proxy tùy chỉnh khai báo type có thể bỏ qua api_key
+      // base_url cần có /v1 (endpoint tương thích OpenAI của ollama nằm dưới /v1)
       "base_url": "http://localhost:11434/v1",
       "models": ["qwen3:14b"]
     },
     "claude-code-proxy": {
-      // 自定义 Anthropic 代理。如果上游限制只能由 Claude Code 客户端访问，
-      // 用 extra 透传 user_agent / anthropic_beta / headers。
-      // base_url 不需要带 /v1。
+      // Proxy Anthropic tùy chỉnh. Nếu upstream chỉ cho phép truy cập qua Claude Code client,
+      // dùng extra để truyền user_agent / anthropic_beta / headers.
+      // base_url không cần /v1.
       "type": "anthropic",
       "api_key": "sk-xxx",
       "base_url": "https://proxy.example.com",
@@ -59,15 +59,15 @@
       }
     },
     "codex-proxy": {
-      // 自定义 OpenAI/NewAPI 代理。如果上游限制只能由 Codex 客户端访问，
-      // 用 extra 覆盖 User-Agent，并透传 Codex 识别头。
-      // base_url 按代理实际地址填写；OpenAI 协议通常需要 /v1。
+      // Proxy OpenAI/NewAPI tùy chỉnh. Nếu upstream chỉ cho phép truy cập qua Codex client,
+      // dùng extra để ghi đè User-Agent và truyền header nhận diện Codex.
+      // base_url điền theo địa chỉ thực của proxy; giao thức OpenAI thường cần /v1.
       "type": "openai",
       "api_key": "sk-xxx",
       "base_url": "https://proxy.example.com/v1",
       "models": ["gpt-5.4", "gpt-5.4-mini", "MiniMax-M3"],
-      // 可选。OpenAI 协议 endpoint：chat（默认 /v1/chat/completions）/
-      // responses（/v1/responses）。Codex 类代理通常需要 responses。
+      // Tùy chọn. Endpoint giao thức OpenAI: chat (mặc định /v1/chat/completions)/
+      // responses (/v1/responses). Proxy kiểu Codex thường cần responses.
       "api": "responses",
       "extra": {
         "user_agent": "codex-tui/0.142.3 (Mac OS 26.5.1; arm64) Apple_Terminal/470.2 (codex-tui; 0.142.3)",
@@ -80,10 +80,10 @@
     }
   },
 
-  // 可选。按角色覆盖默认模型；未配的角色使用上面的 model。
-  // reasoning_effort 也可按角色覆盖；未配时继承顶层 reasoning_effort。
-  // 角色：coordinator / architect / writer / editor。fallbacks 在主模型失败时按序尝试。
-  // 注意：这里的 provider 同样是“指针”，必须指向 providers 里存在的 key。
+  // Tùy chọn. Ghi đè model mặc định theo từng vai trò; vai trò chưa cấu hình dùng model ở trên.
+  // reasoning_effort cũng có thể ghi đè theo vai trò; chưa cấu hình thì kế thừa reasoning_effort cấp trên.
+  // Vai trò: coordinator / architect / writer / editor. fallbacks thử lần lượt khi model chính thất bại.
+  // Lưu ý: provider ở đây cũng là "con trỏ", phải trỏ vào key tồn tại trong providers.
   // "roles": {
   //   "writer": {
   //     "provider": "anthropic",
@@ -94,32 +94,32 @@
   //   "architect": { "provider": "openrouter", "model": "google/gemini-3.1-pro" }
   // },
 
-  // 写作风格：default / suspense / fantasy / romance。
+  // Phong cách viết: default / suspense / fantasy / romance.
   "style": "default"
 
-  // 可选。显式指定上下文压缩使用的窗口大小。省略 / 0 = 按模型名自动解析
-  //（registry 命中用真实窗口，未命中兜底 200k）。配了就优先用：既能给 registry
-  // 查不到的自定义模型指定真实窗口，也能把名义 1M 窗口钉在 300k 提前触发压缩，
-  // 避免在注意力衰退区才压缩。仅影响压缩阈值，不改变 API 实际请求长度。
+  // Tùy chọn. Chỉ định tường minh kích thước cửa sổ context dùng cho nén ngữ cảnh. Bỏ qua / 0 = tự động phân tích theo tên model
+  // (registry tra cứu được dùng cửa sổ thật, không tra được thì mặc định 200k). Cấu hình thì ưu tiên dùng:
+  // có thể chỉ định cửa sổ thật cho model tùy chỉnh không có trong registry, hoặc ghim cửa sổ danh nghĩa 1M
+  // xuống 300k để kích hoạt nén sớm, tránh nén trong vùng chú ý suy giảm. Chỉ ảnh hưởng ngưỡng nén, không thay đổi độ dài request API thực tế.
   // "context_window": 300000
 
-  // 可选。单本书（output 目录）的成本预算，挂机保险丝。book_usd > 0 才启用。
-  // 累计花费达到 warn_ratio 时告警不停机；达到 100% 在当前子代理任务结束后
-  // 优雅停机（hard_stop=true 则越线立即停）。停机后上调 book_usd 即可恢复续跑。
-  // 注意：自定义模型若注册表查不到价格且 provider 不自报 cost，预算形同虚设。
+  // Tùy chọn. Ngân sách chi phí mỗi cuốn sách (thư mục output), cầu dao bảo hiểm chạy không giám sát. book_usd > 0 mới kích hoạt.
+  // Khi tổng chi phí đạt warn_ratio thì cảnh báo nhưng không dừng; khi đạt 100% thì dừng ưu nhã sau khi
+  // sub-agent hiện tại hoàn thành (hard_stop=true thì dừng ngay khi vượt ngưỡng). Sau khi dừng chỉ cần tăng book_usd là tiếp tục được.
+  // Lưu ý: model tùy chỉnh không có trong registry và provider không tự báo cost thì ngân sách vô hiệu.
   // "budget": {
   //   "book_usd": 50,
   //   "warn_ratio": 0.8,
   //   "hard_stop": false
   // },
 
-  // 可选。无人值守告警，缺省启用（macOS osascript / Linux notify-send 桌面通知）。
-  // 配置 command 后改走自定义命令（手机推送走这里）：字段经环境变量
-  // $NOTIFY_TITLE / $NOTIFY_BODY / $NOTIFY_KIND / $NOTIFY_LEVEL 传入，完整 JSON 同时写 stdin。
-  // events 可选过滤：run_end（完成/停止）/ repeat（指令重复，疑似空转）/ budget（预算）。
+  // Tùy chọn. Cảnh báo không giám sát, mặc định bật (thông báo desktop macOS osascript / Linux notify-send).
+  // Cấu hình command thì chuyển sang lệnh tùy chỉnh (push điện thoại đi qua đây): các trường truyền qua biến môi trường
+  // $NOTIFY_TITLE / $NOTIFY_BODY / $NOTIFY_KIND / $NOTIFY_LEVEL, JSON đầy đủ đồng thời ghi vào stdin.
+  // events lọc tùy chọn: run_end (hoàn thành/dừng) / repeat (lệnh lặp, nghi ngờ vòng lặp rỗng) / budget (ngân sách).
   // "notify": {
   //   "enabled": true,
-  //   // 标题/正文含中文与空格，必须经 --data-urlencode 传参，不可拼进 URL 路径或 HTTP 头。
+  //   // Tiêu đề/nội dung có dấu cách và ký tự đặc biệt, phải dùng --data-urlencode, không ghép vào URL path hoặc HTTP header.
   //   // Bark (iOS):         "command": "curl -s --data-urlencode \"title=$NOTIFY_TITLE\" --data-urlencode \"body=$NOTIFY_BODY\" https://api.day.app/<key>"
   //   // ntfy (iOS/Android): "command": "curl -s -G --data-urlencode \"title=$NOTIFY_TITLE\" --data-urlencode \"message=$NOTIFY_BODY\" ntfy.sh/<topic>/publish"
   //   "events": ["run_end", "repeat", "budget"]

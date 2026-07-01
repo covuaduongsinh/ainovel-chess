@@ -12,9 +12,9 @@ import (
 	"log/slog"
 )
 
-// isCancellationNoise 判断一个错误是否为 abort 引发的衍生噪声。
-// 仅当 Host 处于 aborting 态时返回 true 才有意义——非 abort 期间的
-// context.Canceled 可能反映真实问题（如外部 ctx 被取消），仍应上报。
+// isCancellationNoise kiểm tra một lỗi có phải là nhiễu dẫn xuất do abort gây ra không.
+// Chỉ có ý nghĩa khi trả về true trong khi Host ở trạng thái aborting —
+// context.Canceled không phải trong giai đoạn abort có thể phản ánh vấn đề thực (như ctx bên ngoài bị hủy), vẫn cần báo cáo.
 func (o *observer) isCancellationNoise(err error, msg string) bool {
 	if !o.aborting.Load() {
 		return false
@@ -66,7 +66,7 @@ func (o *observer) handle(ev agentcore.Event) {
 		if ev.Err != nil {
 			fullMsg := ev.Err.Error()
 			if o.isCancellationNoise(ev.Err, fullMsg) {
-				// 用户主动 abort 衍生的 ctx-cancel 错误；已有"用户手动暂停"事件，不再重复刷屏。
+				// Lỗi ctx-cancel dẫn xuất từ người dùng chủ động abort; đã có sự kiện "người dùng tạm dừng thủ công", không lặp lại.
 				o.flushActiveCalls(true)
 				slog.Debug("suppressed cancel-derived error", "module", "agent", "msg", fullMsg)
 				return
@@ -88,9 +88,9 @@ func (o *observer) handle(ev agentcore.Event) {
 
 func retryPrefix(attempt, maxRetries int, delay time.Duration) string {
 	if text := formatRetryDelay(delay); text != "" {
-		return fmt.Sprintf("重试 (%d/%d，%s后): ", attempt, maxRetries, text)
+		return fmt.Sprintf("Thử lại (%d/%d，sau %s): ", attempt, maxRetries, text)
 	}
-	return fmt.Sprintf("重试 (%d/%d): ", attempt, maxRetries)
+	return fmt.Sprintf("Thử lại (%d/%d): ", attempt, maxRetries)
 }
 
 func formatRetryDelay(delay time.Duration) string {
@@ -157,7 +157,7 @@ func (o *observer) handleContextProgress(ev agentcore.Event) {
 		agent = "coordinator"
 	}
 
-	// 更新 agent 快照（TUI 侧边栏始终可见）
+	// Cập nhật snapshot agent (thanh bên TUI luôn hiển thị)
 	o.updateAgent(agent, func(a *agentState) {
 		a.context = AgentContextSnapshot{
 			Tokens:        payload.Tokens,
@@ -172,7 +172,7 @@ func (o *observer) handleContextProgress(ev agentcore.Event) {
 	if payload.Percent > 85 {
 		level = "warn"
 	}
-	summary := fmt.Sprintf("%s 上下文 %.0f%% (%d/%d) 策略: %s", agent, payload.Percent, payload.Tokens, payload.ContextWindow, payload.Strategy)
+	summary := fmt.Sprintf("%s ngữ cảnh %.0f%% (%d/%d) chiến lược: %s", agent, payload.Percent, payload.Tokens, payload.ContextWindow, payload.Strategy)
 
 	depth := 0
 	if agent != "coordinator" {
@@ -180,12 +180,12 @@ func (o *observer) handleContextProgress(ev agentcore.Event) {
 	}
 
 	if payload.Strategy != "" {
-		// 触发了压缩 → 事件流 + 日志
+		// Đã kích hoạt nén → luồng sự kiện + log
 		ctxEv := Event{Time: time.Now(), Category: "SYSTEM", Agent: agent, Summary: summary, Level: level, Depth: depth}
 		o.emitEv(ctxEv)
 		o.persistEvent(ctxEv)
 	} else {
-		// 普通使用率报告 → 仅日志
+		// Báo cáo tỷ lệ sử dụng thông thường → chỉ log
 		slogLevel := slog.LevelInfo
 		if level == "warn" {
 			slogLevel = slog.LevelWarn

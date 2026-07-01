@@ -25,9 +25,9 @@ import (
 	"github.com/voocel/ainovel-cli/internal/userrules"
 )
 
-// agentToRole 把 subagent name 归一为 ModelSet 认得的 role 名。
-// architect_short / architect_long 都共用同一个 architect role 配置。
-// 跟 host.agentRoleName 同义，因为 build 与 host 互不依赖故各持一份。
+// agentToRole chuẩn hóa tên subagent thành tên role mà ModelSet nhận ra.
+// architect_short / architect_long cùng dùng chung một cấu hình role architect.
+// Đồng nghĩa với host.agentRoleName, vì build và host không phụ thuộc nhau nên mỗi bên giữ một bản.
 func agentToRole(name string) string {
 	if strings.HasPrefix(name, "architect_") {
 		return "architect"
@@ -35,15 +35,15 @@ func agentToRole(name string) string {
 	return name
 }
 
-// subagentMaxRetries 给所有 SubAgentConfig 与 Coordinator 统一的 LLM retry 上限。
-// 退避策略：指数退避（受 maxDelay 上限约束），优先服从 server Retry-After。
-// 配合 ToolsAreIdempotent=true 让 stream-idle / 503 / 短暂网络抖动这类 retryable
-// 错误能在 subagent 层就近重试，而不是把整个 subagent 抛回 coordinator 重派发。
-// 项目铁律一保证写类工具走 checkpoint+digest 幂等，重试是安全的。
+// subagentMaxRetries là giới hạn retry LLM thống nhất cho tất cả SubAgentConfig và Coordinator.
+// Chiến lược backoff: lũy thừa (bị giới hạn bởi maxDelay), ưu tiên tuân theo server Retry-After.
+// Kết hợp với ToolsAreIdempotent=true để các lỗi retryable như stream-idle / 503 / rung mạng ngắn
+// có thể retry tại lớp subagent thay vì ném toàn bộ subagent về coordinator để dispatch lại.
+// Quy tắc sắt 1 của dự án đảm bảo công cụ ghi đi theo checkpoint+digest idempotent, retry là an toàn.
 const subagentMaxRetries = 7
 
-// UsageRecorder 是 BuildCoordinator 可选的用量回调；签名与 OnMessage 一致，
-// 每条 agent 消息都会调一次，由 Host 层负责聚合。nil 表示不追踪。
+// UsageRecorder là callback dùng lượng tùy chọn của BuildCoordinator; chữ ký giống OnMessage,
+// được gọi mỗi tin nhắn agent, do lớp Host chịu trách nhiệm tổng hợp. nil nghĩa là không theo dõi.
 type UsageRecorder func(agentName string, msg agentcore.AgentMessage)
 
 // FlowBoundaryHook runs synchronously after a Coordinator tool that advances
@@ -51,14 +51,14 @@ type UsageRecorder func(agentName string, msg agentcore.AgentMessage)
 // instruction before the Coordinator gets another LLM turn.
 type FlowBoundaryHook func(toolName string)
 
-// ApplyThinking 把某具体角色的推理强度应用到 live agent（运行时 /model 调整用）。
-// coordinator → Agent.SetThinkingLevel；architect → 两个 architect_* 子代理；
-// writer/editor → 对应子代理。空 level = 沿用模型/provider 默认。其它 role 名忽略。
+// ApplyThinking áp dụng cường độ suy luận của một vai trò cụ thể vào live agent (dùng cho điều chỉnh /model runtime).
+// coordinator → Agent.SetThinkingLevel; architect → hai subagent architect_*;
+// writer/editor → subagent tương ứng. level rỗng = giữ mặc định model/provider. Tên role khác bị bỏ qua.
 type ApplyThinking func(role string, level agentcore.ThinkingLevel)
 
-// ParseThinkingLevel 把配置字符串转 agentcore.ThinkingLevel。
-// "" 合法（= 不覆盖/继承）；其余须是 off/low/medium/high/xhigh/max 之一，
-// 否则返回 error（启动时降级当空并 warn，运行时把 error 回显给用户）。
+// ParseThinkingLevel chuyển đổi chuỗi cấu hình thành agentcore.ThinkingLevel.
+// "" hợp lệ (= không ghi đè/kế thừa); các giá trị còn lại phải là off/low/medium/high/xhigh/max,
+// nếu không thì trả về error (khi khởi động hạ cấp thành rỗng và warn, runtime thì hiển thị error cho người dùng).
 func ParseThinkingLevel(s string) (agentcore.ThinkingLevel, error) {
 	lv := agentcore.NormalizeThinkingLevel(agentcore.ThinkingLevel(s))
 	switch lv {
@@ -66,7 +66,7 @@ func ParseThinkingLevel(s string) (agentcore.ThinkingLevel, error) {
 		agentcore.ThinkingHigh, agentcore.ThinkingXHigh, agentcore.ThinkingMax:
 		return lv, nil
 	default:
-		return "", fmt.Errorf("无效推理强度 %q（可选：off/low/medium/high/xhigh/max）", s)
+		return "", fmt.Errorf("cường độ suy luận không hợp lệ %q (có thể chọn: off/low/medium/high/xhigh/max)", s)
 	}
 }
 
@@ -78,11 +78,11 @@ func AvailableThinkingForModel(model agentcore.ChatModel) []agentcore.ThinkingLe
 	return llm.ThinkingPolicyFor(model).Available
 }
 
-// roleThinking 解析某角色生效的推理强度；非法值降级为空（不覆盖）并 warn。
+// roleThinking phân tích cường độ suy luận có hiệu lực của một vai trò; giá trị không hợp lệ hạ cấp thành rỗng (không ghi đè) và warn.
 func roleThinking(cfg bootstrap.Config, role string) agentcore.ThinkingLevel {
 	lv, err := ParseThinkingLevel(cfg.ResolveReasoningEffort(role))
 	if err != nil {
-		slog.Warn("忽略无效推理强度配置", "module", "agent", "role", role, "err", err)
+		slog.Warn("Bỏ qua cấu hình cường độ suy luận không hợp lệ", "module", "agent", "role", role, "err", err)
 		return ""
 	}
 	return lv
@@ -93,12 +93,12 @@ func resolvedRoleThinking(model agentcore.ChatModel, cfg bootstrap.Config, role 
 	return resolved
 }
 
-// BuildCoordinator 组装 Coordinator Agent 及其 SubAgent。
-// 返回 Agent、AskUserTool、WriterRestorePack、Coordinator 的 ContextEngine 引用，
-// 以及 ApplyThinking 闭包——Host 层 /model 切换时需要直接调 SetContextWindow +
-// SetReserveTokens 联动新模型的窗口（writer/architect/editor 走 ContextManagerFactory
-// 自动重建，不需要 ref；只有常驻的 coordinator 需要），并通过 ApplyThinking 联动各角色
-// 推理强度。Host 层通过 Agent.Subscribe 获取事件流,不再需要 emit 回调。
+// BuildCoordinator lắp ráp Coordinator Agent và các SubAgent của nó.
+// Trả về Agent, AskUserTool, WriterRestorePack, tham chiếu ContextEngine của Coordinator,
+// và closure ApplyThinking —— lớp Host khi chuyển /model cần gọi trực tiếp SetContextWindow +
+// SetReserveTokens để liên động cửa sổ mô hình mới (writer/architect/editor đi theo ContextManagerFactory
+// tự động xây lại, không cần ref; chỉ coordinator thường trú mới cần), và qua ApplyThinking liên động
+// cường độ suy luận các vai trò. Lớp Host lấy luồng sự kiện qua Agent.Subscribe, không cần callback emit nữa.
 func BuildCoordinator(
 	cfg bootstrap.Config,
 	store *store.Store,
@@ -107,10 +107,10 @@ func BuildCoordinator(
 	recordUsage UsageRecorder,
 	onFlowBoundary FlowBoundaryHook,
 ) (*agentcore.Agent, *tools.AskUserTool, *ctxpack.WriterRestorePack, *corecontext.ContextEngine, ApplyThinking) {
-	// 共享工具
+	// Công cụ dùng chung
 	contextTool := tools.NewContextTool(store, bundle.References, cfg.Style)
-	// 用户规则服务：归一化各来源 → 确定性合并 → 落盘本书快照。Coordinator 的
-	// save_user_rules 工具复用它做运行中更新；归一化用 Default 模型（与 Host 开书侧一致）。
+	// Dịch vụ quy tắc người dùng: chuẩn hóa các nguồn → hợp nhất xác định → ghi snapshot của sách này xuống disk.
+	// Công cụ save_user_rules của Coordinator tái sử dụng nó để cập nhật trong khi chạy; chuẩn hóa dùng mô hình Default (nhất quán với phía Host mở sách).
 	userRulesSvc := userrules.NewService(store, models.Default, rules.DefaultOptions())
 	readChapter := tools.NewReadChapterTool(store)
 	askUser := tools.NewAskUserTool()

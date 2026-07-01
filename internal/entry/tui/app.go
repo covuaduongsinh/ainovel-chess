@@ -1,4 +1,4 @@
-package tui
+﻿package tui
 
 import (
 	tea "github.com/charmbracelet/bubbletea"
@@ -8,11 +8,11 @@ import (
 	"github.com/voocel/ainovel-cli/internal/logger"
 )
 
-// Run 启动 TUI。
-// 启动模式分层约定：
-// 1. 快速模式、共创模式属于“启动编排”；
-// 2. 正式创作会话进入 host.Host；
-// 3. 未来若新增“续写已有小说”等共享模式，统一落到 internal/entry/startup。
+// Run khởi động TUI.
+// Quy ước phân tầng chế độ khởi động:
+// 1. Chế độ nhanh, chế độ cộng tác thuộc "điều phối khởi động";
+// 2. Phiên sáng tác chính thức đi vào host.Host;
+// 3. Nếu sau này thêm chế độ dùng chung như "tiếp tục tiểu thuyết có sẵn", thống nhất đặt tại internal/entry/startup.
 func Run(cfg bootstrap.Config, bundle assets.Bundle, version string) error {
 	rt, err := host.New(cfg, bundle)
 	if err != nil {
@@ -25,9 +25,10 @@ func Run(cfg bootstrap.Config, bundle assets.Bundle, version string) error {
 	defer rt.Close()
 
 	m := NewModel(rt, bridge, version)
-	// 不在启动时全局开启鼠标上报：欢迎页用不到鼠标，关闭上报可保留终端原生
-	// 拖拽选中复制。进入创作工作台（modeRunning）时再由 enterRunning 打开上报，
-	// 以支持点击切面板 / 滚轮 / 拖拽侧边栏。
+	// Không bật báo cáo chuột toàn cục khi khởi động: trang chào không dùng chuột,
+	// tắt báo cáo giữ nguyên tính năng kéo chọn sao chép gốc của terminal.
+	// Khi vào bàn làm việc sáng tác (modeRunning), enterRunning sẽ bật báo cáo,
+	// hỗ trợ nhấp để chuyển panel / con lăn / kéo thanh bên.
 	p := tea.NewProgram(m, tea.WithAltScreen())
 	_, err = p.Run()
 	return err

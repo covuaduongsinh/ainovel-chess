@@ -1,154 +1,154 @@
-# ainovel-cli 评测体系
+# Hệ thống đánh giá ainovel-cli
 
-> 评测不是新造一套检查脚本，而是把项目**已有的事实诊断器（`diag`）、全书文体统计器（`stylestat`）、七维原生评审（`ReviewEntry`）当作评测器**，套一层离线批量 harness。一份事实定义，两处不再漂移。
-
----
-
-## 0. 为什么需要重新设计
-
-稳定性已经跑通：长篇 235 章 / 127 万字一次写完，滚动规划闭环成立（见 `architecture.md` §9.1）。瓶颈已经转移——**质量可迭代**：
-
-- 改一个 prompt 后，流程是否仍稳定？工具链、状态推进、持久化事实是否还正确？
-- 正文、大纲、评审质量是真的提升了，还是只是这一次随机抽到了好结果？
-- 长篇里角色、时间线、伏笔、上下文是否持续可靠？
-- **全书级的文体固化**（句式 tic 章均几十次、章末形态同构、跨章逐字复读）有没有变好或变坏？这是 196 章实证 6.5/10 的真凶，单章评审对它天然失明。
-
-目前这些判断靠"凭感觉 + 人工抽读"。评测体系要把 prompt 改动从凭感觉变成**有回归、有证据、有人工读样**的工程流程。
-
-但本项目不需要、也不应该照搬业界通用 eval 平台（dataset / experiment / scorer / 数据库 / Web UI）。原因很简单：**这些能力的核心——确定性检查与质量信号——项目里已经存在，且是 Go 写的、与运行时共享同一份事实模型。**
+> Đánh giá không phải xây dựng một bộ script kiểm tra mới, mà là **lấy bộ chẩn đoán sự kiện đã có (`diag`), bộ thống kê văn thể toàn tập (`stylestat`), xét duyệt nguyên bản bảy chiều (`ReviewEntry`) làm bộ đánh giá**, rồi bọc một lớp harness offline theo lô. Một định nghĩa sự kiện, hai nơi không còn sai lệch.
 
 ---
 
-## 1. 核心论点：评测器已经存在
+## 0. Tại sao cần thiết kế lại
 
-评测系统的四类评测器，三类在代码库里已经实现，只是从未被当作"评测器"调用：
+Tính ổn định đã chạy thông: tác phẩm dài 235 chương / 1,27 triệu chữ viết xong một lần, vòng kín lập kế hoạch cuộn thành công (xem `architecture.md` §9.1). Nút thắt cổ chai đã chuyển sang — **chất lượng có thể lặp lại**:
 
-| 评测器 | 项目已有能力 | 入口 | 产出 |
+- Sau khi sửa một prompt, quy trình có còn ổn định không? Chuỗi công cụ, tiến tiến trạng thái, sự kiện lưu trữ bền vững có còn đúng không?
+- Chất lượng nội dung, dàn ý, xét duyệt có thực sự cải thiện, hay chỉ là lần này tình cờ gặp kết quả tốt?
+- Trong tác phẩm dài, nhân vật, dòng thời gian, phục bút, ngữ cảnh có liên tục đáng tin cậy không?
+- **Cố định văn thể toàn tập** (tic câu trung bình vài chục lần/chương, hình thái đồng cấu cuối chương, lặp từng chữ chéo chương) có tốt hơn hay tệ hơn không? Đây là thủ phạm thực sự của điểm 6,5/10 trong thực nghiệm 196 chương, xét duyệt từng chương về bản chất là mù với nó.
+
+Hiện tại những đánh giá này dựa vào "cảm tính + đọc mẫu thủ công". Hệ thống đánh giá cần biến sửa đổi prompt từ cảm tính thành quy trình kỹ thuật **có hồi quy, có bằng chứng, có đọc mẫu thủ công**.
+
+Nhưng dự án này không cần và không nên copy nguyên xi nền tảng eval thông dụng trong ngành (dataset / experiment / scorer / database / Web UI). Lý do rất đơn giản: **các năng lực cốt lõi này — kiểm tra xác định và tín hiệu chất lượng — đã tồn tại trong dự án, được viết bằng Go và chia sẻ cùng một mô hình sự kiện với runtime.**
+
+---
+
+## 1. Luận điểm cốt lõi: Bộ đánh giá đã tồn tại
+
+Bốn loại bộ đánh giá của hệ thống đánh giá, ba loại đã được triển khai trong codebase, chỉ là chưa từng được gọi với tư cách "bộ đánh giá":
+
+| Bộ đánh giá | Năng lực đã có trong dự án | Cổng vào | Đầu ra |
 |---|---|---|---|
-| **确定性事实诊断** | `internal/diag` 的一组工件规则 + 运行时规则 | `diag.Diagnose(store)` | `Report{Stats, Findings}`，Finding 带 Severity/Evidence |
-| **全书级文体回归** | `internal/stylestat` | `stylestat.Compute(input)` | 句式模式章均、跨章重复句、章末短句占比、标题混用 |
-| **质量裁定（rubric）** | 版本化 rubric（初始派生自 `editor.md` 七维） | LLM Judge（固定标尺做 A/B） | consistency/character/pacing/continuity/foreshadow/hook/aesthetic |
-| **行为脱敏导出** | `internal/diag` 导出 | `diag.WriteExport(store, rep, rc)` | 行为骨架，供人工读样与归档 |
+| **Chẩn đoán sự kiện xác định** | Một tập quy tắc artifact + quy tắc runtime của `internal/diag` | `diag.Diagnose(store)` | `Report{Stats, Findings}`, Finding có Severity/Evidence |
+| **Hồi quy văn thể toàn tập** | `internal/stylestat` | `stylestat.Compute(input)` | Mẫu câu trung bình/chương, câu lặp chéo chương, tỷ lệ câu ngắn cuối chương, tiêu đề lẫn lộn |
+| **Phán xét chất lượng (rubric)** | Rubric có phiên bản (ban đầu suy ra từ bảy chiều của `editor.md`) | LLM Judge (thước chuẩn cố định làm A/B) | consistency/character/pacing/continuity/foreshadow/hook/aesthetic |
+| **Xuất hành vi khử nhạy cảm** | Xuất của `internal/diag` | `diag.WriteExport(store, rep, rc)` | Khung hành vi, dùng cho đọc mẫu thủ công và lưu trữ |
 
-`diag.Analyze(s *store.Store)` 接收一个 Store 就能产出完整 `Report`——**它本来就能离线跑在任何产出目录上**。`stylestat.Compute` 是纯函数。这意味着评测系统要做的不是重新实现"章节是否落盘、progress 是否推进、checkpoint 是否存在、有没有 pending 残留、流程有没有死循环"——这些 diag 全做了，而且每条规则都对应一个踩过的真实坑（`PhaseFlowMismatch`、`OrphanedSteer`、`OutlineExhausted`、`repeatedErrors`/`stuckStep` 对应 idleResume / 大纲耗尽 livelock / 工具调用当文字打印等历史故障）。
+`diag.Analyze(s *store.Store)` nhận một Store là có thể tạo ra `Report` hoàn chỉnh — **nó vốn đã có thể chạy offline trên bất kỳ thư mục đầu ra nào**. `stylestat.Compute` là hàm thuần túy. Điều này có nghĩa hệ thống đánh giá không cần triển khai lại "chương có ghi xuống đĩa không, progress có tiến không, checkpoint có tồn tại không, pending có còn sót không, quy trình có vòng lặp chết không" — những điều này diag đều làm rồi, và mỗi quy tắc tương ứng với một bẫy thực tế đã từng rơi vào (`PhaseFlowMismatch`, `OrphanedSteer`, `OutlineExhausted`, `repeatedErrors`/`stuckStep` tương ứng với các sự cố lịch sử như idleResume / deadlock cạn dàn ý / công cụ được gọi như in văn bản v.v.).
 
-> **评测系统的工作不是造检查，而是：批量驱动 + 把已有评测器跑在产出上 + 把 Finding/统计映射成门禁 + 聚合报告。**
-
----
-
-## 2. 设计原则
-
-### 2.1 评测器即诊断器，绝不重造确定性检查
-
-确定性检查只调用 `diag.Diagnose`，不在评测层重新解析 `progress.json` / `checkpoints.jsonl` / `sessions/*.jsonl`。理由是这个项目的 DRY 铁律：**"什么是合法状态"只能有一份定义。** 如果评测用 Python 重新解析一遍 checkpoint 判断 commit 是否缺失，就有了两份"commit 完成"的定义，运行时改了 diag 规则、评测不跟着改，门禁立刻失真。
-
-→ 评测 harness 用 **Go**，in-process 调用 `diag` 与 `stylestat`，与运行时共享 `internal/domain` 与 `internal/store`。这是本设计与上一版最根本的区别。
-
-### 2.2 全书级文体回归是第一质量信号
-
-单章 LLM Judge 看每一章都"正常"，但瓶颈恰恰是跨章固化。所以质量回归的**确定性骨干是 `stylestat`，不是 LLM Judge**。
-
-**前提：`stylestat.Compute` 少于 5 章直接返回 nil**（`stylestat.go` `minChapters=5`，样本太小频率无意义）。因此文体回归**只在 ≥5 章的 Quality / Longform 层生效**，1 章的 Smoke 拿不到文体信号——这点决定了下文成本与默认策略。指标包括：
-
-- variant 的句式模式章均次数 vs baseline（`patterns[].per_chapter`）
-- 章末短句收尾占比（`ending.short_ratio` 逼近 1 是病）
-- 跨章逐字重复句条数（`repeated_sentences`）
-- 标题格式混用（`title_formats`）
-- 开篇时间词率（`opening_time_rate`）
-
-这些是零 LLM 成本、确定性、且正打在质量瓶颈上的指标。**LLM Judge 是补充，stylestat delta 是主线。**
-
-### 2.3 LLM Judge 对齐七维原生 rubric，不另起炉灶
-
-Judge 不发明新评分维度——维度严格等于 `domain.DimensionScore` 的七项，做 baseline/variant 比较。
-
-**但 rubric 必须版本化、可固定**，存为 `evals/rubrics/*.json` 的快照，不是运行时实时读 `editor.md`。原因：当被测对象正是 `editor.md` 本身时，若裁判跟着 `editor.md` 一起变，评测基准就漂了——裁判和被测同源会让"改 editor 是好是坏"无从判断。所以 rubric 初始**派生**自 editor 七维（保证口径一致），之后**独立演进、显式 bump 版本**；report 里记录用的是哪版 rubric。
-
-### 2.4 确定性 Finding 决定门禁，LLM 与人工只做质量裁定
-
-对齐架构铁律"统计归代码，裁定归 LLM"：
-
-- **能阻塞合入的只有确定性证据**：`diag` 的 `SevCritical` Finding、case 声明的契约断言失败。
-- **LLM Judge 与人工读样产出 warning 与排序线索**，不单独决定合入。
-- 一句话：`Finding.Severity` 直接映射门禁等级，不引入新的严重度分类法。
-
-### 2.5 评测只观察，不介入控制流
-
-评测复用 `diag`，但**丢弃 diag 的 `Action` 与 `Planner`**——那是运行时控制流的东西。在评测语境里 `diag.Report` 只取 `Stats` 与 `Findings`，Action 一律忽略。评测不自动修 prompt、不自动回滚、不续跑。这是观察者纪律（`architecture.md` §2.3）在评测语境的延伸。
-
-### 2.6 失败显式暴露
-
-不 mock 成功、不吞错误、不用模板假装通过。模型、工具、配置、文件系统、解析、judge 任一失败，报告显式记录原因。**失败本身就是评测结果**——一个 case 跑崩了，门禁就是 FAIL，不是"跳过"。
-
-### 2.7 每次只验证一个变量
-
-A/B 的硬约束：同需求、同配置、同模型/provider、同风格、隔离输出目录。Baseline = 当前正式 prompt，Variant = 只替换本次要验证的 prompt 文件。一次实验不要同时改 Writer/Architect/Editor/Coordinator。
+> **Việc của hệ thống đánh giá không phải tạo ra kiểm tra, mà là: thúc đẩy theo lô + chạy bộ đánh giá đã có trên đầu ra + ánh xạ Finding/thống kê thành cổng kiểm soát + tổng hợp báo cáo.**
 
 ---
 
-## 3. 架构全景
+## 2. Nguyên tắc thiết kế
+
+### 2.1 Bộ đánh giá chính là chẩn đoán viên, tuyệt đối không tái tạo kiểm tra xác định
+
+Kiểm tra xác định chỉ gọi `diag.Diagnose`, không phân tích lại `progress.json` / `checkpoints.jsonl` / `sessions/*.jsonl` ở tầng đánh giá. Lý do là nguyên tắc DRY sắt của dự án này: **"trạng thái hợp lệ là gì" chỉ được có một định nghĩa.** Nếu đánh giá dùng Python phân tích lại checkpoint một lần nữa để phán xét commit có thiếu không, thì sẽ có hai định nghĩa "commit hoàn thành", runtime sửa quy tắc diag mà đánh giá không sửa theo, cổng kiểm soát lập tức mất chính xác.
+
+→ Eval harness dùng **Go**, gọi in-process `diag` và `stylestat`, chia sẻ `internal/domain` và `internal/store` với runtime. Đây là sự khác biệt căn bản nhất giữa thiết kế này và phiên bản trước.
+
+### 2.2 Hồi quy văn thể toàn tập là tín hiệu chất lượng đầu tiên
+
+LLM Judge từng chương trông chương nào cũng "bình thường", nhưng nút thắt cổ chai chính là cố định chéo chương. Nên **cột sống xác định của hồi quy chất lượng là `stylestat`, không phải LLM Judge**.
+
+**Tiền đề: `stylestat.Compute` dưới 5 chương trả về nil trực tiếp** (`stylestat.go` `minChapters=5`, mẫu quá nhỏ tần suất vô nghĩa). Do đó hồi quy văn thể **chỉ có hiệu lực ở tầng Quality / Longform ≥5 chương**, 1 chương Smoke không lấy được tín hiệu văn thể — điều này quyết định chi phí và chiến lược mặc định ở phần dưới. Các chỉ số bao gồm:
+
+- Mẫu câu trung bình/chương của variant vs baseline (`patterns[].per_chapter`)
+- Tỷ lệ câu ngắn cuối chương (`ending.short_ratio` tiệm cận 1 là bệnh)
+- Số câu lặp từng chữ chéo chương (`repeated_sentences`)
+- Định dạng tiêu đề lẫn lộn (`title_formats`)
+- Tỷ lệ từ chỉ thời gian mở đầu (`opening_time_rate`)
+
+Đây là các chỉ số không tốn LLM, xác định, và đánh trúng vào nút thắt chất lượng. **LLM Judge là bổ sung, stylestat delta là luồng chính.**
+
+### 2.3 LLM Judge căn chỉnh theo rubric nguyên bản bảy chiều, không khởi xướng mới
+
+Judge không phát minh chiều đánh giá mới — chiều nghiêm ngặt bằng bảy mục của `domain.DimensionScore`, thực hiện so sánh baseline/variant.
+
+**Nhưng rubric phải có phiên bản, có thể cố định**, lưu dưới dạng snapshot trong `evals/rubrics/*.json`, không phải đọc `editor.md` realtime trong runtime. Lý do: khi đối tượng được kiểm tra chính là `editor.md` bản thân, nếu trọng tài cũng thay đổi cùng với `editor.md`, tiêu chuẩn đánh giá sẽ trôi dạt — trọng tài và đối tượng kiểm tra cùng nguồn gốc khiến "sửa editor tốt hay xấu" không thể phán xét. Nên rubric ban đầu **suy ra** từ bảy chiều của editor (đảm bảo khẩu kính nhất quán), sau đó **phát triển độc lập, tăng phiên bản tường minh**; báo cáo ghi lại dùng phiên bản rubric nào.
+
+### 2.4 Finding xác định quyết định cổng kiểm soát, LLM và con người chỉ làm phán xét chất lượng
+
+Căn chỉnh theo nguyên tắc sắt của kiến trúc "thống kê giao code, phán xét giao LLM":
+
+- **Chỉ có bằng chứng xác định mới có thể chặn hợp nhất**: Finding `SevCritical` của `diag`, khẳng định hợp đồng theo case thất bại.
+- **LLM Judge và đọc mẫu thủ công tạo ra warning và gợi ý sắp xếp**, không đơn độc quyết định hợp nhất.
+- Một câu: `Finding.Severity` ánh xạ trực tiếp mức cổng kiểm soát, không giới thiệu hệ thống phân loại mức độ nghiêm trọng mới.
+
+### 2.5 Đánh giá chỉ quan sát, không can thiệp luồng điều khiển
+
+Đánh giá tái sử dụng `diag`, nhưng **loại bỏ `Action` và `Planner` của diag** — đó là thứ của luồng điều khiển runtime. Trong ngữ cảnh đánh giá `diag.Report` chỉ lấy `Stats` và `Findings`, Action đều bỏ qua. Đánh giá không tự động sửa prompt, không tự động rollback, không tiếp tục chạy. Đây là kỷ luật quan sát viên (`architecture.md` §2.3) được mở rộng sang ngữ cảnh đánh giá.
+
+### 2.6 Thất bại phơi bày tường minh
+
+Không mock thành công, không nuốt lỗi, không dùng template giả vờ qua. Mô hình, công cụ, cấu hình, hệ thống tệp, phân tích, judge bất kỳ cái nào thất bại, báo cáo ghi tường minh lý do. **Thất bại chính là kết quả đánh giá** — một case chạy crash, cổng kiểm soát chính là FAIL, không phải "bỏ qua".
+
+### 2.7 Mỗi lần chỉ xác thực một biến số
+
+Ràng buộc cứng của A/B: cùng yêu cầu, cùng cấu hình, cùng mô hình/provider, cùng phong cách, thư mục đầu ra cách ly. Baseline = prompt chính thức hiện tại, Variant = chỉ thay thế tệp prompt cần xác thực lần này. Một thí nghiệm không được đồng thời sửa Writer/Architect/Editor/Coordinator.
+
+---
+
+## 3. Toàn cảnh kiến trúc
 
 ```text
-[Cases]  evals/cases/*.json —— 事实层断言集，不是通用 dataset 行
+[Cases]  evals/cases/*.json —— tập khẳng định sự kiện, không phải hàng dataset thông dụng
    │
-[Runner]  internal/eval —— in-process 装配 host 驱动（按章数上限截停），bundle.Prompts 内存覆盖做 variant
+[Runner]  internal/eval —— lắp ráp in-process host điều khiển (dừng theo giới hạn số chương), ghi đè bộ nhớ bundle.Prompts làm variant
    │       baseline run ┐
-   │       variant  run ┘  各自隔离 output 目录
+   │       variant  run ┘  thư mục đầu ra cách ly riêng
    ▼
-[Collectors]  对每个产出目录采集：
-   ├── diag.Diagnose(store)      → Report{Stats, Findings}      （事实 + 运行时）
-   ├── stylestat.Compute(input)  → 全书文体统计                 （质量回归骨干）
-   ├── case 契约断言             → 期望 checkpoint/phase/工具契约（diag 不覆盖的）
-   ├── usage / cost / token      → 从 meta/usage.json 读
-   └── tool_calls                → 从 meta/sessions/*.jsonl 读真实工具调用
+[Collectors]  Thu thập trên mỗi thư mục đầu ra:
+   ├── diag.Diagnose(store)      → Report{Stats, Findings}      (sự kiện + runtime)
+   ├── stylestat.Compute(input)  → thống kê văn thể toàn tập    (cột sống hồi quy chất lượng)
+   ├── khẳng định hợp đồng case  → checkpoint/phase/hợp đồng công cụ dự kiến (không diag bao phủ)
+   ├── usage / cost / token      → đọc từ meta/usage.json
+   └── tool_calls                → đọc lời gọi công cụ thực tế từ meta/sessions/*.jsonl
    ▼
 [Graders]
-   ├── 确定性门禁：Finding.Severity + 契约断言 → hard_fail / regression
-   ├── stylestat delta：variant vs baseline 文体指标差
-   ├── LLM Judge（可选）：七维 rubric A/B 比较
-   └── Human：人工读 baseline/variant 产物
+   ├── Cổng xác định: Finding.Severity + khẳng định hợp đồng → hard_fail / regression
+   ├── stylestat delta: chênh lệch chỉ số văn thể variant vs baseline
+   ├── LLM Judge (tùy chọn): so sánh A/B rubric bảy chiều
+   └── Human: con người đọc sản phẩm baseline/variant
    ▼
-[Report]  report.json（机读）+ report.md（人读）+ 行为脱敏导出
+[Report]  report.json (máy đọc) + report.md (người đọc) + xuất hành vi khử nhạy cảm
    └── Gate: PASS / WARN / FAIL
 ```
 
-依赖方向：`eval → host → agents → tools → store → domain`，横向复用 `diag` / `stylestat`。评测层**不反向依赖**运行时控制流，只读 Store 与只读评测器。
+Hướng phụ thuộc: `eval → host → agents → tools → store → domain`, tái sử dụng ngang `diag` / `stylestat`. Tầng đánh giá **không phụ thuộc ngược** luồng điều khiển runtime, chỉ đọc Store và bộ đánh giá chỉ đọc.
 
-> **当前实现覆盖确定性主线**：无 `--variant` 时为 `mode=single`；传 `--variant` 时为 `mode=ab`，同一 case 隔离运行 baseline 与 variant，并生成 delta。Collectors 已接 `diag.Diagnose`、case 契约、`stylestat.Compute`、`meta/usage.json`、session tool call 计数；Graders 已接确定性门禁、baseline/variant diag delta、cost/token/tool call delta、stylestat delta。Runner 直接 `host.New` 装配并自带章数上限截停，**不复用 `headless.Run`**（后者无章数上限、且会设交互式 ask_user handler）。LLM Judge 与 Human 仍是后续可选层，不参与当前确定性门禁。
+> **Triển khai hiện tại bao phủ luồng chính xác định**: Không có `--variant` là `mode=single`; truyền `--variant` là `mode=ab`, cùng một case chạy cách ly baseline và variant, và tạo delta. Collectors đã kết nối `diag.Diagnose`, khẳng định hợp đồng case, `stylestat.Compute`, `meta/usage.json`, đếm tool call của session; Graders đã kết nối cổng xác định, diag delta baseline/variant, cost/token/tool call delta, stylestat delta. Runner trực tiếp `host.New` lắp ráp và tự có tính năng dừng theo giới hạn số chương, **không tái sử dụng `headless.Run`** (sau này không có giới hạn số chương, và sẽ đặt handler ask_user tương tác). LLM Judge và Human vẫn là tầng tùy chọn theo sau, không tham gia cổng xác định hiện tại.
 
 ---
 
-## 4. 为什么是 Go in-process，不是 shell + Python
+## 4. Tại sao là Go in-process, không phải shell + Python
 
-| 维度 | shell 拷源码 + Python 解析（旧路） | Go in-process（本设计） |
+| Chiều | shell chép source + Python phân tích (đường cũ) | Go in-process (thiết kế này) |
 |---|---|---|
-| 确定性检查 | Python 重新解析 JSON，与 diag 规则两份定义 | 直接 `diag.Diagnose(store)`，一份定义 |
-| variant 切换 | 拷整个源码树 + 重新 `go build` 两个二进制 | `bundle.OverridePrompt(...)` 内存覆盖后装配 host，零拷贝零重编译 |
-| 文体回归 | 需在 Python 重写 stylestat 的中文分句逻辑 | 直接 `stylestat.Compute` |
-| Judge rubric | 维度散落在 Python | 复用 `domain.DimensionScore`，与线上同源 |
-| 漂移风险 | 高：运行时改了事实模型，评测不跟 | 低：编译期就会暴露字段变更 |
+| Kiểm tra xác định | Python phân tích lại JSON, hai định nghĩa với quy tắc diag | Trực tiếp `diag.Diagnose(store)`, một định nghĩa |
+| Chuyển đổi variant | Chép toàn bộ cây source + biên dịch lại hai binary | `bundle.OverridePrompt(...)` ghi đè bộ nhớ rồi lắp ráp host, không chép không biên dịch lại |
+| Hồi quy văn thể | Cần viết lại logic tách câu tiếng Trung của stylestat trong Python | Trực tiếp `stylestat.Compute` |
+| Judge rubric | Chiều rải rác trong Python | Tái sử dụng `domain.DimensionScore`, cùng nguồn với bản online |
+| Rủi ro sai lệch | Cao: runtime sửa mô hình sự kiện, đánh giá không theo | Thấp: biên dịch đã phơi bày thay đổi trường |
 
-旧 `prompt_ab.sh` 之所以要拷源码重编译，是因为 prompt 是嵌入二进制的（`go:embed`）。但 `assets.Bundle.Prompts` 是普通结构体，**runner 在内存里改一个字段就能做 variant**，根本不需要拷源码。这是用 Go 写 harness 顺带拿到的最大简化。
+`prompt_ab.sh` cũ phải chép source biên dịch lại vì prompt được nhúng vào binary (`go:embed`). Nhưng `assets.Bundle.Prompts` là struct thông thường, **runner sửa một trường trong bộ nhớ là có thể làm variant**, hoàn toàn không cần chép source. Đây là sự đơn giản hóa lớn nhất có được khi dùng Go viết harness.
 
-> **实现约束**：`assets.Load` 经 `loadPrompts` 给核心 prompt（coordinator/architect/writer/editor）统一追加了 `withSimulationGuidance` 后缀，而 `withSimulationGuidance`/`loadPrompts` 都是**未导出**的——`internal/eval` 无法直接调用。若 variant 只把裸文本塞进 `bundle.Prompts.Writer`，就丢了 baseline 有的仿写画像后缀，A/B 不等价。
+> **Ràng buộc triển khai**: `assets.Load` qua `loadPrompts` thống nhất nối thêm hậu tố `withSimulationGuidance` cho prompt cốt lõi (coordinator/architect/writer/editor), mà `withSimulationGuidance`/`loadPrompts` đều là **không export** — `internal/eval` không thể gọi trực tiếp. Nếu variant chỉ nhét văn bản thô vào `bundle.Prompts.Writer`, thì mất hậu tố hồ sơ mô phỏng mà baseline có, A/B không tương đương.
 >
-> 正确做法是**在 `assets` 包加一个导出的覆盖 helper**（如 `assets.OverridePrompt(b *Bundle, role, raw string)` 或导出 `assets.WithSimulationGuidance(raw, role) string`），内部走与 `Load` 完全相同的包装；eval 调它，而不是复制包装逻辑。这符合项目"缺能力去源头加，不在应用层写兜底补丁"的原则。
+> Cách làm đúng là **thêm helper export ghi đè trong gói `assets`** (như `assets.OverridePrompt(b *Bundle, role, raw string)` hoặc export `assets.WithSimulationGuidance(raw, role) string`), nội bộ đi qua cùng cách bao bọc với `Load`; eval gọi nó, không sao chép logic bao bọc. Điều này tuân thủ nguyên tắc "thiếu tính năng thì vào nguồn thêm, không viết bản vá dự phòng ở tầng ứng dụng" của dự án.
 
-> 上一版文档保留 `prompt_ab.sh` / `prompt_ab_report.py` 并"逐步抽取能力"。本设计放弃这条路：它们解决的问题（隔离运行 + 指标汇总）在 in-process Go harness 里是子集，强行复用反而背上 shell/Python/Go 三语言的接口胶水。**Go harness 是唯一主路**；当前 Go harness 已覆盖 baseline/variant 隔离运行、repeat 汇总与确定性 delta。旧脚本（`scripts/prompt_ab.sh`、`scripts/prompt_ab_report.py`）及其操作手册 `docs/prompt-ab.md` 已随本设计落地一并删除，不再保留。
+> Phiên bản tài liệu trước giữ lại `prompt_ab.sh` / `prompt_ab_report.py` và "dần dần trích xuất năng lực". Thiết kế này từ bỏ con đường đó: vấn đề chúng giải quyết (chạy cách ly + tổng hợp chỉ số) là tập con trong Go harness in-process, buộc tái sử dụng ngược lại mang theo keo giao diện ba ngôn ngữ shell/Python/Go. **Go harness là con đường chính duy nhất**; Go harness hiện tại đã bao phủ chạy cách ly baseline/variant, tổng hợp repeat và delta xác định. Script cũ (`scripts/prompt_ab.sh`, `scripts/prompt_ab_report.py`) và hướng dẫn vận hành `docs/prompt-ab.md` đã được xóa cùng với việc triển khai thiết kế này, không còn được giữ lại.
 
 ---
 
 ## 5. Case Manifest
 
-Case 是评测输入的最小单位，也是一组**事实层断言**。用 JSON 描述，避免规则散落在命令行参数里。
+Case là đơn vị nhỏ nhất của đầu vào đánh giá, cũng là một tập **khẳng định sự kiện**. Dùng JSON mô tả, tránh quy tắc rải rác trong tham số dòng lệnh.
 
 ```json
 {
   "id": "writer_first_chapter_xianxia",
   "category": "smoke",
   "role": "writer",
-  "description": "验证 Writer 第一章正文质量与工具链稳定性",
-  "prompt": "写一本修仙长篇，主角从边城杂役起步，靠异常记忆破解宗门旧案卷入长生局。",
+  "description": "Xác thực chất lượng nội dung chương đầu tiên của Writer và tính ổn định chuỗi công cụ",
+  "prompt": "Viết một tiểu thuyết tu tiên dài, nhân vật chính xuất phát từ tạp dịch vùng biên thành, nhờ ký ức bất thường phá giải án cũ tông môn và cuốn vào cục trường sinh.",
   "style": "fantasy",
   "max_chapters": 1,
   "target_prompts": ["writer.md"],
@@ -170,111 +170,111 @@ Case 是评测输入的最小单位，也是一组**事实层断言**。用 JSON
 }
 ```
 
-**字段语义**：
+**Ngữ nghĩa trường**:
 
-- `expect`：case 级契约断言，**只声明 diag 通用规则覆盖不到的、与本 case 强相关的预期**（比如"这个 smoke case 必须恰好产出 chapter:1:commit"）。通用的"无 pending 残留 / phase-flow 一致 / 无章节缺口"交给 diag，不在 case 里重复声明。
-- `category`：评测层 ∈ `smoke` / `workflow` / `quality` / `longform` / `recovery` / `steering`。决定跑哪套门禁与默认是否开 stylestat/Judge。
-- `role`：被测的角色 ∈ `writer` / `architect` / `editor` / `coordinator`。与 `category` 正交——层决定"验到什么深度"，角色决定"验哪个子代理"。Workflow 层按 `role` 选断言集。
-- `max_severity`：diag Finding 允许的最高严重度。超过即 hard fail。
-- `gate.max_cost_delta_ratio` / `gate.max_tool_call_delta_ratio`：variant 相对 baseline 的成本与工具调用增幅阈值；省略时默认 `0.3`，显式 `0` 表示不允许增长，负数表示关闭该项 delta gate。
-- `rubric`：启用哪个版本化 LLM Judge 评分表。缺省则不跑 Judge。
-- `gate.stylestat_regression`：`block` / `warn` / `off`，控制文体回归是否阻塞（仅 ≥5 章 case 生效）。
+- `expect`: Khẳng định hợp đồng cấp case, **chỉ khai báo kỳ vọng liên quan mạnh đến case này mà quy tắc chung của diag không bao phủ** (ví dụ "smoke case này phải tạo ra chính xác chapter:1:commit"). Các điều chung như "không còn pending / phase-flow nhất quán / không có khoảng trống chương" giao cho diag, không khai báo lại trong case.
+- `category`: Tầng đánh giá ∈ `smoke` / `workflow` / `quality` / `longform` / `recovery` / `steering`. Quyết định chạy bộ cổng kiểm soát nào và mặc định có bật stylestat/Judge không.
+- `role`: Vai được kiểm tra ∈ `writer` / `architect` / `editor` / `coordinator`. Trực giao với `category` — tầng quyết định "xác thực đến độ sâu nào", vai quyết định "xác thực subagent nào". Tầng Workflow chọn tập khẳng định theo `role`.
+- `max_severity`: Mức độ nghiêm trọng cao nhất cho phép của diag Finding. Vượt quá là hard fail.
+- `gate.max_cost_delta_ratio` / `gate.max_tool_call_delta_ratio`: Ngưỡng mức tăng chi phí và lời gọi công cụ của variant so với baseline; mặc định `0.3` khi bỏ qua, `0` tường minh nghĩa là không cho tăng, số âm nghĩa là tắt delta gate đó.
+- `rubric`: Bật bảng điểm LLM Judge phiên bản nào. Thiếu thì không chạy Judge.
+- `gate.stylestat_regression`: `block` / `warn` / `off`, kiểm soát hồi quy văn thể có chặn không (chỉ có hiệu lực với case ≥5 chương).
 
 ---
 
-## 6. 评测分层
+## 6. Phân tầng đánh giá
 
-每一层明确**用哪个已有评测器**，避免"评测层自己又写一遍判断"。
+Mỗi tầng rõ ràng **dùng bộ đánh giá nào đã có**, tránh "tầng đánh giá tự mình lại viết một lần phán xét".
 
-### 6.1 Smoke（每次 prompt 改动必跑，最小集）
+### 6.1 Smoke (phải chạy mỗi lần sửa prompt, tập tối thiểu)
 
-只判断系统是否还能稳定跑，不判文笔。1 章 / 规划阶段即可暴露。
+Chỉ phán xét hệ thống có còn chạy ổn định không, không phán xét văn bút. 1 chương / giai đoạn lập kế hoạch là đủ để phơi bày.
 
-| case | 目标 | 主要评测器 |
+| Case | Mục tiêu | Bộ đánh giá chính |
 |---|---|---|
-| `writer_first_chapter` | Writer 完成第一章并 commit | `expect.required_checkpoints` + diag |
-| `architect_short` | 短篇规划存全 premise/outline/characters/world_rules | diag `MissingSummaries` 同源的 foundation 检查 + `expect` |
-| `architect_long` | 长篇规划存 layered_outline/compass，首弧展开 | diag `OutlineExhausted`/`CompassDrift` + `expect` |
-| `editor_review` | 到评审点 Editor 存 review（七维齐全） | `ReviewEntry` 字段断言 |
+| `writer_first_chapter` | Writer hoàn thành và commit chương đầu tiên | `expect.required_checkpoints` + diag |
+| `architect_short` | Lập kế hoạch ngắn lưu đủ premise/outline/characters/world_rules | Kiểm tra foundation cùng nguồn với `MissingSummaries` của diag + `expect` |
+| `architect_long` | Lập kế hoạch dài lưu layered_outline/compass, triển khai cung đầu | `OutlineExhausted`/`CompassDrift` của diag + `expect` |
+| `editor_review` | Đến điểm xét duyệt Editor lưu review (đủ bảy chiều) | Khẳng định trường `ReviewEntry` |
 
-成本：1 章 × baseline+variant，秒级到分钟级，不开 Judge、不跑 stylestat（章数不足 5，`Compute` 返回 nil）。CI 默认只跑这层。
+Chi phí: 1 chương × baseline+variant, cấp giây đến phút, không bật Judge, không chạy stylestat (số chương không đủ 5, `Compute` trả về nil). CI mặc định chỉ chạy tầng này.
 
-### 6.2 Workflow（验证 Agent 行为符合架构契约）
+### 6.2 Workflow (xác thực hành vi Agent tuân thủ hợp đồng kiến trúc)
 
-**关键纪律：断言契约，不断言精确工具序列。** 架构押注 LLM 自主决策流程（`architecture.md` §2.1），把工具顺序写死会在评测层重新引入被 §10.13 拒绝的"为 LLM 行为写硬编码"。所以这里只断言**必然事实**：
+**Kỷ luật quan trọng: Khẳng định hợp đồng, không khẳng định chuỗi công cụ chính xác.** Kiến trúc đặt cược LLM tự chủ quyết định quy trình (`architecture.md` §2.1), viết cứng thứ tự công cụ sẽ giới thiệu lại "hard-code hành vi LLM" đã bị §10.13 từ chối ở tầng đánh giá. Nên đây chỉ khẳng định **sự kiện tất yếu**:
 
-- Writer：`chapter:N:commit` checkpoint 存在；commit 后子代理本轮结束（无超长尾随正文）；draft checkpoint 先于 commit。**不**断言"必须 novel_context→read_chapter→plan→draft→check→commit 这个精确顺序**。
-- Architect：写作期 outline 只增不全覆（`expand_arc`/`append_volume` 的 checkpoint，没有第二条 `layered_outline` 全量写）；展开后扁平 outline 与 layered 章节数一致。
-- Editor：`ReviewEntry.Verdict` 合法（accept/polish/rewrite）；rewrite/polish 必须产出 affected chapters；弧末有 `arc_summary`、卷末有 `volume_summary` checkpoint。
-- Coordinator：收 `[Host 下达指令]` 后下一个 subagent 调用匹配指令的 agent（从 session trace 读，diag `repeatedErrors` 兜底循环）。
+- Writer: Checkpoint `chapter:N:commit` tồn tại; subagent kết thúc lượt sau commit (không có nội dung đuôi dài theo sau); checkpoint draft trước checkpoint commit. **Không** khẳng định "phải theo thứ tự chính xác novel_context→read_chapter→plan→draft→check→commit".
+- Architect: Outline trong giai đoạn viết chỉ tăng không ghi đè toàn bộ (checkpoint của `expand_arc`/`append_volume`, không có dòng thứ hai `layered_outline` ghi đầy đủ); số chương outline phẳng và layered nhất quán sau khi triển khai.
+- Editor: `ReviewEntry.Verdict` hợp lệ (accept/polish/rewrite); rewrite/polish phải tạo ra affected chapters; cuối cung có checkpoint `arc_summary`, cuối tập có checkpoint `volume_summary`.
+- Coordinator: Sau khi nhận `[Host ra lệnh]` lần gọi subagent tiếp theo khớp với agent của lệnh (đọc từ session trace, `repeatedErrors` của diag dự phòng vòng lặp).
 
-这些大部分能直接由 diag 规则 + checkpoint 断言覆盖，少量（commit 后尾随正文）需在 collector 里加一条轻量 trace 检查。
+Những điều này phần lớn có thể trực tiếp bao phủ bởi quy tắc diag + khẳng định checkpoint, một số ít (nội dung đuôi sau commit) cần thêm một kiểm tra trace nhẹ trong collector.
 
-### 6.3 Quality（流程通过后才跑，评内容质量）
+### 6.3 Quality (chỉ chạy sau khi quy trình thông, đánh giá chất lượng nội dung)
 
-两条腿：
+Hai chân:
 
-1. **stylestat delta（确定性，主线）**：variant vs baseline 的文体指标差。这是质量回归的硬证据。**要求 case 跑满 ≥5 章**（否则 `Compute` 返回 nil，此项标 `insufficient_sample`），所以纯 1 章 Quality case 拿不到文体回归，需把 `max_chapters` 设到 5 以上。
-2. **LLM Judge（辅助）**：七维 rubric A/B（见 §8）。
+1. **stylestat delta (xác định, luồng chính)**: Chênh lệch chỉ số văn thể variant vs baseline. Đây là bằng chứng cứng của hồi quy chất lượng. **Yêu cầu case chạy đủ ≥5 chương** (nếu không `Compute` trả về nil, mục này đánh dấu `insufficient_sample`), nên case Quality thuần 1 chương không lấy được hồi quy văn thể, cần đặt `max_chapters` lên 5 trở lên.
+2. **LLM Judge (bổ trợ)**: So sánh A/B rubric bảy chiều (xem §8).
 
-只有 §6.1/§6.2 通过的 case 才进 Quality——流程都不对，谈质量没意义。
+Chỉ case đã qua §6.1/§6.2 mới vào Quality — quy trình không đúng thì nói chất lượng không có ý nghĩa.
 
-### 6.4 Longform & Recovery（重大改动 / nightly）
+### 6.4 Longform & Recovery (thay đổi lớn / chạy hàng đêm)
 
-不必每次跑。覆盖长篇稳定性与恢复能力，正是 diag 运行时规则与 context 规则的主场：
+Không cần chạy mỗi lần. Bao phủ tính ổn định tác phẩm dài và khả năng khôi phục, chính là sân chơi chủ yếu của quy tắc runtime và quy tắc context của diag:
 
-- 前 3 章 / 5 章连续写作 → diag `GhostCharacter`/`TimelineGaps`/`RelationshipStagnation`/`ChapterGaps` + stylestat 跨章重复。
-- 弧末评审 + 下一弧展开 → `OutlineExhausted`/`StaleForeshadow`/`CompassDrift`。
-- 用户中途干预（steering case）→ user_rules 是否落 `meta/user_rules.json`、是否被后续章节遵守。
-- 崩溃恢复：跑到第 N 章 draft 后 kill → Resume → diag 确认 `checkpoints.jsonl` 无重复 step、不重写已落盘 draft、`pending_commit` 最终清零。
-- 工具调用膨胀 / 成本异常 → diag `repeatedErrors`/`stuckStep`/`streamIdleStorm` + usage delta。
+- Viết liên tục 3 chương / 5 chương → `GhostCharacter`/`TimelineGaps`/`RelationshipStagnation`/`ChapterGaps` của diag + lặp chéo chương stylestat.
+- Xét duyệt cuối cung + triển khai cung tiếp theo → `OutlineExhausted`/`StaleForeshadow`/`CompassDrift`.
+- Người dùng can thiệp giữa chừng (steering case) → user_rules có rơi vào `meta/user_rules.json` không, các chương tiếp theo có tuân thủ không.
+- Phục hồi crash: chạy đến draft chương N rồi kill → Resume → diag xác nhận `checkpoints.jsonl` không có bước trùng lặp, không viết lại bản nháp đã ghi xuống đĩa, `pending_commit` cuối cùng về 0.
+- Công cụ gọi phình to / chi phí bất thường → `repeatedErrors`/`stuckStep`/`streamIdleStorm` của diag + usage delta.
 
 ---
 
-## 7. 确定性门禁
+## 7. Cổng xác định
 
-门禁等级由 **diag Finding 的 Severity** + **case 契约断言** 直接派生，不另立分类法。
+Mức cổng kiểm soát được suy ra trực tiếp từ **Severity của diag Finding** + **khẳng định hợp đồng case**, không đặt ra hệ thống phân loại mới.
 
-### 7.1 Hard Fail（阻塞合入）
+### 7.1 Hard Fail (chặn hợp nhất)
 
-- 进程 panic / headless 返回 error。
-- diag 产出 `SevCritical` Finding（`InvalidPendingRewrites` / `PhaseFlowMismatch` 等）。
-- case `expect` 契约断言失败：缺 commit checkpoint、phase 未达预期、声明的 pending 未清零。
-- variant 的错误数 / critical Finding 数多于 baseline（回归到更坏）。
+- Tiến trình panic / headless trả về error.
+- diag tạo ra Finding `SevCritical` (`InvalidPendingRewrites` / `PhaseFlowMismatch` v.v.).
+- Khẳng định hợp đồng `expect` của case thất bại: thiếu commit checkpoint, phase chưa đạt kỳ vọng, pending đã khai báo chưa về 0.
+- Số lỗi / số Critical Finding của variant nhiều hơn baseline (hồi quy tệ hơn).
 
-### 7.2 Regression（默认 warning，是否阻塞由 case gate 决定）
+### 7.2 Regression (mặc định warning, có chặn không do gate của case quyết định)
 
-- diag 新增 `SevWarning` Finding（variant 比 baseline 多）。
-- tool calls / cost / input token / output token 增幅超过 case 阈值（默认 30%）。
-- **stylestat 回归**：句式模式章均次数上升、章末短句占比上升、跨章重复句增多、标题混用出现——按 `gate.stylestat_regression` 决定 warn/block。
-- 章节字数低于 baseline 60% 或高于 180%（diag `WordCountAnomaly` 同源阈值）。
+- diag tăng thêm Finding `SevWarning` (variant nhiều hơn baseline).
+- Tool calls / cost / input token / output token tăng vượt ngưỡng case (mặc định 30%).
+- **Hồi quy stylestat**: Mẫu câu trung bình/chương tăng, tỷ lệ câu ngắn cuối chương tăng, câu lặp chéo chương tăng, tiêu đề lẫn lộn xuất hiện — theo `gate.stylestat_regression` quyết định warn/block.
+- Số chữ chương thấp hơn 60% baseline hoặc cao hơn 180% (ngưỡng cùng nguồn với `WordCountAnomaly` của diag).
 
-### 7.3 Quality Gate（人工兜底）
+### 7.3 Quality Gate (con người dự phòng)
 
-- LLM Judge 只做辅助与排序。
-- Judge 判 variant 明显更差 → 必须人工读样确认。
-- 人工读样认定退化 → 阻塞。
-- Judge 判 variant 更好但确定性有 hard fail → 仍阻塞。
+- LLM Judge chỉ làm bổ trợ và sắp xếp.
+- Judge phán variant tệ hơn rõ ràng → phải có con người đọc mẫu xác nhận.
+- Con người đọc mẫu xác định suy giảm → chặn.
+- Judge phán variant tốt hơn nhưng xác định có hard fail → vẫn chặn.
 
-### 7.4 推荐合入条件
+### 7.4 Điều kiện hợp nhất được đề xuất
 
-日常改 prompt：Smoke 全过 + 目标角色 Workflow 全过（Smoke 1 章不含文体回归；若跑了 ≥5 章 Quality case，则 stylestat 无明显回归）。
-重大改动：再加 2-3 个 Quality case + 1-2 个 Longform case + 人工读样。
+Sửa prompt thường ngày: Smoke toàn thông + Workflow mục tiêu vai toàn thông (Smoke 1 chương không có hồi quy văn thể; nếu đã chạy case Quality ≥5 chương, thì stylestat không có hồi quy đáng kể).
+Thay đổi lớn: Thêm 2-3 case Quality + 1-2 case Longform + đọc mẫu thủ công.
 
 ---
 
 ## 8. LLM Judge
 
-Judge 是质量辅助，本质是**用版本化 rubric（初始派生自 editor.md 七维）离线做 baseline/variant 比较**。rubric 是固定标尺、独立于线上 `editor.md` 演进（理由见 §2.3），report 记录所用 rubric 版本。
+Judge là bổ trợ chất lượng, bản chất là **dùng rubric có phiên bản (ban đầu suy ra từ bảy chiều của editor.md) để so sánh A/B offline baseline/variant**. Rubric là thước chuẩn cố định, phát triển độc lập với `editor.md` online (lý do xem §2.3), báo cáo ghi lại phiên bản rubric đã dùng.
 
-### 8.1 输入（控制大小，绝不塞整本书）
+### 8.1 Đầu vào (kiểm soát kích thước, tuyệt đối không nhồi cả cuốn sách)
 
-- 用户原始需求 + 当前章节大纲/契约。
-- baseline 与 variant 的**同一章**正文。
-- 最近 1-2 章摘要 + 角色状态摘要（从 store 读）。
-- 该章的 stylestat 相关切片（让 Judge 看到"这句在全书重复了 7 次"这类事实）。
+- Yêu cầu gốc của người dùng + dàn ý/hợp đồng chương hiện tại.
+- Nội dung **cùng chương** của baseline và variant.
+- Tóm tắt 1-2 chương gần nhất + tóm tắt trạng thái nhân vật (đọc từ store).
+- Lát cắt stylestat liên quan của chương đó (để Judge thấy sự kiện như "câu này lặp lại 7 lần trong toàn tập").
 
-### 8.2 输出（结构化，对齐七维）
+### 8.2 Đầu ra (có cấu trúc, căn chỉnh bảy chiều)
 
 ```json
 {
@@ -284,54 +284,54 @@ Judge 是质量辅助，本质是**用版本化 rubric（初始派生自 editor.
   },
   "winner": "variant",
   "confidence": "medium",
-  "reasons": ["variant 行动推进更集中", "baseline 前情复述更重"],
-  "risks": ["variant 配角动机铺垫略少"]
+  "reasons": ["variant thúc đẩy hành động tập trung hơn", "baseline phức thuật tiền tình nặng hơn"],
+  "risks": ["variant phục bút động cơ nhân vật phụ hơi ít"]
 }
 ```
 
-- 维度严格等于 `domain.DimensionScore` 七项，每项 0-10。
-- `winner` ∈ baseline/variant/tie；`confidence` ∈ low/medium/high。
-- `reasons`/`risks` 每条 ≤ 80 字，引用原文要短。
+- Chiều nghiêm ngặt bằng bảy mục của `domain.DimensionScore`, mỗi mục 0-10.
+- `winner` ∈ baseline/variant/tie; `confidence` ∈ low/medium/high.
+- `reasons`/`risks` mỗi câu ≤ 80 chữ, trích nguyên văn phải ngắn.
 
-### 8.3 边界
+### 8.3 Ranh giới
 
-Judge **不能**：决定流程是否通过、修改产物、自动改 prompt、作为唯一合入依据、生成长篇原文摘录。
-Judge **可以**：给人工评审排序、标出明显退化、总结 A/B 差异、暴露 prompt 改动副作用。
+Judge **không thể**: Quyết định quy trình có thông qua không, sửa đổi sản phẩm, tự động sửa prompt, là căn cứ hợp nhất duy nhất, tạo ra trích dẫn nguyên văn dài.
+Judge **có thể**: Sắp xếp thứ tự cho đánh giá thủ công, đánh dấu suy giảm rõ ràng, tóm tắt sự khác biệt A/B, phơi bày tác dụng phụ của thay đổi prompt.
 
 ---
 
-## 9. 报告
+## 9. Báo cáo
 
-每次实验生成 `report.json`（机读，可重生 markdown）+ `report.md`（人读）+ `artifacts/{case_id}/{baseline,variant}/`（原始产物）。`--repeat N` 时路径为 `artifacts/{case_id}/rN/{baseline,variant}/`。
+Mỗi thí nghiệm tạo ra `report.json` (máy đọc, có thể tái tạo markdown) + `report.md` (người đọc) + `artifacts/{case_id}/{baseline,variant}/` (sản phẩm gốc). Khi có `--repeat N` đường dẫn là `artifacts/{case_id}/rN/{baseline,variant}/`.
 
-### 9.1 指标 delta
+### 9.1 Delta chỉ số
 
-报告显示 variant 相对 baseline 的差异，绝对值与比例并列：
+Báo cáo hiển thị sự khác biệt của variant so với baseline, giá trị tuyệt đối và tỷ lệ song song:
 
 ```text
-completed: baseline=5 variant=5   ← ≥5 章，文体指标才有意义
+completed: baseline=5 variant=5   ← ≥5 chương, chỉ số văn thể mới có ý nghĩa
 tool_calls: baseline=12 variant=16  +4 (+33.3%)
 cost_usd: baseline=0.42 variant=0.55  +0.13 (+31.0%)
 output_tokens: baseline=8200 variant=9100  +900 (+11.0%)
 critical_findings: baseline=0 variant=0
 warning_findings: baseline=1 variant=2  +1
-stylestat.pattern_top_per_chapter: baseline=3.1 variant=5.4  +2.3   ← 文体回归
-stylestat.ending_short_ratio: baseline=0.42 variant=0.71  +0.29     ← 章末同构加重
+stylestat.pattern_top_per_chapter: baseline=3.1 variant=5.4  +2.3   ← hồi quy văn thể
+stylestat.ending_short_ratio: baseline=0.42 variant=0.71  +0.29     ← đồng cấu cuối chương nặng hơn
 ```
 
-### 9.2 Repeat 汇总
+### 9.2 Tổng hợp Repeat
 
-`--repeat N` 时不只看最后一次，当前实现展示通过率、hard fail 次数、warning 次数、cost/tool_calls 的 min/avg/max。Judge 接入后再追加 winner 分布，避免在默认确定性报告里混入模型裁判噪声。
+Khi có `--repeat N` không chỉ xem lần cuối, triển khai hiện tại hiển thị tỷ lệ qua, số lần hard fail, số lần warning, min/avg/max của cost/tool_calls. Sau khi kết nối Judge thêm phân phối winner, tránh trộn nhiễu trọng tài mô hình vào báo cáo xác định mặc định.
 
 ```text
 writer_first_chapter_xianxia repeat=3
 - pass_rate: 3/3
 - cost_usd: avg=0.41 min=0.38 max=0.44
 - tool_calls: avg=13 min=12 max=15
-- stylestat.pattern_top_per_chapter: avg delta=+0.4（无显著回归）
+- stylestat.pattern_top_per_chapter: avg delta=+0.4 (không có hồi quy đáng kể)
 ```
 
-### 9.3 最小可行报告
+### 9.3 Báo cáo khả thi tối thiểu
 
 ```text
 Gate: FAIL
@@ -341,7 +341,7 @@ Hard Fail:
 
 Warnings:
 - writer_dialogue_density: tool_calls +35%
-- writer_anti_ai_tone: ending_short_ratio +0.28 (文体回归)
+- writer_anti_ai_tone: ending_short_ratio +0.28 (hồi quy văn thể)
 
 Quality:
 - writer_anti_ai_tone: judge prefers variant, confidence=medium
@@ -352,41 +352,41 @@ Artifacts:
 
 ---
 
-## 10. 目录结构与命令
+## 10. Cấu trúc thư mục và lệnh
 
 ```text
 internal/eval/
-  case.go        Case manifest 结构 + 加载
-  eval.go        CLI 编排：single / A/B / repeat
-  runner.go      装配 host 驱动（按章数上限截停 + drain 到 Done），bundle.OverridePrompt 内存覆盖
-  collect.go     对产出目录跑 diag.Diagnose + stylestat.Compute + usage/tool_calls + 契约断言
-  grade.go       Finding→门禁映射 + baseline/variant delta + stylestat gate 决策
+  case.go        Cấu trúc Case manifest + tải
+  eval.go        Điều phối CLI: single / A/B / repeat
+  runner.go      Lắp ráp host điều khiển (dừng theo giới hạn số chương + drain đến Done), ghi đè bộ nhớ bundle.OverridePrompt
+  collect.go     Chạy diag.Diagnose + stylestat.Compute + usage/tool_calls + khẳng định hợp đồng trên thư mục đầu ra
+  grade.go       Ánh xạ Finding→cổng kiểm soát + delta baseline/variant + quyết định stylestat gate
   report.go      report.json + report.md
 
-cmd/ainovel-cli  eval 子命令入口
+cmd/ainovel-cli  Cổng vào lệnh con eval
 
 evals/
   cases/         smoke/ workflow/ quality/ longform/ recovery/ steering/
   rubrics/       writer_chapter.json / architect_outline.json / editor_review.json
-  variants/      writer-anti-ai-tone/writer.md 等（每目录只放要替换的 prompt）
-  reports/       历史报告归档
+  variants/      writer-anti-ai-tone/writer.md v.v. (mỗi thư mục chỉ để tệp prompt cần thay thế)
+  reports/       Lưu trữ báo cáo lịch sử
 ```
 
-命令：
+Lệnh:
 
 ```bash
-# 多 case 批量（CI 默认只跑 smoke、不开 judge）
+# Nhiều case theo lô (CI mặc định chỉ chạy smoke, không bật judge)
 ainovel-cli eval --cases evals/cases/smoke \
   --variant evals/variants/writer-anti-ai-tone \
   --out workspace/evals/writer-anti-ai-tone --ci
 ```
 
-**本期已实现的参数**：`--cases`（目录或单 manifest）、`--variant`（变体 prompt 目录；传入后自动跑 baseline+variant A/B）、`--repeat N`（每个 case 重复运行 N 次）、`--config`、`--out`、`--max-chapters N`（覆盖 case 默认）、`--timeout`（单 case 墙钟上限）、`--ci`（抑制逐事件输出；退出码非 0 即 hard fail，不带也生效）。
+**Tham số đã triển khai kỳ này**: `--cases` (thư mục hoặc một manifest đơn), `--variant` (thư mục prompt variant; truyền vào tự động chạy baseline+variant A/B), `--repeat N` (mỗi case lặp N lần), `--config`, `--out`, `--max-chapters N` (ghi đè mặc định của case), `--timeout` (giới hạn giờ đồng hồ mỗi case), `--ci` (triệt tiêu đầu ra từng sự kiện; mã thoát không 0 là hard fail, không truyền cũng có hiệu lực).
 
-**规划中（尚未实现，勿在命令行使用，否则报 flag 未定义）**：`--judge`/`--no-judge`（Phase 3 LLM Judge）。重大 prompt 改动当前可先用确定性 A/B + repeat：
+**Đang lên kế hoạch (chưa triển khai, đừng dùng trên dòng lệnh, nếu không sẽ báo flag chưa định nghĩa)**: `--judge`/`--no-judge` (Phase 3 LLM Judge). Thay đổi prompt lớn hiện tại có thể dùng A/B xác định + repeat trước:
 
 ```bash
-# 重大 prompt 改动：A/B + repeat 降随机性
+# Thay đổi prompt lớn: A/B + repeat giảm tính ngẫu nhiên
 ainovel-cli eval --cases evals/cases/quality \
   --variant evals/variants/writer-anti-ai-tone \
   --repeat 3 --ci
@@ -394,91 +394,91 @@ ainovel-cli eval --cases evals/cases/quality \
 
 ---
 
-## 11. 明确不做的事
+## 11. Những điều rõ ràng không làm
 
-违反即代表评测偏离定位。
+Vi phạm đồng nghĩa đánh giá lệch định vị.
 
-1. **不在评测层复制 diag 的通用诊断逻辑** —— 通用判断（pending 残留、phase/flow 一致、章节缺口、死循环）一律走 `diag`，事实判断只有一份定义。case 级契约断言（`expect.required_checkpoints` 等）允许直接读 `store`/checkpoint API，但只做**薄断言**——验证本 case 强相关的具体预期，绝不重写一遍 diag 已有的通用规则。
-2. **不重新实现确定性规则** —— diag 已有一组工件规则 + 运行时规则。缺规则就去 diag 加，评测层只消费。
-3. **不在 Python 里重写 stylestat 的中文文体逻辑** —— 直接调 Go 包。
-4. **不让 LLM Judge 决定流程是否通过** —— 门禁只认确定性证据。
-5. **不让评测介入控制流** —— 丢弃 diag 的 Action/Planner，不自动修 prompt、不回滚、不续跑、不发布。
-6. **不断言精确工具调用序列** —— 只断言契约（commit 发生、checkpoint 存在），保护"LLM 驱动流程"的押注。
-7. **不引入数据库 / Web UI / 在线评测平台** —— 当前阶段需要的是可重复、可落地、低成本的本地回归。
-8. **不拷源码重编译做 variant** —— 内存覆盖 `bundle.Prompts`。
-9. **不 mock 成功、不吞错误** —— 任何环节失败显式记录，case 跑崩即 FAIL。
-10. **case 不随 prompt 频繁改动** —— case 是稳定测试集；为了让 variant 通过去改 case 是作弊。
+1. **Không sao chép logic chẩn đoán chung của diag ở tầng đánh giá** — Phán xét chung (pending còn sót, phase/flow nhất quán, khoảng trống chương, vòng lặp chết) đều đi qua `diag`, phán xét sự kiện chỉ có một định nghĩa. Khẳng định hợp đồng cấp case (`expect.required_checkpoints` v.v.) cho phép đọc trực tiếp API `store`/checkpoint, nhưng chỉ làm **khẳng định mỏng** — xác thực kỳ vọng cụ thể liên quan mạnh đến case này, tuyệt đối không viết lại quy tắc chung đã có của diag.
+2. **Không tái triển khai quy tắc xác định** — diag đã có một tập quy tắc artifact + quy tắc runtime. Thiếu quy tắc thì vào diag thêm, tầng đánh giá chỉ tiêu thụ.
+3. **Không viết lại logic văn thể tiếng Việt của stylestat trong Python** — Gọi trực tiếp gói Go.
+4. **Không để LLM Judge quyết định quy trình có thông qua không** — Cổng kiểm soát chỉ nhận bằng chứng xác định.
+5. **Không để đánh giá can thiệp luồng điều khiển** — Loại bỏ Action/Planner của diag, không tự động sửa prompt, không rollback, không tiếp tục chạy, không phát hành.
+6. **Không khẳng định chuỗi lời gọi công cụ chính xác** — Chỉ khẳng định hợp đồng (commit xảy ra, checkpoint tồn tại), bảo vệ cược "LLM điều khiển quy trình".
+7. **Không giới thiệu database / Web UI / nền tảng đánh giá online** — Giai đoạn hiện tại cần hồi quy địa phương có thể lặp lại, có thể triển khai, chi phí thấp.
+8. **Không chép source biên dịch lại để làm variant** — Ghi đè bộ nhớ `bundle.Prompts`.
+9. **Không mock thành công, không nuốt lỗi** — Bất kỳ khâu nào thất bại ghi tường minh, case chạy crash là FAIL.
+10. **Case không thay đổi thường xuyên theo prompt** — Case là tập test ổn định; sửa case để variant thông qua là gian lận.
 
 ---
 
-## 12. 分阶段落地
+## 12. Triển khai theo giai đoạn
 
-### Phase 1 · Runner + 确定性门禁（MVP，先证假设）
+### Phase 1 · Runner + Cổng xác định (MVP, chứng minh giả thuyết trước)
 
-- `internal/eval`：Case 结构 + runner（in-process headless + bundle 覆盖）+ collect（调 `diag.Diagnose`）+ grade（Finding→门禁 + `expect` 契约）。
-- `evals/cases/smoke/` 放 3-4 个 case。
-- 报告先出 `report.json` + 最小 markdown。
+- `internal/eval`: Cấu trúc Case + runner (in-process headless + ghi đè bundle) + collect (gọi `diag.Diagnose`) + grade (Finding→cổng kiểm soát + hợp đồng `expect`).
+- `evals/cases/smoke/` để 3-4 case.
+- Báo cáo xuất `report.json` + markdown tối thiểu trước.
 
-**验收**：一条命令跑完 smoke；Writer 跳过 commit、pending 残留、checkpoint 缺失、phase 不符**都能被门禁拦下**（这些 diag 本就能查，验证的是 harness 把它接对了）。
+**Nghiệm thu**: Một lệnh chạy xong smoke; Writer bỏ qua commit, pending còn sót, checkpoint thiếu, phase không đúng **đều có thể bị cổng kiểm soát chặn lại** (những điều này diag vốn đã kiểm tra được, xác thực là harness kết nối đúng).
 
-### Phase 2 · A/B + repeat + stylestat 回归（已实现）
+### Phase 2 · A/B + repeat + hồi quy stylestat (đã triển khai)
 
-- `--variant` 自动跑 baseline 与 variant，输出隔离 artifacts。
-- `--repeat N` 汇总 pass rate、hard fail runs、warning runs、cost/tool_calls min/avg/max。
-- collect 加 `stylestat.Compute`，grade 加文体 delta。
-- 报告展示句式章均 / 章末短句占比 / 跨章重复句 / 标题混用的 baseline-variant 对比。
+- `--variant` tự động chạy baseline và variant, artifact đầu ra cách ly.
+- `--repeat N` tổng hợp pass rate, số lần hard fail, số lần warning, min/avg/max của cost/tool_calls.
+- collect thêm `stylestat.Compute`, grade thêm delta văn thể.
+- Báo cáo hiển thị so sánh baseline-variant của mẫu câu/chương / tỷ lệ câu ngắn cuối chương / câu lặp chéo chương / tiêu đề lẫn lộn.
 
-**验收**：用一个 ≥5 章的 case + 一个"句式 tic 加重"的 variant，能被文体回归标出 warning；章数不足的 case 明确显示 `insufficient_sample` 而非误判通过。
+**Nghiệm thu**: Dùng một case ≥5 chương + một variant "tic câu nặng hơn", có thể bị hồi quy văn thể đánh dấu warning; case số chương không đủ hiển thị rõ ràng `insufficient_sample` thay vì nhầm phán qua.
 
 ### Phase 3 · LLM Judge
 
-- `evals/rubrics/` + `judge.go`，七维 rubric A/B。
-- Judge 失败（非法 JSON）→ 报告记失败，不影响确定性结果。
+- `evals/rubrics/` + `judge.go`, so sánh A/B rubric bảy chiều.
+- Judge thất bại (JSON không hợp lệ) → báo cáo ghi thất bại, không ảnh hưởng kết quả xác định.
 
-**验收**：Judge 输出进 json+md，且不污染确定性门禁。
+**Nghiệm thu**: Đầu ra Judge vào json+md, và không làm ô nhiễm cổng xác định.
 
 ### Phase 4 · Longform & Recovery
 
-- 3-5 章连续 / 弧末评审 / 用户干预 / pending_commit replay / 上下文压缩压力 case。
-- 复用 diag context+运行时规则。
+- 3-5 chương liên tục / xét duyệt cuối cung / can thiệp người dùng / replay pending_commit / case áp lực nén ngữ cảnh.
+- Tái sử dụng quy tắc context+runtime của diag.
 
-**验收**：能发现重复时间线、pending 残留、弧末摘要缺失、工具循环。
-
----
-
-## 13. Case 维护规范
-
-- **数量克制**：Smoke 3-5、Workflow 各角色 3-5、Quality 2-4、Longform/Recovery 各 2-3。过多没人愿意跑。
-- **好 case**：输入短而明确、覆盖真实风险、少章内暴露问题、不依赖模型生成固定句子、不把风格偏好写太细。
-- **差 case**：输入过长、同时多目标、要跑几十章才判断、只能靠主观感受。
-- **Variant 命名**：`writer-anti-ai-tone` / `architect-rolling-outline` / `editor-strict-review`，每目录只放要替换的 prompt。
+**Nghiệm thu**: Có thể phát hiện dòng thời gian lặp, pending còn sót, thiếu tóm tắt cuối cung, vòng lặp công cụ.
 
 ---
 
-## 14. 风险与边界
+## 13. Quy chuẩn bảo trì Case
 
-- **模型随机性**：同 prompt 多跑也会变。重要改动 `--repeat 3` 看趋势。
-- **成本**：Judge 与 longform 烧钱。本地默认只跑 **smoke**（1 章 × baseline+variant，确定性 diag 门禁、不开 Judge、不跑 stylestat）；**stylestat 在 ≥5 章的 Quality/Longform 才启用**（smoke 章数不足，`Compute` 返回 nil，报告标 `insufficient_sample`）；完整 suite 留给重大改动。
-- **Judge 偏差**：Judge 也是模型，偏好工整解释性文本，未必等于好看的小说——所以只做辅助，stylestat 是确定性主线。
-- **过度指标化**：字数/工具次数/成本/文体统计都是信号不是目标。stylestat 数字是否成病由人按题材裁定，**阈值不写死**（与 editor.md 一致）。
-- **不做线上自动回滚**：离线回归工具，不负责线上自动改 prompt / 发布。
-
----
-
-## 15. 总结
-
-这套评测体系的价值不是自动判断文学质量，而是把 prompt 改动从"凭感觉"变成"有回归、有证据、有人工读样"。
-
-它与上一版设计的根本区别只有一句：**评测器已经在代码库里了。** `diag` 是确定性事实诊断器，`stylestat` 是全书文体回归器，`ReviewEntry` 七维是原生 rubric。评测系统要做的是一层薄薄的 Go harness——批量驱动、采集、把 Finding 与统计映射成门禁、聚合报告——而不是用另一种语言把这些事实判断重写一遍。
-
-一份事实定义，永不漂移。这正是这个项目从架构到评测一以贯之的纪律：**最小 harness、最强复用、确定性归代码、裁定归 LLM 与人。**
+- **Kiềm chế số lượng**: Smoke 3-5, Workflow mỗi vai 3-5, Quality 2-4, Longform/Recovery mỗi loại 2-3. Quá nhiều không ai muốn chạy.
+- **Case tốt**: Đầu vào ngắn gọn rõ ràng, bao phủ rủi ro thực tế, ít chương phơi bày vấn đề, không phụ thuộc mô hình tạo câu cố định, không viết sở thích phong cách quá tỉ mỉ.
+- **Case xấu**: Đầu vào quá dài, nhiều mục tiêu đồng thời, cần chạy vài chục chương mới phán xét được, chỉ dựa vào cảm nhận chủ quan.
+- **Đặt tên Variant**: `writer-anti-ai-tone` / `architect-rolling-outline` / `editor-strict-review`, mỗi thư mục chỉ để tệp prompt cần thay thế.
 
 ---
 
-## 16. 参考
+## 14. Rủi ro và ranh giới
 
-业界 LLM eval 的通用结构（dataset / experiment / scorer / trace / regression gate）是本设计的思想来源，但**刻意不照搬**——本项目的"scorer"是已有的 `diag`/`stylestat`，"trace"是已有的 checkpoint/session 事实层，"dataset"是贴事实层断言的 case。
+- **Tính ngẫu nhiên của mô hình**: Cùng prompt chạy nhiều lần cũng thay đổi. Thay đổi quan trọng thì `--repeat 3` xem xu hướng.
+- **Chi phí**: Judge và longform đốt tiền. Mặc định địa phương chỉ chạy **smoke** (1 chương × baseline+variant, cổng diag xác định, không bật Judge, không chạy stylestat); **stylestat chỉ bật ở Quality/Longform ≥5 chương** (số chương smoke không đủ, `Compute` trả về nil, báo cáo đánh dấu `insufficient_sample`); bộ suite đầy đủ để dành cho thay đổi lớn.
+- **Thiên vị Judge**: Judge cũng là mô hình, ưa thích văn bản giải thích gọn gàng, chưa chắc tương đương với tiểu thuyết hay đọc — nên chỉ làm bổ trợ, stylestat là luồng chính xác định.
+- **Chỉ số hóa quá mức**: Số chữ/số lần công cụ/chi phí/thống kê văn thể đều là tín hiệu không phải mục tiêu. Số stylestat có thành bệnh hay không do con người phán xét theo thể loại, **ngưỡng không hard-code** (nhất quán với editor.md).
+- **Không tự động rollback online**: Công cụ hồi quy offline, không chịu trách nhiệm tự động sửa prompt / phát hành online.
 
-- OpenAI Evals · https://developers.openai.com/api/docs/guides/evals （注：其托管 Evals 平台已公布退役时间线，只引其结构化测试/自动评分/人工校准的**思想**，不作为未来依赖）
+---
+
+## 15. Tóm tắt
+
+Giá trị của hệ thống đánh giá này không phải tự động phán xét chất lượng văn học, mà là biến sửa đổi prompt từ "cảm tính" thành "có hồi quy, có bằng chứng, có đọc mẫu thủ công".
+
+Sự khác biệt căn bản với thiết kế phiên bản trước chỉ có một câu: **Bộ đánh giá đã có trong codebase.** `diag` là bộ chẩn đoán sự kiện xác định, `stylestat` là bộ hồi quy văn thể toàn tập, bảy chiều `ReviewEntry` là rubric nguyên bản. Việc hệ thống đánh giá cần làm là một lớp Go harness mỏng — thúc đẩy theo lô, thu thập, ánh xạ Finding và thống kê thành cổng kiểm soát, tổng hợp báo cáo — thay vì dùng ngôn ngữ khác viết lại những phán xét sự kiện này một lần nữa.
+
+Một định nghĩa sự kiện, không bao giờ sai lệch. Đây chính là kỷ luật xuyên suốt từ kiến trúc đến đánh giá của dự án này: **harness tối thiểu, tái sử dụng tối đa, xác định giao code, phán xét giao LLM và con người.**
+
+---
+
+## 16. Tham khảo
+
+Cấu trúc chung của eval LLM trong ngành (dataset / experiment / scorer / trace / regression gate) là nguồn cảm hứng tư tưởng của thiết kế này, nhưng **cố ý không copy nguyên xi** — "scorer" của dự án này là `diag`/`stylestat` đã có, "trace" là tầng sự kiện checkpoint/session đã có, "dataset" là case khẳng định sát tầng sự kiện.
+
+- OpenAI Evals · https://developers.openai.com/api/docs/guides/evals (Lưu ý: nền tảng Evals lưu trữ của họ đã công bố lịch trình ngừng hoạt động, chỉ tham khảo **tư tưởng** kiểm tra có cấu trúc/tự động chấm điểm/hiệu chỉnh thủ công, không làm phụ thuộc tương lai)
 - Braintrust · https://www.braintrust.dev/foundations/what-is-an-eval
 - LangSmith · https://docs.langchain.com/langsmith/evaluation-concepts

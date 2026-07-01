@@ -11,7 +11,7 @@ import (
 	"github.com/voocel/ainovel-cli/internal/userrules"
 )
 
-// nil 模型 → 归一化降级；空 LoadOptions → 不读真实磁盘。
+// Mo hinh nil → giam cap chuan hoa; LoadOptions rong → khong doc dia that.
 func newDegradedTool(t *testing.T) (*SaveUserRulesTool, *store.Store) {
 	t.Helper()
 	st := store.NewStore(t.TempDir())
@@ -19,13 +19,13 @@ func newDegradedTool(t *testing.T) (*SaveUserRulesTool, *store.Store) {
 	return NewSaveUserRulesTool(svc), st
 }
 
-// 核心契约：归一化失败（技术细节）绝不抛回 Coordinator，只降级 + 返回事实 + 落盘。
+// Hop dong cot loi: loi chuan hoa (chi tiet ky thuat) tuyet doi khong nem lai cho Coordinator, chi giam cap + tra ve su kien + luu dia.
 func TestSaveUserRulesTool_DegradeReturnsFactsNotError(t *testing.T) {
 	tool, st := newDegradedTool(t)
 
-	out, err := tool.Execute(t.Context(), json.RawMessage(`{"text":"每章1500字，少用比喻"}`))
+	out, err := tool.Execute(t.Context(), json.RawMessage(`{"text":"Moi chuong 1500 chu, han che dung an du"}`))
 	if err != nil {
-		t.Fatalf("归一化降级不应作为 tool error 抛出：%v", err)
+		t.Fatalf("Giam cap chuan hoa khong nen nem ra nhu tool error: %v", err)
 	}
 
 	var res struct {
@@ -38,23 +38,23 @@ func TestSaveUserRulesTool_DegradeReturnsFactsNotError(t *testing.T) {
 		InEffect map[string]any `json:"in_effect"`
 	}
 	if err := json.Unmarshal(out, &res); err != nil {
-		t.Fatalf("结果应为合法 JSON：%v", err)
+		t.Fatalf("Ket qua phai la JSON hop le: %v", err)
 	}
 	if !res.Saved {
-		t.Fatal("saved 应为 true")
+		t.Fatal("saved phai la true")
 	}
 	if res.Status != string(rules.StatusDegraded) {
-		t.Fatalf("无模型应 degraded，got %q", res.Status)
+		t.Fatalf("Khong co mo hinh phai la degraded, got %q", res.Status)
 	}
-	if !res.Understood.Degraded || res.Understood.Preferences != "每章1500字，少用比喻" {
-		t.Fatalf("回显应含降级标记与原文，got %+v", res.Understood)
+	if !res.Understood.Degraded || res.Understood.Preferences != "Moi chuong 1500 chu, han che dung an du" {
+		t.Fatalf("Hien thi lai phai chua dau hieu giam cap va van ban goc, got %+v", res.Understood)
 	}
 	if res.InEffect == nil {
-		t.Fatal("应返回当前全量生效约束供回显")
+		t.Fatal("Phai tra ve toan bo rang buoc dang hieu luc de hien thi lai")
 	}
-	// 已落盘。
+	// Da luu dia.
 	if cur, _ := st.UserRules.Load(); cur == nil {
-		t.Fatal("规则应已持久化")
+		t.Fatal("Quy tac phai da duoc luu tru")
 	}
 }
 

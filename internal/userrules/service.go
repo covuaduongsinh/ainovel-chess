@@ -9,25 +9,25 @@ import (
 	"github.com/voocel/ainovel-cli/internal/store"
 )
 
-// Service 编排用户规则快照的生成与更新：归一化各来源 → 确定性合并 → 落盘。
+// Service điều phối việc tạo và cập nhật ảnh chụp quy tắc người dùng: chuẩn hóa từng nguồn → hợp nhất có tính xác định → lưu xuống đĩa.
 //
-// 两个调用方共用同一套逻辑：
-//   - 开书/刷新（启动侧，确定性）：Build / GetOrBuild，由 Host 直接调用，不经 Coordinator。
-//   - 运行中更新（Coordinator 工具）：AddRuntimeRule，save_user_rules 工具壳复用。
+// Hai bên gọi dùng chung một bộ logic:
+//   - Mở sách/làm mới (phía khởi động, có tính xác định): Build / GetOrBuild, Host gọi trực tiếp, không qua Coordinator.
+//   - Cập nhật lúc chạy (công cụ Coordinator): AddRuntimeRule, vỏ công cụ save_user_rules tái dùng.
 type Service struct {
 	store     *store.Store
 	norm      *Normalizer
 	rulesOpts rules.LoadOptions
 }
 
-// NewService 构造服务。model 用于归一化（应为能力较强的模型）；model 为 nil 时
-// 所有来源降级为 raw preferences（仍可产出快照，机械检查由 system_defaults 兜底）。
+// NewService tạo dịch vụ. model dùng cho chuẩn hóa (nên là mô hình có năng lực mạnh hơn); khi model là nil
+// tất cả nguồn giáng cấp thành raw preferences (vẫn có thể tạo ảnh chụp, kiểm tra cơ học do system_defaults đảm bảo).
 func NewService(st *store.Store, model agentcore.ChatModel, opts rules.LoadOptions) *Service {
 	return &Service{store: st, norm: NewNormalizer(model), rulesOpts: opts}
 }
 
-// Build 从静态来源（system_defaults + rules 文件 + 启动 prompt）归一化生成快照并落盘。
-// 开书/刷新时调用。startupPrompt 可空。
+// Build tạo ảnh chụp bằng cách chuẩn hóa từ nguồn tĩnh (system_defaults + tệp rules + startup prompt) và lưu xuống đĩa.
+// Gọi khi mở sách/làm mới. startupPrompt có thể rỗng.
 func (s *Service) Build(ctx context.Context, startupPrompt string) (*rules.Snapshot, error) {
 	cands := []rules.Candidate{rules.SystemDefaults()}
 	for _, rs := range rules.RawFileSources(s.rulesOpts) {
@@ -43,8 +43,8 @@ func (s *Service) Build(ctx context.Context, startupPrompt string) (*rules.Snaps
 	return &snap, nil
 }
 
-// GetOrBuild 返回当前快照；老书无快照时惰性生成（无启动 prompt 原文，故只含
-// system_defaults + rules 文件）。运行时读取路径统一走这里。
+// GetOrBuild trả về ảnh chụp hiện tại; khi sách cũ chưa có ảnh chụp thì tạo lười biếng (không có văn bản startup prompt gốc, nên chỉ chứa
+// system_defaults + tệp rules). Đường đọc lúc chạy đều đi qua đây.
 func (s *Service) GetOrBuild(ctx context.Context) (*rules.Snapshot, error) {
 	cur, err := s.store.UserRules.Load()
 	if err != nil {
@@ -56,9 +56,9 @@ func (s *Service) GetOrBuild(ctx context.Context) (*rules.Snapshot, error) {
 	return s.Build(ctx, "")
 }
 
-// AddRuntimeRule 归一化一条运行中长期规则，以最高优先级叠加到当前快照并落盘。
-// 永不因归一化失败而报错——失败时该条降级为 raw preferences。
-// 返回叠加后的快照与本次的归一化候选（后者供 save_user_rules 回显"理解成了什么"给用户确认）。
+// AddRuntimeRule chuẩn hóa một quy tắc lâu dài lúc chạy, chồng lên ảnh chụp hiện tại với ưu tiên cao nhất rồi lưu xuống đĩa.
+// Không bao giờ báo lỗi do chuẩn hóa thất bại — khi thất bại, quy tắc đó giáng cấp thành raw preferences.
+// Trả về ảnh chụp sau khi chồng và ứng viên chuẩn hóa lần này (cái sau dùng để save_user_rules phản hồi lại "đã hiểu thành gì" cho người dùng xác nhận).
 func (s *Service) AddRuntimeRule(ctx context.Context, text string) (*rules.Snapshot, rules.Candidate, error) {
 	cur, err := s.GetOrBuild(ctx)
 	if err != nil {
