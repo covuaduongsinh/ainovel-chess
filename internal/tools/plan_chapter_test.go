@@ -13,11 +13,11 @@ import (
 func planArgs(chapter int) json.RawMessage {
 	b, _ := json.Marshal(map[string]any{
 		"chapter":     chapter,
-		"title":       "测试章",
-		"goal":        "推进剧情",
-		"conflict":    "外部阻力",
-		"hook":        "留下悬念",
-		"emotion_arc": "紧张到期待",
+		"title":       "Chuong kiem thu",
+		"goal":        "Day tien co truyen",
+		"conflict":    "Tro ngai ben ngoai",
+		"hook":        "De lai huyen han",
+		"emotion_arc": "Tu cang thang den ky vong",
 	})
 	return b
 }
@@ -32,17 +32,17 @@ func TestPlanChapterRejectsUnexpandedLayeredChapter(t *testing.T) {
 	}
 	if err := st.Outline.SaveLayeredOutline([]domain.VolumeOutline{{
 		Index: 1,
-		Title: "第一卷",
+		Title: "Tap mot",
 		Arcs: []domain.ArcOutline{{
 			Index: 1,
-			Title: "第一弧",
+			Title: "Cung mot",
 			Chapters: []domain.OutlineEntry{
-				{Chapter: 1, Title: "一"},
-				{Chapter: 2, Title: "二"},
+				{Chapter: 1, Title: "Mot"},
+				{Chapter: 2, Title: "Hai"},
 			},
 		}, {
 			Index:             2,
-			Title:             "第二弧",
+			Title:             "Cung hai",
 			EstimatedChapters: 3,
 		}},
 	}}); err != nil {
@@ -74,13 +74,13 @@ func TestPlanChapterAllowsExpandedLayeredChapter(t *testing.T) {
 	}
 	if err := st.Outline.SaveLayeredOutline([]domain.VolumeOutline{{
 		Index: 1,
-		Title: "第一卷",
+		Title: "Tap mot",
 		Arcs: []domain.ArcOutline{{
 			Index: 1,
-			Title: "第一弧",
+			Title: "Cung mot",
 			Chapters: []domain.OutlineEntry{
-				{Chapter: 1, Title: "一"},
-				{Chapter: 2, Title: "二"},
+				{Chapter: 1, Title: "Mot"},
+				{Chapter: 2, Title: "Hai"},
 			},
 		}},
 	}}); err != nil {

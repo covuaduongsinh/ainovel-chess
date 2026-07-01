@@ -33,11 +33,11 @@ func TestCollectReadsStyleUsageAndToolCalls(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("save outline: %v", err)
 	}
-	if err := s.Characters.Save([]domain.Character{{Name: "林墨", Aliases: []string{"药童"}}}); err != nil {
+	if err := s.Characters.Save([]domain.Character{{Name: "Lâm Mặc", Aliases: []string{"Dược đồng"}}}); err != nil {
 		t.Fatalf("save characters: %v", err)
 	}
 	for ch := 1; ch <= 5; ch++ {
-		text := "# 标题\n\n不是风停了，而是所有人都屏住呼吸。沉默了片刻，林墨握紧药囊。"
+		text := "# Tiêu đề\n\nKhông phải gió đã ngừng, mà là tất cả mọi người đều nín thở. Sau một khoảnh khắc im lặng, Lâm Mặc siết chặt túi thuốc."
 		if err := s.Drafts.SaveFinalChapter(ch, text); err != nil {
 			t.Fatalf("save chapter %d: %v", ch, err)
 		}
@@ -80,7 +80,7 @@ func TestCollectStyleInsufficientSample(t *testing.T) {
 	if err := s.Progress.Save(&domain.Progress{CompletedChapters: []int{1}}); err != nil {
 		t.Fatalf("save progress: %v", err)
 	}
-	if err := s.Drafts.SaveFinalChapter(1, "只有一章"); err != nil {
+	if err := s.Drafts.SaveFinalChapter(1, "Chỉ có một chương"); err != nil {
 		t.Fatalf("save chapter: %v", err)
 	}
 	col := Collect(dir, nil)
@@ -112,7 +112,7 @@ func TestChapterTitleUsesLayeredEntryChapter(t *testing.T) {
 				{
 					Index: 2,
 					Chapters: []domain.OutlineEntry{
-						{Chapter: 7, Title: "第七章 真标题"},
+						{Chapter: 7, Title: "Chương 7 Tiêu đề thật"},
 					},
 				},
 			},
@@ -121,8 +121,8 @@ func TestChapterTitleUsesLayeredEntryChapter(t *testing.T) {
 		t.Fatalf("save layered outline: %v", err)
 	}
 
-	got := chapterTitle(s, 7, "# 正文兜底标题\n\n内容", func(string, error) {})
-	if got != "第七章 真标题" {
+	got := chapterTitle(s, 7, "# Tiêu đề dự phòng từ nội dung\n\nNội dung", func(string, error) {})
+	if got != "Chương 7 Tiêu đề thật" {
 		t.Fatalf("phải khớp tiêu đề phân tầng theo entry.Chapter, nhận được %q", got)
 	}
 }

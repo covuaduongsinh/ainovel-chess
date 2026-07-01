@@ -78,7 +78,7 @@ func renderOutlineGrid(snap host.UISnapshot, contentW int) string {
 	} else if titleW < 4 {
 		titleW = 4
 	}
-	cellW := 3 + chNumW + titleW // marker(1) + 空格(1) + 章号 + 空格(1) + 标题
+	cellW := 3 + chNumW + titleW // marker(1) + khoảng trắng(1) + số chương + khoảng trắng(1) + tiêu đề
 	gutter := 4
 	cols := (contentW + gutter) / (cellW + gutter)
 	if cols < 1 {

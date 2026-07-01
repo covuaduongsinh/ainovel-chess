@@ -11,23 +11,23 @@ import (
 )
 
 const validAnalyzerEnvelope = `=== SUMMARY ===
-林晚收到匿名爆料后，在档案馆发现失踪者全部姓陈，并在祭品旁找到陈姓家族祖宅地址。
+Sau khi nhận tin tố cáo ẩn danh, Lâm Vãn phát hiện tại kho lưu trữ rằng tất cả nạn nhân mất tích đều họ Trần, và tìm được địa chỉ tổ trạch của gia tộc họ Trần bên cạnh vật tế lễ.
 
 === CHARACTERS ===
-["林晚","档案馆管理员"]
+["Lâm Vãn","quản lý kho lưu trữ"]
 
 === KEY_EVENTS ===
-["林晚收到匿名信","在档案馆发现陈姓共同点","找到祖宅地址"]
+["Lâm Vãn nhận được thư ẩn danh","phát hiện điểm chung họ Trần tại kho lưu trữ","tìm được địa chỉ tổ trạch"]
 
 === TIMELINE ===
 [
-  {"time":"傍晚","event":"林晚收到匿名信","characters":["林晚"]},
-  {"time":"次日","event":"档案馆走访","characters":["林晚","档案馆管理员"]}
+  {"time":"chiều tối","event":"Lâm Vãn nhận thư ẩn danh","characters":["Lâm Vãn"]},
+  {"time":"ngày hôm sau","event":"thăm kho lưu trữ","characters":["Lâm Vãn","quản lý kho lưu trữ"]}
 ]
 
 === FORESHADOW ===
 [
-  {"id":"hk-chen-family","action":"plant","description":"陈姓家族与连环失踪案的关联"}
+  {"id":"hk-chen-family","action":"plant","description":"mối liên hệ giữa gia tộc họ Trần và vụ mất tích liên hoàn"}
 ]
 
 === RELATIONSHIPS ===
@@ -35,7 +35,7 @@ const validAnalyzerEnvelope = `=== SUMMARY ===
 
 === STATE_CHANGES ===
 [
-  {"entity":"林晚","field":"location","old_value":"编辑部","new_value":"档案馆","reason":"循迹追查"}
+  {"entity":"Lâm Vãn","field":"location","old_value":"tòa soạn","new_value":"kho lưu trữ","reason":"truy theo dấu vết"}
 ]
 
 === HOOK_TYPE ===
@@ -81,7 +81,7 @@ func TestParseAnalyzer_RejectsInvalidHookType(t *testing.T) {
 func TestParseAnalyzer_RejectsPlantWithoutDescription(t *testing.T) {
 	bad := strings.Replace(
 		validAnalyzerEnvelope,
-		`{"id":"hk-chen-family","action":"plant","description":"陈姓家族与连环失踪案的关联"}`,
+		`{"id":"hk-chen-family","action":"plant","description":"mối liên hệ giữa gia tộc họ Trần và vụ mất tích liên hoàn"}`,
 		`{"id":"hk-chen-family","action":"plant"}`,
 		1,
 	)
@@ -106,7 +106,7 @@ func TestPersistChapter_FullPipeline(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// 准备 foundation：先用 ReverseFoundation+PersistFoundation 模拟 Phase 2 已完成
+	// Chuan bi foundation: su dung ReverseFoundation+PersistFoundation de mo phong Phase 2 da hoan tat
 	fr := mustParse(t, validEnvelope, 2)
 	if err := PersistFoundation(context.Background(), st, domain.PlanningTierShort, fr); err != nil {
 		t.Fatal(err)
@@ -117,10 +117,10 @@ func TestPersistChapter_FullPipeline(t *testing.T) {
 		t.Fatal(err)
 	}
 	commitTool := tools.NewCommitChapterTool(st)
-	body := "林晚翻开匿名信，发现一行潦草字迹...\n\n（正文略，>500 字以让 LoadChapterContent 通过校验）"
-	body = strings.Repeat(body, 10) // 凑够字数
+	body := "Lâm Vãn mở phong bì ẩn danh, phát hiện một hàng chữ nguệch ngoạc...\n\n(nội dung lược bỏ, >500 ký tự để qua kiểm tra LoadChapterContent)"
+	body = strings.Repeat(body, 10) // Gop du so ky tu
 
-	if err := PersistChapter(context.Background(), st, commitTool, 1, "初遇", body, a); err != nil {
+	if err := PersistChapter(context.Background(), st, commitTool, 1, "Lần Đầu Gặp Gỡ", body, a); err != nil {
 		t.Fatalf("PersistChapter: %v", err)
 	}
 
@@ -137,8 +137,8 @@ func TestPersistChapter_FullPipeline(t *testing.T) {
 		t.Errorf("foreshadow not persisted: %+v", hooks)
 	}
 
-	// 二次提交同一章应是幂等（commit_chapter.IsChapterCompleted 短路）
-	if err := PersistChapter(context.Background(), st, commitTool, 1, "初遇", body, a); err != nil {
+	// De xuat lan hai cung chuong phai la idempotent (commit_chapter.IsChapterCompleted ngan lai)
+	if err := PersistChapter(context.Background(), st, commitTool, 1, "Lần Đầu Gặp Gỡ", body, a); err != nil {
 		t.Errorf("re-import should be idempotent, got: %v", err)
 	}
 	prog2, _ := st.Progress.Load()

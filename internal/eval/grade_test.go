@@ -16,7 +16,7 @@ func writerSmokeCase() Case {
 		ID:          "writer_first_chapter",
 		Category:    "smoke",
 		Role:        "writer",
-		Prompt:      "写一本修仙小说",
+		Prompt:      "viết một tiểu thuyết tiên hiệp",
 		MaxChapters: 1,
 		Expect: Expect{
 			Phase:                "writing",
@@ -25,7 +25,7 @@ func writerSmokeCase() Case {
 			NoPending:            []string{"pending_commit", "pending_steer"},
 		},
 	}
-	_ = c.Validate() // 填默认 max_severity
+	_ = c.Validate() // điền max_severity mặc định
 	return c
 }
 
@@ -105,13 +105,13 @@ func TestGradeMinChaptersNotMet(t *testing.T) {
 // critical finding kích hoạt hard fail; warning finding chỉ WARN (max_severity=warning mặc định).
 func TestGradeFindingSeverity(t *testing.T) {
 	crit := cleanCollected()
-	crit.Report.Findings = []diag.Finding{{Rule: "PhaseFlowMismatch", Severity: diag.SevCritical, Title: "状态机异常"}}
+	crit.Report.Findings = []diag.Finding{{Rule: "PhaseFlowMismatch", Severity: diag.SevCritical, Title: "Lỗi máy trạng thái"}}
 	if r := Grade(writerSmokeCase(), crit); r.Outcome != Fail {
 		t.Fatalf("critical finding phải FAIL, nhận được %s", r.Outcome)
 	}
 
 	warn := cleanCollected()
-	warn.Report.Findings = []diag.Finding{{Rule: "RewritePendingPressure", Severity: diag.SevWarning, Title: "重写积压"}}
+	warn.Report.Findings = []diag.Finding{{Rule: "RewritePendingPressure", Severity: diag.SevWarning, Title: "Tồn đọng viết lại"}}
 	r := Grade(writerSmokeCase(), warn)
 	if r.Outcome != Warn {
 		t.Fatalf("warning finding phải WARN, nhận được %s", r.Outcome)
@@ -119,7 +119,7 @@ func TestGradeFindingSeverity(t *testing.T) {
 
 	// info finding là Note thông tin, không nên đẩy case sạch thành WARN.
 	info := cleanCollected()
-	info.Report.Findings = []diag.Finding{{Rule: "GhostCharacter", Severity: diag.SevInfo, Title: "角色长期未出场"}}
+	info.Report.Findings = []diag.Finding{{Rule: "GhostCharacter", Severity: diag.SevInfo, Title: "Nhân vật vắng mặt lâu dài"}}
 	ri := Grade(writerSmokeCase(), info)
 	if ri.Outcome != Pass {
 		t.Fatalf("info finding không được thay đổi cổng kiểm soát, kỳ vọng PASS, nhận được %s", ri.Outcome)
@@ -160,7 +160,7 @@ func TestGradeDeltaStylestatWarnAndBlock(t *testing.T) {
 	variant := cleanResult()
 	variant.Metrics.Stylestat = &stylestat.Stats{
 		Patterns:          []stylestat.PatternStat{{Name: "p", PerChapter: 2}},
-		RepeatedSentences: []stylestat.SentenceStat{{Text: "重复句", Chapters: 3, Count: 3}},
+		RepeatedSentences: []stylestat.SentenceStat{{Text: "câu lặp", Chapters: 3, Count: 3}},
 		Ending:            stylestat.EndingStat{ShortRatio: 0.5},
 	}
 

@@ -302,7 +302,7 @@ func (m *Model) splitHeights(bodyH int) (eventH, streamH int) {
 	if eventH < 3 {
 		eventH = 3
 	}
-	streamH = bodyH - eventH - 1 // -1 为分隔线
+	streamH = bodyH - eventH - 1 // -1 cho đường phân cách
 	if streamH < 3 {
 		streamH = 3
 	}
@@ -733,9 +733,9 @@ func (m Model) handleCoCreateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.exitCoCreate()
 	}
 
-	// 等待 AI 回复时编辑类（字符输入/退格/光标/Ctrl+U/多行换行）放行——
-	// 用户能在 AI 思考期间预输入下一句。提交类的屏蔽下沉到各 case 内部，
-	// 让 Enter 节流先于 awaiting 屏蔽——这样粘贴的 \n 残片仍能补空格。
+	// Khi chờ AI trả lời, các thao tác chỉnh sửa (nhập ký tự/xóa/di chuyển con trỏ/Ctrl+U/xuống dòng) vẫn được thực hiện——
+	// người dùng có thể nhập trước câu tiếp theo trong khi AI đang suy nghĩ. Chặn gửi được hạ xuống từng case nội bộ,
+	// để throttle Enter ưu tiên hơn chặn awaiting——như vậy mảnh vụn \n khi paste vẫn có thể được điền khoảng trắng.
 
 	switch msg.Type {
 	case tea.KeyCtrlS:

@@ -1,58 +1,58 @@
-// Package exp 实现已完成章节的导出能力。
+// Package exp thuc hien kha nang xuat cac chuong da hoan thanh.
 //
-// 与 imp/ 对称：纯本地 IO，不依赖 LLM，不改 store 状态。导出可以与
-// Coordinator 并发运行（只读 Progress + 章节终稿），属于横向能力。
+// Doi xung voi imp/: IO chi cuc bo, khong phu thuoc LLM, khong thay doi trang thai store. Xuat co the chay
+// dong thoi voi Coordinator (chi doc Progress + ban thao cuoi chuong), thuoc kha nang ngang.
 //
-// 第一版只支持 TXT；EPUB 留待下一轮。
+// Phien ban dau chi ho tro TXT; EPUB de lai vong tiep theo.
 package exp
 
 import "github.com/voocel/ainovel-cli/internal/store"
 
-// Format 标识导出格式。
+// Format xac dinh dinh dang xuat.
 type Format string
 
 const (
-	// FormatTXT 纯文本输出。
+	// FormatTXT Dau ra van ban thuan.
 	FormatTXT Format = "txt"
-	// FormatEPUB 标准 EPUB 3 容器（zip + xhtml）。
+	// FormatEPUB Container EPUB 3 chuan (zip + xhtml).
 	FormatEPUB Format = "epub"
 )
 
-// Options 控制导出行为。zero-value 等价于"导出全本到默认路径，文件存在时报错"。
+// Options kiem soat hanh vi xuat. zero-value tuong duong "xuat toan bo sang duong dan mac dinh, bao loi neu file ton tai".
 //
-// 版式：《书名》 → 卷分隔 → 章节正文。两类内部数据不进导出：premise（创作蓝图，
-// 含目标读者 / 核心消费点 / 写作禁区等后台元信息，给作者与引擎看，不是读者的序）；
-// 弧分隔（读者视角下弧是过细的内部结构）。书名与卷分隔始终保留。
+// Dinh dang: {{TenSach}} -> phan cach tap -> noi dung chuong. Hai loai du lieu noi bo khong vao xuat: premise (ban do sang tac,
+// chua doc gia muc tieu / diem tieu thu cot loi / vung cam viet v.v. la meta thong tin hau truong, cho tac gia va engine xem, khong phai loi noi dau cho doc gia);
+// phan cach cung (cung la cau truc noi bo qua chi tiet tu goc nhin doc gia). Ten sach va phan cach tap luon giu lai.
 type Options struct {
-	// Format 空字符串时由 OutPath 后缀推断（.txt → TXT，.epub → EPUB）；
-	// OutPath 也为空时回退 FormatTXT。SDK 调用方可显式指定以跳过推断。
+	// Format Khi chuoi rong thi suy ra tu hau to OutPath (.txt -> TXT, .epub -> EPUB);
+	// Khi OutPath cung rong thi tro ve FormatTXT. SDK caller co the chi dinh tuong minh de bo qua suy ra.
 	Format Format
 
-	// OutPath 输出文件路径；空表示 {novelDir}/{NovelName}.{ext}，
-	// ext 由 Format 决定（NovelName 为空则用目录名）。
+	// OutPath Duong dan file dau ra; rong thi dung {novelDir}/{TenSach}.{ext},
+	// ext do Format quyet dinh (TenSach rong thi dung ten thu muc).
 	OutPath string
 
-	// From / To 章节范围，闭区间。0 表示从第 1 章 / 到最后一章。
-	// 范围内未完成的章节会被跳过并写入 Result.Skipped，不视为错误。
+	// From / To Pham vi chuong, dong kin. 0 co nghia la tu chuong 1 / den chuong cuoi.
+	// Cac chuong chua hoan thanh trong pham vi se bi bo qua va ghi vao Result.Skipped, khong coi la loi.
 	From, To int
 
-	// Overwrite 文件存在时是否覆盖；默认拒绝。
+	// Overwrite Khi file da ton tai co ghi de khong; mac dinh tu choi.
 	Overwrite bool
 }
 
-// Deps 是 Run 所需依赖。仅 store；导出无需 LLM、prompt、bundle。
+// Deps la phu thuoc can thiet cua Run. Chi store; xuat khong can LLM, prompt, bundle.
 type Deps struct {
 	Store *store.Store
 }
 
-// Result 是一次成功导出的产物摘要。
+// Result la tom tat san pham cua mot lan xuat thanh cong.
 type Result struct {
-	// Path 实际写入的文件路径（绝对或调用方传入的相对）。
+	// Path Duong dan file thuc te duoc ghi (tuyet doi hoac tuong doi do caller truyen vao).
 	Path string
-	// Chapters 实际写入的章节数。
+	// Chapters So chuong thuc te duoc ghi.
 	Chapters int
-	// Bytes 文件字节数（UTF-8）。
+	// Bytes So byte file (UTF-8).
 	Bytes int
-	// Skipped 落在请求范围内但未完成的章节号。
+	// Skipped Cac so chuong nam trong pham vi yeu cau nhung chua hoan thanh.
 	Skipped []int
 }

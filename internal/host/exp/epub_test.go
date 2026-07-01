@@ -10,13 +10,13 @@ import (
 
 func TestRenderEPUB_StructuralInvariants(t *testing.T) {
 	data, err := renderEPUB(
-		"光斑",
+		"Ánh Chớp",
 		[]int{1, 2},
-		chapterTitleIndex{1: "雨夜归人", 2: "破晓"},
+		chapterTitleIndex{1: "Người về đêm mưa", 2: "Bình minh"},
 		nil,
 		map[int]string{
-			1: "# 第 1 章 雨夜归人\n\n他望着窗外。\n\n第二段。",
-			2: "她推开门。",
+			1: "# 第 1 章 Người về đêm mưa\n\nHắn nhìn ra ngoài cửa sổ.\n\nĐoạn hai.",
+			2: "Cô ấy mở cửa.",
 		},
 	)
 	if err != nil {
@@ -74,19 +74,19 @@ func TestRenderEPUB_StructuralInvariants(t *testing.T) {
 		}
 	}
 
-	// container.xml 指向 OEBPS/content.opf
+	// container.xml tro den OEBPS/content.opf
 	if !strings.Contains(files["META-INF/container.xml"], `full-path="OEBPS/content.opf"`) {
 		t.Errorf("container.xml does not point to content.opf")
 	}
 
-	// content.opf 必含 metadata + manifest + spine 三大块；spine 顺序 = 章节顺序
+	// content.opf phai chua ba khoi metadata + manifest + spine; thu tu spine = thu tu chuong
 	opf := files["OEBPS/content.opf"]
 	for _, want := range []string{
 		"<metadata", "</metadata>",
 		"<manifest>", "</manifest>",
 		"<spine>", "</spine>",
 		"urn:uuid:",
-		"<dc:title>光斑</dc:title>",
+		"<dc:title>Ánh Chớp</dc:title>",
 		`href="chapter001.xhtml"`,
 		`href="chapter002.xhtml"`,
 		`idref="ch001"`,
@@ -100,22 +100,22 @@ func TestRenderEPUB_StructuralInvariants(t *testing.T) {
 		t.Errorf("spine order wrong: ch001=%d ch002=%d", idx1, idx2)
 	}
 
-	// 章节 XHTML 含标题 + 段落 + 转义；首行 markdown 标题已剥
+	// Chuong XHTML chua tieu de + doan van + escape; dong markdown dau tien da bi loai bo
 	ch1 := files["OEBPS/chapter001.xhtml"]
-	if !strings.Contains(ch1, "第 1 章 雨夜归人") {
+	if !strings.Contains(ch1, "Chuong 1 Người về đêm mưa") {
 		t.Errorf("chapter1 missing display title")
 	}
-	if !strings.Contains(ch1, "<p>他望着窗外。</p>") {
+	if !strings.Contains(ch1, "<p>Hắn nhìn ra ngoài cửa sổ.</p>") {
 		t.Errorf("chapter1 missing paragraph 1: %s", ch1)
 	}
-	if !strings.Contains(ch1, "<p>第二段。</p>") {
+	if !strings.Contains(ch1, "<p>Đoạn hai.</p>") {
 		t.Errorf("chapter1 missing paragraph 2: %s", ch1)
 	}
 	if strings.Contains(ch1, "# 第 1 章") {
 		t.Errorf("chapter1 should have stripped markdown header: %s", ch1)
 	}
 
-	// nav.xhtml 列出所有章节
+	// nav.xhtml liet ke tat ca cac chuong
 	nav := files["OEBPS/nav.xhtml"]
 	if !strings.Contains(nav, `epub:type="toc"`) {
 		t.Errorf("nav missing epub:type=toc")
@@ -127,11 +127,11 @@ func TestRenderEPUB_StructuralInvariants(t *testing.T) {
 
 func TestRenderEPUB_HTMLEscape(t *testing.T) {
 	data, err := renderEPUB(
-		"A & B", // & 必须转义
+		"A & B", // & phai duoc escape
 		[]int{1},
 		chapterTitleIndex{1: "C \"D\""},
 		nil,
-		map[int]string{1: "正文 < & > 内容。"},
+		map[int]string{1: "Nội dung < & > văn bản."},
 	)
 	if err != nil {
 		t.Fatalf("renderEPUB: %v", err)
@@ -148,7 +148,7 @@ func TestRenderEPUB_HTMLEscape(t *testing.T) {
 	if !strings.Contains(files["OEBPS/cover.xhtml"], "A &amp; B") {
 		t.Errorf("cover should escape &: %s", files["OEBPS/cover.xhtml"])
 	}
-	if !strings.Contains(files["OEBPS/chapter001.xhtml"], "正文 &lt; &amp; &gt; 内容。") {
+	if !strings.Contains(files["OEBPS/chapter001.xhtml"], "Nội dung &lt; &amp; &gt; văn bản.") {
 		t.Errorf("chapter body should escape entities")
 	}
 	if !strings.Contains(files["OEBPS/content.opf"], "<dc:title>A &amp; B</dc:title>") {
@@ -156,18 +156,18 @@ func TestRenderEPUB_HTMLEscape(t *testing.T) {
 	}
 }
 
-// TestRenderEPUB_LayeredVolume 验证分层大纲只在卷首插卷分隔，弧分隔永不出现。
+// TestRenderEPUB_LayeredVolume Kiem tra de cuong phan tang chi chen phan cach tap o dau tap, phan cach cung khong bao gio xuat hien.
 func TestRenderEPUB_LayeredVolume(t *testing.T) {
 	locs := map[int]chapterLocation{
-		1: {VolumeIdx: 1, VolumeTitle: "起源", IsFirstOfVolume: true},
-		2: {VolumeIdx: 1, VolumeTitle: "起源"},
+		1: {VolumeIdx: 1, VolumeTitle: "Khởi nguyên", IsFirstOfVolume: true},
+		2: {VolumeIdx: 1, VolumeTitle: "Khởi nguyên"},
 	}
 	data, err := renderEPUB(
 		"X",
 		[]int{1, 2},
 		chapterTitleIndex{1: "A", 2: "B"},
 		locs,
-		map[int]string{1: "正文一。", 2: "正文二。"},
+		map[int]string{1: "Nội dung một.", 2: "Nội dung hai."},
 	)
 	if err != nil {
 		t.Fatalf("renderEPUB: %v", err)
@@ -182,7 +182,7 @@ func TestRenderEPUB_LayeredVolume(t *testing.T) {
 	}
 
 	ch1 := files["OEBPS/chapter001.xhtml"]
-	if !strings.Contains(ch1, `class="volume-divider"`) || !strings.Contains(ch1, "第 1 卷 起源") {
+	if !strings.Contains(ch1, `class="volume-divider"`) || !strings.Contains(ch1, "Tap 1 Khởi nguyên") {
 		t.Errorf("ch1 should have volume divider: %s", ch1)
 	}
 	if strings.Contains(ch1, `class="arc-divider"`) {
@@ -198,9 +198,9 @@ func TestRenderEPUB_LayeredVolume(t *testing.T) {
 func TestRenderEPUB_NoCoverWhenNoTitle(t *testing.T) {
 	data, err := renderEPUB(
 		"", []int{1},
-		chapterTitleIndex{1: "唯一一章"},
+		chapterTitleIndex{1: "Chương duy nhất"},
 		nil,
-		map[int]string{1: "正文。"},
+		map[int]string{1: "Nội dung."},
 	)
 	if err != nil {
 		t.Fatalf("renderEPUB: %v", err)
@@ -211,7 +211,7 @@ func TestRenderEPUB_NoCoverWhenNoTitle(t *testing.T) {
 			t.Errorf("cover.xhtml should not exist when title is empty")
 		}
 	}
-	// content.opf 不应引用 cover
+	// content.opf khong nen tham chieu cover
 	for _, f := range zr.File {
 		if f.Name != "OEBPS/content.opf" {
 			continue
@@ -231,10 +231,10 @@ func TestSplitParagraphs(t *testing.T) {
 		want []string
 	}{
 		{"a\n\nb", []string{"a", "b"}},
-		{"a\n\n\n\nb", []string{"a", "b"}}, // 多空行折叠为一个分隔
-		{"a\nb", []string{"a b"}},          // 段内单换行变空格
-		{"  ", nil},                        // 全空白返回 nil
-		{"a\r\n\r\nb", []string{"a", "b"}}, // CRLF 兼容
+		{"a\n\n\n\nb", []string{"a", "b"}}, // Nhieu dong trong gop lai thanh mot phan cach
+		{"a\nb", []string{"a b"}},          // Xuong dong don trong doan thanh khoang trang
+		{"  ", nil},                        // Toan khoang trang tra ve nil
+		{"a\r\n\r\nb", []string{"a", "b"}}, // Tuong thich CRLF
 	}
 	for _, c := range cases {
 		got := splitParagraphs(c.in)
@@ -245,13 +245,13 @@ func TestSplitParagraphs(t *testing.T) {
 }
 
 func TestBookIdentifier_StableAcrossChapterRanges(t *testing.T) {
-	// 同名作品、不同导出范围必须返回同一 ID — 阅读器才能识别为"更新版本"
-	idFull := bookIdentifier("光斑")
-	idAgain := bookIdentifier("光斑")
+	// Cung ten tac pham, pham vi xuat khac nhau phai tra ve cung ID -- trinh doc moi nhan ra la "ban cap nhat"
+	idFull := bookIdentifier("Ánh Chớp")
+	idAgain := bookIdentifier("Ánh Chớp")
 	if idFull != idAgain {
 		t.Errorf("identifier not stable across calls: %s vs %s", idFull, idAgain)
 	}
-	if id := bookIdentifier("月相"); id == idFull {
+	if id := bookIdentifier("Trăng Rằm"); id == idFull {
 		t.Errorf("different titles must yield different identifiers")
 	}
 	if !strings.HasPrefix(idFull, "urn:uuid:") {

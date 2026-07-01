@@ -6,12 +6,12 @@ import (
 	"strings"
 )
 
-// envelopeTagRe 匹配 === TAG === 行（前后可有空白），不区分大小写。
+// envelopeTagRe Khop dong === TAG === (co the co khoang trang truoc sau), khong phan biet hoa thuong.
 var envelopeTagRe = regexp.MustCompile(`(?m)^\s*===\s*([A-Z_]+)\s*===\s*$`)
 
-// parseTaggedEnvelope 把 `=== TAG ===\nbody...` 形式的多段输出解析成 map。
-// key 为大写标签名，value 为对应段落（已 trim 首尾空白）。
-// 出现重复标签时，后者覆盖前者。
+// parseTaggedEnvelope Phan tich dau ra nhieu doan dang `=== TAG ===\nbody...` thanh map.
+// key la ten the viet hoa, value la doan tuong ung (da trim khoang trang dau cuoi).
+// Khi xuat hien the trung lap, the sau ghi de the truoc.
 func parseTaggedEnvelope(text string) map[string]string {
 	matches := envelopeTagRe.FindAllStringSubmatchIndex(text, -1)
 	if len(matches) == 0 {
@@ -30,7 +30,7 @@ func parseTaggedEnvelope(text string) map[string]string {
 	return out
 }
 
-// requireTags 校验 envelope 必含给定标签且非空。
+// requireTags Kiem tra envelope phai chua cac the cho truoc va khong rong.
 func requireTags(env map[string]string, tags ...string) error {
 	var missing []string
 	for _, t := range tags {

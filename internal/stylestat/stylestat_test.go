@@ -27,10 +27,10 @@ func TestComputePatterns(t *testing.T) {
 		t.Fatal("expected stats")
 	}
 	want := map[string]int{
-		"矫正句『不是…(而)是…』":          6,
-		"计时量词『X息/X瞬』":            6,
-		"明喻『像一/仿佛/如同/宛如』":        6,
-		"沉默节拍『沉默了/没有说话/没有回头』": 6,
+		"Câu chỉnh sửa 'không phải… mà là…'":            6,
+		"Lượng từ thời gian 'X hơi thở/X thoáng'":       6,
+		"So sánh 'như một/như thể/tựa như/tựa'":          6,
+		"Nhịp im lặng 'im lặng/không nói/không quay đầu'": 6,
 	}
 	for _, p := range s.Patterns {
 		if w, ok := want[p.Name]; ok && p.Total != w {
@@ -46,7 +46,7 @@ func TestComputePatterns(t *testing.T) {
 }
 
 func TestComputeTopPhrasesWithStopwords(t *testing.T) {
-	// 「青云山巅」高频出现；「陆九渊」是角色名应被过滤
+	// "Thanh Vân Sơn Điên" xuất hiện tần số cao; "Lục Cửu Uyên" là tên nhân vật cần được lọc
 	line := "众人望向青云山巅，陆九渊负手而立。\n"
 	chapters := make([]string, 10)
 	for i := range chapters {

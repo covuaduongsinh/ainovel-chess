@@ -267,7 +267,7 @@ func TestExampleConfigIsValidAndSelfConsistent(t *testing.T) {
 	if _, ok := cfg.Providers[cfg.Provider]; !ok {
 		t.Errorf("provider %q cấp cao nhất của ví dụ không trỏ đến mục trong providers — mẫu con trỏ chính mình treo rồi", cfg.Provider)
 	}
-	if !contains(exampleConfig, "指针") {
+	if !contains(exampleConfig, "con trỏ") {
 		t.Error("ví dụ nên nêu rõ 'provider là con trỏ' — đừng để bẫy nhận thức của #37 quay lại")
 	}
 }

@@ -32,58 +32,58 @@ func (m *mockLLM) Generate(_ context.Context, msgs []agentcore.Message, _ []agen
 }
 
 const validEnvelope = `=== PREMISE ===
-# 测试书名
+# Tên truyện thử nghiệm
 
-## 题材和基调
-现代都市悬疑
+## Thể loại và không khí
+Huyền bí đô thị hiện đại
 
-## 核心冲突
-新闻记者追查连环失踪案
+## Xung đột cốt lõi
+Nhà báo điều tra vụ mất tích liên hoàn
 
-## 主角目标
-找出真凶并自证清白
+## Mục tiêu nhân vật chính
+Tìm ra hung thủ thật sự và minh oan cho bản thân
 
-## 结局方向
-真相大白，主角抉择
+## Hướng kết thúc
+Sự thật phơi bày, nhân vật chính phải lựa chọn
 
-## 写作禁区
-血腥猎奇，跳脱现实
+## Vùng cấm kỵ trong viết lách
+Kinh dị đẫm máu, thoát ly thực tế
 
-## 差异化卖点
-- 双线叙事
-- 女性视角
+## Điểm bán hàng khác biệt
+- Tự sự hai tuyến
+- Góc nhìn nữ tính
 
-## 差异化钩子
-失踪者全部姓"陈"
+## Điểm móc dị biệt
+Tất cả nạn nhân mất tích đều họ "Trần"
 
-## 核心兑现承诺
-追完能体验完整悬疑解谜
+## Lời hứa cốt lõi
+Đọc xong có thể trải nghiệm đầy đủ giải mã huyền bí
 
 === CHARACTERS ===
 [
-  {"name":"林晚","role":"主角","description":"独立记者","arc":"前期被动追案，后期主动出击","traits":["敏锐","固执"]},
-  {"name":"陈沉","role":"反派","description":"幕后凶手","arc":"前期隐蔽，后期暴露","traits":["冷静","残忍"]}
+  {"name":"Lâm Vãn","role":"nhân vật chính","description":"phóng viên tự do","arc":"giai đoạn đầu bị động, giai đoạn sau chủ động","traits":["nhạy bén","cứng đầu"]},
+  {"name":"Trần Trầm","role":"phản diện","description":"hung thủ đứng sau","arc":"giai đoạn đầu ẩn náu, giai đoạn sau lộ diện","traits":["điềm tĩnh","tàn nhẫn"]}
 ]
 
 === WORLD_RULES ===
 [
-  {"category":"society","rule":"现代都市背景，警力体系完备","boundary":"不超自然"}
+  {"category":"society","rule":"bối cảnh đô thị hiện đại, hệ thống cảnh sát hoàn chỉnh","boundary":"không siêu nhiên"}
 ]
 
 === LAYERED_OUTLINE ===
 [
   {
     "index":1,
-    "title":"失踪疑云",
-    "theme":"记者追查连环失踪案",
+    "title":"Bóng Mây Mất Tích",
+    "theme":"nhà báo điều tra vụ mất tích liên hoàn",
     "arcs":[
       {
         "index":1,
-        "title":"初查",
-        "goal":"林晚接案并锁定陈姓线索",
+        "title":"Điều Tra Ban Đầu",
+        "goal":"Lâm Vãn nhận vụ và khóa chặt manh mối họ Trần",
         "chapters":[
-          {"title":"初遇","core_event":"林晚收到匿名爆料","hook":"线索指向陈姓家族","scenes":["编辑部","咖啡馆"]},
-          {"title":"循迹","core_event":"林晚走访失踪者家属","hook":"发现共同祭品符号","scenes":["旧宅","档案馆"]}
+          {"title":"Lần Đầu Gặp Gỡ","core_event":"Lâm Vãn nhận được tin tố cáo ẩn danh","hook":"manh mối chỉ đến gia tộc họ Trần","scenes":["tòa soạn","quán cà phê"]},
+          {"title":"Truy Tìm Dấu Vết","core_event":"Lâm Vãn thăm gia đình nạn nhân","hook":"phát hiện biểu tượng vật tế lễ chung","scenes":["nhà cũ","kho lưu trữ"]}
         ]
       }
     ]
@@ -92,26 +92,26 @@ const validEnvelope = `=== PREMISE ===
 
 === COMPASS ===
 {
-  "ending_direction":"真相大白，主角在揭露与自保间抉择",
-  "open_threads":["陈姓家族的祭品仪式真相","林晚的清白指控"],
-  "estimated_scale":"预计 20-40 章"
+  "ending_direction":"sự thật phơi bày, nhân vật chính chọn giữa vạch trần và tự bảo vệ",
+  "open_threads":["sự thật về nghi lễ tế lễ của gia tộc họ Trần","cáo buộc oan sai của Lâm Vãn"],
+  "estimated_scale":"dự kiến 20-40 chương"
 }
 `
 
 func TestReverseFoundation_ParsesValid(t *testing.T) {
 	llm := &mockLLM{out: validEnvelope}
 	chapters := []Chapter{
-		{Title: "初遇", Content: "林晚翻开匿名信..."},
-		{Title: "循迹", Content: "她敲响那栋旧宅的门..."},
+		{Title: "Lần Đầu Gặp Gỡ", Content: "Lâm Vãn mở phong bì ẩn danh..."},
+		{Title: "Truy Tìm Dấu Vết", Content: "Cô gõ cửa căn nhà cũ kỹ đó..."},
 	}
 	got, err := ReverseFoundation(context.Background(), llm, "system prompt with ${chapter_count}", chapters)
 	if err != nil {
 		t.Fatalf("ReverseFoundation: %v", err)
 	}
-	if !strings.HasPrefix(got.Premise, "# 测试书名") {
+	if !strings.HasPrefix(got.Premise, "# Tên truyện thử nghiệm") {
 		t.Errorf("premise head: %q", got.Premise[:20])
 	}
-	if len(got.Characters) != 2 || got.Characters[0].Name != "林晚" {
+	if len(got.Characters) != 2 || got.Characters[0].Name != "Lâm Vãn" {
 		t.Errorf("characters wrong: %+v", got.Characters)
 	}
 	if len(got.Volumes) != 1 || len(domain.FlattenOutline(got.Volumes)) != 2 {
@@ -124,7 +124,7 @@ func TestReverseFoundation_ParsesValid(t *testing.T) {
 		t.Errorf("system prompt expected ${chapter_count}=2 substituted, got: %q",
 			llm.got[0].TextContent())
 	}
-	if !strings.Contains(llm.got[1].TextContent(), "林晚翻开匿名信") {
+	if !strings.Contains(llm.got[1].TextContent(), "Lâm Vãn mở phong bì ẩn danh") {
 		t.Errorf("user prompt should contain chapter 1 content")
 	}
 }
@@ -197,7 +197,7 @@ func TestPersistFoundation_PromotesPhaseToWriting(t *testing.T) {
 	if c, _ := st.Outline.LoadCompass(); c == nil {
 		t.Errorf("compass must be saved for continuation")
 	}
-	if prog.NovelName != "测试书名" {
+	if prog.NovelName != "Tên truyện thử nghiệm" {
 		t.Errorf("novel name: %q", prog.NovelName)
 	}
 	if got := st.FoundationMissing(); len(got) != 0 {

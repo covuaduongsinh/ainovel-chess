@@ -1,4 +1,4 @@
-package tools
+﻿package tools
 
 import (
 	"context"
@@ -19,18 +19,18 @@ func TestSaveArcSummaryPersistsStyleRulesDialogueObjects(t *testing.T) {
 	args, err := json.Marshal(map[string]any{
 		"volume":     1,
 		"arc":        2,
-		"title":      "入山",
-		"summary":    "主角完成入山试炼，确认后续追索方向。",
-		"key_events": []string{"通过试炼", "发现旧案线索"},
+		"title":      "Vao Nui",
+		"summary":    "Nhan vat chinh hoan thanh thu thach vao nui, xac nhan huong truy tim tiep theo.",
+		"key_events": []string{"Vuot qua thu thach", "Phat hien manh moi vu an cu"},
 		"character_snapshots": []map[string]any{
-			{"name": "沈渊", "status": "存活", "motivation": "追查旧案"},
+			{"name": "Tram Uyen", "status": "Con song", "motivation": "Truy tim vu an cu"},
 		},
 		"style_rules": map[string]any{
-			"prose": []string{"环境描写优先触觉和嗅觉", "动作戏用短句推进", "心理描写不解释结论"},
+			"prose": []string{"Mo ta moi truong uu tien xuc giac va khi giac", "Canh hanh dong dung cau ngan day tien", "Mo ta tam ly khong giai thich ket luan"},
 			"dialogue": []map[string]any{
-				{"name": "沈渊", "rules": []string{"对话极简", "少用疑问句"}},
+				{"name": "Tram Uyen", "rules": []string{"Doi thoai cuc ngan gon", "Han che dung cau hoi"}},
 			},
-			"taboos": []string{"避免章末长独白"},
+			"taboos": []string{"Tranh doc thoai dai o cuoi chuong"},
 		},
 	})
 	if err != nil {
@@ -48,7 +48,7 @@ func TestSaveArcSummaryPersistsStyleRulesDialogueObjects(t *testing.T) {
 	if rules == nil || len(rules.Dialogue) != 1 {
 		t.Fatalf("expected one dialogue rule, got %+v", rules)
 	}
-	if rules.Dialogue[0].Name != "沈渊" || len(rules.Dialogue[0].Rules) != 2 {
+	if rules.Dialogue[0].Name != "Tram Uyen" || len(rules.Dialogue[0].Rules) != 2 {
 		t.Fatalf("unexpected dialogue rule: %+v", rules.Dialogue[0])
 	}
 }
@@ -63,13 +63,13 @@ func TestSaveArcSummaryRejectsDialogueStringArray(t *testing.T) {
 	args, err := json.Marshal(map[string]any{
 		"volume":              1,
 		"arc":                 2,
-		"title":               "入山",
-		"summary":             "主角完成入山试炼，确认后续追索方向。",
-		"key_events":          []string{"通过试炼"},
+		"title":               "Vao Nui",
+		"summary":             "Nhan vat chinh hoan thanh thu thach vao nui, xac nhan huong truy tim tiep theo.",
+		"key_events":          []string{"Vuot qua thu thach"},
 		"character_snapshots": []map[string]any{},
 		"style_rules": map[string]any{
-			"prose":    []string{"环境描写优先触觉和嗅觉"},
-			"dialogue": []string{"沈渊对话极简"},
+			"prose":    []string{"Mo ta moi truong uu tien xuc giac va khi giac"},
+			"dialogue": []string{"Tram Uyen doi thoai cuc ngan gon"},
 		},
 	})
 	if err != nil {

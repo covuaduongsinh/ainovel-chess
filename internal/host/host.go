@@ -96,7 +96,7 @@ func New(cfg bootstrap.Config, bundle assets.Bundle) (*Host, error) {
 	// Ưu tiên đọc meta/usage.json; các trường hợp sau đều đi qua sessions/*.jsonl để bù đắp một lần:
 	//   - File không tồn tại (lần đầu nâng cấp lên phiên bản có persistence)
 	//   - Schema version không khớp (bỏ định dạng cũ sau khi nâng cấp tương lai)
-	//   - File tồn tại nhưng hỏng / lỗi IO (không để dữ liệu xấu làm lũy kế归零 vĩnh viễn)
+	//   - File tồn tại nhưng hỏng / lỗi IO (không để dữ liệu xấu làm lũy kế về zero vĩnh viễn)
 	// Sau khi bù đắp xong lập tức SaveNow để cố định kết quả, lần khởi động tiếp theo Load trực tiếp.
 	loaded, loadErr := usage.LoadFromStore()
 	if loadErr != nil {
@@ -148,8 +148,8 @@ func New(cfg bootstrap.Config, bundle assets.Bundle) (*Host, error) {
 	if cfg.Notify.IsEnabled() {
 		h.notifier = notify.New(cfg.Notify.Command, cfg.Notify.Events)
 	}
-	// 预算哨兵订阅子代理边界事件执行停机；Dispatcher 由工具执行链同步触发，
-	// 不再通过事件订阅抢占下一轮模型调用。
+	// Sentinel ngân sách đăng ký sự kiện biên subagent để dừng; Dispatcher được kích hoạt đồng bộ bởi chuỗi thực thi công cụ,
+	// không còn tranh quyền lần gọi model tiếp theo thông qua đăng ký sự kiện.
 	if sentinel := NewBudgetSentinel(cfg.Budget,
 		func() float64 { c, _, _, _, _ := usage.Totals(); return c },
 		func(reason string) { h.abortWithEvent(reason, "error") },
@@ -1041,7 +1041,7 @@ func (h *Host) SetRoleThinking(role, level string) error {
 	return nil
 }
 
-// ── 事件回放 ──
+// ── Phát lại sự kiện ──
 
 func (h *Host) ReplayQueue(afterSeq int64) ([]domain.RuntimeQueueItem, error) {
 	if h.store == nil || h.store.Runtime == nil {
@@ -1050,7 +1050,7 @@ func (h *Host) ReplayQueue(afterSeq int64) ([]domain.RuntimeQueueItem, error) {
 	return h.store.Runtime.LoadQueueAfter(afterSeq)
 }
 
-// ── 共创 ──
+// ── Đồng sáng tác ──
 
 // CoCreateStream khoi dong lanh dong sang tao: lam ro yeu cau tu dau, tao ra chi thi sang tac cho ca cuon sach.
 func (h *Host) CoCreateStream(ctx context.Context, history []CoCreateMessage, onProgress func(kind, text string)) (CoCreateReply, error) {
@@ -1212,11 +1212,11 @@ func (h *Host) guardExclusive(action string) error {
 	return nil
 }
 
-// Export 导出已完成章节为外部文件（当前仅支持 TXT）。
+// Export xuat cac chuong da hoan thanh ra file ben ngoai (hien tai chi ho tro TXT).
 //
-// 与 ImportFrom 不同：导出是只读操作（不动 Progress / Checkpoint），
-// 因此**不要求 Coordinator 空闲**——写作中途也可以随时导出"现阶段成品"。
-// 只读到 Progress.CompletedChapters + 章节终稿 + 大纲 + premise 的一致快照。
+// Khac voi ImportFrom: xuat la thao tac chi doc (khong thay doi Progress / Checkpoint),
+// do do **khong yeu cau Coordinator ranh**--co the xuat "san pham hien tai" bat cu luc nao trong khi dang viet.
+// Chi doc snapshot nhat quan cua Progress.CompletedChapters + ban thao cuoi chuong + de cuong + premise.
 func (h *Host) Export(ctx context.Context, opts exp.Options) (*exp.Result, error) {
 	return exp.Run(ctx, exp.Deps{Store: h.store}, opts)
 }

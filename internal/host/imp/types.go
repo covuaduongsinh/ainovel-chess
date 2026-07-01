@@ -1,32 +1,33 @@
-// Package imp 实现外部小说章节的导入与反推。
+// Package imp thực hiện việc nhập và suy ngược các chương tiểu thuyết từ bên ngoài.
 //
-// 核心思路：用 LLM 反推 foundation + 每章事实，复用现有 save_foundation /
-// commit_chapter 工具的原子三件套落盘。导入完成后 store 状态等同于"写完 N 章
-// 后崩溃"，调用方调 host.Resume() 即可无缝续写。
+// Ý tưởng cốt lõi: dùng LLM suy ngược foundation + sự kiện từng chương, tái sử dụng
+// bộ ba nguyên tử của công cụ save_foundation / commit_chapter để lưu trữ. Sau khi nhập xong,
+// trạng thái store tương đương với "viết xong N chương rồi crash"; phía gọi chỉ cần gọi host.Resume()
+// là có thể tiếp tục viết liền mạch.
 //
-// 不走 Coordinator：导入是确定性回放，不属于 LLM 决策范畴；让 Coordinator
-// 介入只会引入不确定性。本包直接调 LLM 客户端 + 调工具。
+// Không đi qua Coordinator: nhập là replay xác định, không thuộc phạm vi ra quyết định của LLM;
+// để Coordinator can thiệp chỉ tạo thêm bất định. Gói này gọi trực tiếp LLM client + công cụ.
 package imp
 
 import "time"
 
-// Chapter 是切分后的单个章节。
+// Chapter là một chương đơn sau khi phân tách.
 type Chapter struct {
 	Title   string
 	Content string
 }
 
-// Options 控制导入行为。
+// Options kiểm soát hành vi nhập.
 type Options struct {
-	// SourcePath 必填。单个 txt/md 文件路径。
+	// SourcePath bắt buộc. Đường dẫn tệp txt/md đơn lẻ.
 	SourcePath string
 
-	// ResumeFrom 可选。从第 N 章开始导入；0 / 1 表示从头。
-	// 若 > 1，会跳过 Foundation 反推（认为已落盘）。
+	// ResumeFrom tùy chọn. Bắt đầu nhập từ chương N; 0 / 1 nghĩa là từ đầu.
+	// Nếu > 1, sẽ bỏ qua việc suy ngược Foundation (coi như đã lưu rồi).
 	ResumeFrom int
 }
 
-// Stage 表示导入流程的当前阶段。
+// Stage biểu thị giai đoạn hiện tại của luồng nhập.
 type Stage string
 
 const (
@@ -37,12 +38,12 @@ const (
 	StageError      Stage = "error"
 )
 
-// Event 是导入流程对外发出的进度事件。
+// Event là sự kiện tiến độ được phát ra bên ngoài từ luồng nhập.
 type Event struct {
 	Time    time.Time
 	Stage   Stage
-	Current int    // chapter 阶段的当前章号；其它阶段为 0
-	Total   int    // 总章数
-	Message string // 人类可读描述
-	Err     error  // StageError 时携带
+	Current int    // số chương hiện tại ở giai đoạn chapter; bằng 0 ở các giai đoạn khác
+	Total   int    // tổng số chương
+	Message string // mô tả dễ đọc cho người dùng
+	Err     error  // được đính kèm khi StageError
 }

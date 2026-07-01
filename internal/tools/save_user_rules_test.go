@@ -1,4 +1,4 @@
-package tools
+﻿package tools
 
 import (
 	"encoding/json"
@@ -61,6 +61,6 @@ func TestSaveUserRulesTool_DegradeReturnsFactsNotError(t *testing.T) {
 func TestSaveUserRulesTool_EmptyTextErrors(t *testing.T) {
 	tool, _ := newDegradedTool(t)
 	if _, err := tool.Execute(t.Context(), json.RawMessage(`{"text":"  "}`)); !errors.Is(err, errs.ErrToolArgs) {
-		t.Fatalf("空 text 应返回 ErrToolArgs，got %v", err)
+		t.Fatalf("text rong phai tra ve ErrToolArgs, got %v", err)
 	}
 }

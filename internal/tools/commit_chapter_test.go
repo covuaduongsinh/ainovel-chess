@@ -501,9 +501,9 @@ func TestCommitChapterRejectsPolishWithoutDraftChange(t *testing.T) {
 	}
 }
 
-// TestCommitChapterLayeredRejectsOutOfRangeChapter 验证分层模式下，
-// 章号越出 layered_outline 的 commit 必须硬失败，而不是 slog.Warn 放行。
-// 这是阻止"裁定误判后 writer 一路裸跑"的物理刹车（《凡骨》ch204..347 案例）。
+// TestCommitChapterLayeredRejectsOutOfRangeChapter xac minh trong che do phan tang,
+// commit voi so chuong vuot ngoai pham vi layered_outline phai that bai cung, khong the su dung slog.Warn cho qua.
+// Day la phanh vat ly ngan "writer chay tran sau khi phan quyet sai" (vu "Fan Gu" ch204..347).
 func TestCommitChapterLayeredRejectsOutOfRangeChapter(t *testing.T) {
 	dir := t.TempDir()
 	s := store.NewStore(dir)
@@ -514,16 +514,16 @@ func TestCommitChapterLayeredRejectsOutOfRangeChapter(t *testing.T) {
 		t.Fatalf("InitProgress: %v", err)
 	}
 
-	// 建一份 layered_outline，只有 1 卷 1 弧 1 章
+	// Tao mot layered_outline chi co 1 tap 1 cung 1 chuong
 	foundation := NewSaveFoundationTool(s)
 	layeredArgs, _ := json.Marshal(map[string]any{
 		"type": "layered_outline",
 		"content": []map[string]any{{
-			"index": 1, "title": "卷一", "theme": "主题",
+			"index": 1, "title": "Tap mot", "theme": "Chu de",
 			"arcs": []map[string]any{{
-				"index": 1, "title": "弧一", "goal": "目标",
+				"index": 1, "title": "Cung mot", "goal": "Muc tieu",
 				"chapters": []map[string]any{
-					{"title": "首章", "core_event": "起", "hook": "续"},
+					{"title": "Chuong dau", "core_event": "Mo dau", "hook": "Tiep theo"},
 				},
 			}},
 		}},
@@ -534,23 +534,23 @@ func TestCommitChapterLayeredRejectsOutOfRangeChapter(t *testing.T) {
 	}
 	_ = s.Progress.UpdatePhase(domain.PhaseWriting)
 
-	// 越界章节 2 的 commit 必须硬失败
-	if err := s.Drafts.SaveDraft(2, "越界章节正文，必须被拦下。"); err != nil {
+	// Commit chuong tran bien 2 phai that bai cung
+	if err := s.Drafts.SaveDraft(2, "Noi dung chuong tran bien, phai bi chan lai."); err != nil {
 		t.Fatalf("SaveDraft: %v", err)
 	}
 	tool := NewCommitChapterTool(s)
 	args, _ := json.Marshal(map[string]any{
 		"chapter":    2,
-		"summary":    "越界章节",
-		"characters": []string{"主角"},
-		"key_events": []string{"不该被允许"},
+		"summary":    "Chuong tran bien",
+		"characters": []string{"Nhan vat chinh"},
+		"key_events": []string{"Khong duoc phep"},
 	})
 	_, err := tool.Execute(context.Background(), args)
 	if err == nil {
 		t.Fatal("expected commit to fail when chapter out of layered outline range")
 	}
 
-	// 章节文件不应落盘、Progress 不应推进
+	// File chuong khong nen duoc luu dia, Progress khong nen tien
 	if _, statErr := os.Stat(dir + "/chapters/02.md"); !os.IsNotExist(statErr) {
 		t.Fatalf("chapter 2 should not be persisted, stat err=%v", statErr)
 	}
@@ -560,11 +560,11 @@ func TestCommitChapterLayeredRejectsOutOfRangeChapter(t *testing.T) {
 	}
 }
 
-// TestCommitChapterLayeredAutoCompletesWhenDone 验证分层模式确定性完结兜底：
-// 大纲全部展开并写完 + 无骨架弧 + 无返工 + 活跃伏笔为零 + 指南针长线收束时，
-// 最后一章 commit 自动推 Phase=Complete，不依赖架构师主动调 complete_book。
-// 这是 9bf26a5 删掉分层自动完结后引入的 livelock 的修复（终卷末尾模型既不 append
-// 也不 complete → 写手裸跑越界死循环）。
+// TestCommitChapterLayeredAutoCompletesWhenDone xac minh nen ket thuc xac dinh tinh phan tang:
+// Khi toan bo dan y da trien khai va viet xong + khong co cung xuong + khong co viec lam lai + phuc but hoat dong bang khong + long tuyen compass da ket,
+// commit chuong cuoi tu dong day Phase=Complete, khong can kien truc su chu dong goi complete_book.
+// Day la ban sua loi livelock duoc gioi thieu sau khi 9bf26a5 xoa ket thuc tu dong phan tang (mo hinh cuoi tap cuoi khong append
+// cung khong complete → writer chay tran vong lap).
 func TestCommitChapterLayeredAutoCompletesWhenDone(t *testing.T) {
 	dir := t.TempDir()
 	s := store.NewStore(dir)
@@ -575,17 +575,17 @@ func TestCommitChapterLayeredAutoCompletesWhenDone(t *testing.T) {
 		t.Fatalf("InitProgress: %v", err)
 	}
 
-	// 单卷单弧两章，全部展开（无骨架弧）
+	// Mot tap mot cung hai chuong, tat ca da trien khai (khong co cung xuong)
 	foundation := NewSaveFoundationTool(s)
 	layeredArgs, _ := json.Marshal(map[string]any{
 		"type": "layered_outline",
 		"content": []map[string]any{{
-			"index": 1, "title": "卷一", "theme": "主题",
+			"index": 1, "title": "Tap mot", "theme": "Chu de",
 			"arcs": []map[string]any{{
-				"index": 1, "title": "弧一", "goal": "目标",
+				"index": 1, "title": "Cung mot", "goal": "Muc tieu",
 				"chapters": []map[string]any{
-					{"title": "首章", "core_event": "起", "hook": "续"},
-					{"title": "次章", "core_event": "承", "hook": "终"},
+					{"title": "Chuong dau", "core_event": "Mo dau", "hook": "Tiep theo"},
+					{"title": "Chuong hai", "core_event": "Phat trien", "hook": "Ket thuc"},
 				},
 			}},
 		}},
@@ -594,19 +594,19 @@ func TestCommitChapterLayeredAutoCompletesWhenDone(t *testing.T) {
 	if _, err := foundation.Execute(context.Background(), layeredArgs); err != nil {
 		t.Fatalf("Execute layered: %v", err)
 	}
-	// 指南针长线已收束（OpenThreads 空）
-	if err := s.Outline.SaveCompass(domain.StoryCompass{EndingDirection: "主角归乡"}); err != nil {
+	// Long tuyen compass da ket (OpenThreads rong)
+	if err := s.Outline.SaveCompass(domain.StoryCompass{EndingDirection: "Nhan vat chinh ve que"}); err != nil {
 		t.Fatalf("SaveCompass: %v", err)
 	}
 	_ = s.Progress.UpdatePhase(domain.PhaseWriting)
 
 	tool := NewCommitChapterTool(s)
 	commit := func(ch int) map[string]any {
-		if err := s.Drafts.SaveDraft(ch, fmt.Sprintf("第 %d 章正文内容，用于测试确定性完结。", ch)); err != nil {
+		if err := s.Drafts.SaveDraft(ch, fmt.Sprintf("Noi dung chuong %d, dung de kiem thu ket thuc xac dinh tinh.", ch)); err != nil {
 			t.Fatalf("SaveDraft %d: %v", ch, err)
 		}
 		args, _ := json.Marshal(map[string]any{
-			"chapter": ch, "summary": "摘要", "characters": []string{"主角"}, "key_events": []string{"事件"},
+			"chapter": ch, "summary": "Tom tat", "characters": []string{"Nhan vat chinh"}, "key_events": []string{"Su kien"},
 		})
 		raw, err := tool.Execute(context.Background(), args)
 		if err != nil {
@@ -619,25 +619,25 @@ func TestCommitChapterLayeredAutoCompletesWhenDone(t *testing.T) {
 		return out
 	}
 
-	// 第 1 章：未写完，不应完结
+	// Chuong 1: chua viet xong, khong nen ket thuc
 	if bc, _ := commit(1)["book_complete"].(bool); bc {
-		t.Fatal("写完第 1 章不应触发完结")
+		t.Fatal("Viet xong chuong 1 khong nen kich hoat ket thuc")
 	}
 	if p, _ := s.Progress.Load(); p.Phase == domain.PhaseComplete {
-		t.Fatal("写完第 1 章 phase 不应为 complete")
+		t.Fatal("Viet xong chuong 1 phase khong nen la complete")
 	}
 
-	// 第 2 章（最后一章）：应自动完结
+	// Chuong 2 (chuong cuoi): nen tu dong ket thuc
 	if bc, _ := commit(2)["book_complete"].(bool); !bc {
-		t.Fatal("写完最后一章应自动完结")
+		t.Fatal("Viet xong chuong cuoi nen tu dong ket thuc")
 	}
 	if p, _ := s.Progress.Load(); p.Phase != domain.PhaseComplete {
 		t.Fatalf("expected phase=complete, got %s", p.Phase)
 	}
 }
 
-// TestCommitChapterLayeredNoAutoCompleteWithOpenThreads 验证保守性：仍有活跃长线时
-// 即使章节写满也不自动完结，把"是否继续"的裁定权留给架构师。
+// TestCommitChapterLayeredNoAutoCompleteWithOpenThreads xac minh tinh bao thu: khi van con long tuyen hoat dong
+// du chuong viet day du cung khong tu dong ket thuc, trao quyen phan quyet "co tiep tuc hay khong" cho kien truc su.
 func TestCommitChapterLayeredNoAutoCompleteWithOpenThreads(t *testing.T) {
 	dir := t.TempDir()
 	s := store.NewStore(dir)
@@ -652,10 +652,10 @@ func TestCommitChapterLayeredNoAutoCompleteWithOpenThreads(t *testing.T) {
 	layeredArgs, _ := json.Marshal(map[string]any{
 		"type": "layered_outline",
 		"content": []map[string]any{{
-			"index": 1, "title": "卷一", "theme": "主题",
+			"index": 1, "title": "Tap mot", "theme": "Chu de",
 			"arcs": []map[string]any{{
-				"index": 1, "title": "弧一", "goal": "目标",
-				"chapters": []map[string]any{{"title": "首章", "core_event": "起", "hook": "续"}},
+				"index": 1, "title": "Cung mot", "goal": "Muc tieu",
+				"chapters": []map[string]any{{"title": "Chuong dau", "core_event": "Mo dau", "hook": "Tiep theo"}},
 			}},
 		}},
 		"scale": "long",
@@ -663,23 +663,23 @@ func TestCommitChapterLayeredNoAutoCompleteWithOpenThreads(t *testing.T) {
 	if _, err := foundation.Execute(context.Background(), layeredArgs); err != nil {
 		t.Fatalf("Execute layered: %v", err)
 	}
-	// 仍有未收束的活跃长线
-	if err := s.Outline.SaveCompass(domain.StoryCompass{EndingDirection: "主角归乡", OpenThreads: []string{"宿敌未除"}}); err != nil {
+	// Van con long tuyen hoat dong chua ket
+	if err := s.Outline.SaveCompass(domain.StoryCompass{EndingDirection: "Nhan vat chinh ve que", OpenThreads: []string{"Ke thu chua bi tieu diet"}}); err != nil {
 		t.Fatalf("SaveCompass: %v", err)
 	}
 	_ = s.Progress.UpdatePhase(domain.PhaseWriting)
 
-	if err := s.Drafts.SaveDraft(1, "唯一一章的正文，但长线未收束。"); err != nil {
+	if err := s.Drafts.SaveDraft(1, "Noi dung chuong duy nhat, nhung long tuyen chua ket."); err != nil {
 		t.Fatalf("SaveDraft: %v", err)
 	}
 	tool := NewCommitChapterTool(s)
 	args, _ := json.Marshal(map[string]any{
-		"chapter": 1, "summary": "摘要", "characters": []string{"主角"}, "key_events": []string{"事件"},
+		"chapter": 1, "summary": "Tom tat", "characters": []string{"Nhan vat chinh"}, "key_events": []string{"Su kien"},
 	})
 	if _, err := tool.Execute(context.Background(), args); err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
 	if p, _ := s.Progress.Load(); p.Phase == domain.PhaseComplete {
-		t.Fatal("活跃长线未收束时不应自动完结")
+		t.Fatal("Long tuyen hoat dong chua ket khong nen tu dong hoan thanh")
 	}
 }

@@ -152,7 +152,7 @@ func TestSplitText_NoTitle_FallsBack(t *testing.T) {
 	if len(got) != 2 {
 		t.Fatalf("want 2, got %d", len(got))
 	}
-	if got[0].Title != "第1章" || got[1].Title != "第2章" {
+	if got[0].Title != "Chuong 1" || got[1].Title != "Chuong 2" {
 		t.Errorf("fallback titles wrong: %+v", got)
 	}
 }
@@ -213,7 +213,7 @@ func TestSplitText_FullWidthSpace(t *testing.T) {
 	if got[0].Title != "风起" {
 		t.Errorf("ch1 title: %q", got[0].Title)
 	}
-	if got[1].Title != "第2章" { // 仅尾随全角空格 → 回退占位标题
+	if got[1].Title != "Chuong 2" { // Chi co khoang trang toan goc theo sau -> title du phong
 		t.Errorf("ch2 title: %q", got[1].Title)
 	}
 }

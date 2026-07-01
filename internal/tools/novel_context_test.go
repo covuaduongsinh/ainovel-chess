@@ -1,4 +1,4 @@
-package tools
+﻿package tools
 
 import (
 	"context"
@@ -20,7 +20,7 @@ func TestContextToolInjectsStyleStats(t *testing.T) {
 	}
 
 	progress := &domain.Progress{TotalChapters: 10}
-	body := "# Chuong N\nAnh khong do du, ma la so hai. Im lang mot luc. Nhu mot tia sang.\nBong dem buong xuong.\nAnh di roi."
+	body := "# Chuong N\n他不是犹豫，而是恐惧。沉默了一息。像一道光。\n夜色降临。\n他离开了。"
 	for ch := 1; ch <= 6; ch++ {
 		if err := st.Drafts.SaveFinalChapter(ch, body); err != nil {
 			t.Fatalf("SaveFinalChapter: %v", err)
@@ -451,11 +451,11 @@ func TestContextToolSelectedMemoryRecallsStoryThreadsAndReviewLessons(t *testing
 	if err := s.World.SaveForeshadowLedger([]domain.ForeshadowEntry{
 		{ID: "trial_invite", Description: "Muc dich that su cua loi moi thu thach noi mon", PlantedAt: 1, Status: "planted"},
 		{ID: "trial_mastermind", Description: "Ai la nguoi dung sau thuc day cuoc thu thach nay", PlantedAt: 1, Status: "planted"},
-		{ID: "trial_rules", Description: "Manh van bia quy tac thu thach con sot lai", PlantedAt: 1, Status: "planted"},
-		{ID: "outer_disciple", Description: "Mon no cu cua de tu ngoai mon", PlantedAt: 1, Status: "planted"},
-		{ID: "elder_token", Description: "Nguon goc the bai trong tay truong lao", PlantedAt: 1, Status: "planted"},
-		{ID: "hidden_gate", Description: "Con duong bi mat phia sau cong mon", PlantedAt: 1, Status: "planted"},
-		{ID: "trial_bet", Description: "Nguoi dieu phoi thu cuoc thu thach ngam", PlantedAt: 1, Status: "planted"},
+		{ID: "trial_rules", Description: "Bia khac con sot lai trong hang da bi phong kin", PlantedAt: 1, Status: "planted"},
+		{ID: "outer_disciple", Description: "Mon no cu cua de tu ben ngoai", PlantedAt: 1, Status: "planted"},
+		{ID: "elder_token", Description: "Nguon goc the bai trong tay truong boi", PlantedAt: 1, Status: "planted"},
+		{ID: "hidden_gate", Description: "Canh cua bi mat phia sau buc tuong da", PlantedAt: 1, Status: "planted"},
+		{ID: "trial_bet", Description: "Nguoi dieu phoi cuoc dat cuoc an ngam", PlantedAt: 1, Status: "planted"},
 	}); err != nil {
 		t.Fatalf("SaveForeshadowLedger: %v", err)
 	}
@@ -511,19 +511,19 @@ func TestContextToolSelectedMemoryRecallsStoryThreadsAndReviewLessons(t *testing
 	if len(payload.Selected.ReviewLessons) == 0 {
 		t.Fatal("expected review lesson recall items")
 	}
-	if !containsRecallSummary(payload.Selected.StoryThreads, "loi moi thu thach noi mon") {
+	if !containsRecallSummary(payload.Selected.StoryThreads, "cua loi moi") {
 		t.Fatalf("expected story thread recall to mention invite, got %+v", payload.Selected.StoryThreads)
 	}
-	if !containsRecallSummary(payload.Selected.StoryThreads, "thuc day cuoc thu thach nay") {
+	if !containsRecallSummary(payload.Selected.StoryThreads, "nguoi dung sau thuc day") {
 		t.Fatalf("expected story thread recall to mention trial mastermind, got %+v", payload.Selected.StoryThreads)
 	}
-	if containsRecallSummary(payload.Selected.StoryThreads, "Manh van bia quy tac thu thach con sot lai") {
+	if containsRecallSummary(payload.Selected.StoryThreads, "Bia khac con sot") {
 		t.Fatalf("expected weak-overlap foreshadow to stay out, got %+v", payload.Selected.StoryThreads)
 	}
 	if containsRecallSummary(payload.Selected.StoryThreads, "de xuat xem lai chuong") {
 		t.Fatalf("expected related_chapters not to be duplicated into story_threads, got %+v", payload.Selected.StoryThreads)
 	}
-	if !containsRecallSummary(payload.Selected.ReviewLessons, "thieu contract") {
+	if !containsRecallSummary(payload.Selected.ReviewLessons, "thiếu contract") {
 		t.Fatalf("expected review lesson recall to mention contract miss, got %+v", payload.Selected.ReviewLessons)
 	}
 	if !strings.Contains(payload.Summary, "goiLaiCotTruyen:") || !strings.Contains(payload.Summary, "goiLaiThamDinh:") {
@@ -587,7 +587,7 @@ func TestContextToolSelectedMemorySurfacesAgingForeshadow(t *testing.T) {
 	if !containsRecallSummary(payload.Selected.StoryThreads, "huyet mach mat tich") {
 		t.Fatalf("expected second aging foreshadow to surface, got %+v", payload.Selected.StoryThreads)
 	}
-	if !containsRecallSummary(payload.Selected.StoryThreads, "chua thu") {
+	if !containsRecallSummary(payload.Selected.StoryThreads, "chưa thu") {
 		t.Fatalf("expected aging item to carry overdue annotation, got %+v", payload.Selected.StoryThreads)
 	}
 	// Phuc but gan day (tuoi <30 va khong lien quan) khong nen duoc bo sung.
@@ -617,7 +617,7 @@ func TestContextToolSelectedMemoryIncludesGlobalReviewLessons(t *testing.T) {
 		Verdict: "polish",
 		Summary: "Toan cuon tien trien dat yeu cau, nhung bieu dat muc tieu nhan vat van chua on dinh.",
 		Issues: []domain.ConsistencyIssue{
-			{Type: "character", Severity: "warning", Description: "Bieu dat muc tieu nhan vat chinh chua on dinh"},
+			{Type: "character", Severity: "warning", Description: "muc tieu nhan vat chinh"},
 		},
 	}); err != nil {
 		t.Fatalf("SaveReview(global): %v", err)
@@ -641,7 +641,7 @@ func TestContextToolSelectedMemoryIncludesGlobalReviewLessons(t *testing.T) {
 	if err := json.Unmarshal(result, &payload); err != nil {
 		t.Fatalf("Unmarshal: %v", err)
 	}
-	if !containsRecallSummary(payload.Selected.ReviewLessons, "Bieu dat muc tieu nhan vat chinh chua on dinh") {
+	if !containsRecallSummary(payload.Selected.ReviewLessons, "muc tieu nhan vat chinh") {
 		t.Fatalf("expected global review lesson to be recalled, got %+v", payload.Selected.ReviewLessons)
 	}
 }
@@ -706,12 +706,12 @@ func TestContextToolFallsBackToFullForeshadowWhenSelectionIsTooSparse(t *testing
 		t.Fatalf("InitProgress: %v", err)
 	}
 	if err := s.World.SaveForeshadowLedger([]domain.ForeshadowEntry{
-		{ID: "trial_invite", Description: "Muc dich that su cua loi moi thu thach noi mon", PlantedAt: 1, Status: "planted"},
-		{ID: "trial_rules", Description: "Manh van bia quy tac thu thach con sot lai", PlantedAt: 1, Status: "planted"},
-		{ID: "outer_disciple", Description: "Mon no cu cua de tu ngoai mon", PlantedAt: 1, Status: "planted"},
-		{ID: "elder_token", Description: "Nguon goc the bai trong tay truong lao", PlantedAt: 1, Status: "planted"},
-		{ID: "hidden_gate", Description: "Con duong bi mat phia sau cong mon", PlantedAt: 1, Status: "planted"},
-		{ID: "trial_bet", Description: "Nguoi dieu phoi thu cuoc thu thach ngam", PlantedAt: 1, Status: "planted"},
+		{ID: "old_debt", Description: "Mon no cu tu thoi bat dau hanh trinh", PlantedAt: 1, Status: "planted"},
+		{ID: "missing_elder", Description: "Truong boi bien mat bat minh", PlantedAt: 1, Status: "planted"},
+		{ID: "strange_relic", Description: "Vat the ky la trong kho bao vat", PlantedAt: 1, Status: "planted"},
+		{ID: "blood_feud", Description: "Thu han tu nhieu doi ve truoc", PlantedAt: 1, Status: "planted"},
+		{ID: "lost_map", Description: "Ban do bi mat dan den noi bi an", PlantedAt: 1, Status: "planted"},
+		{ID: "sealed_letter", Description: "La thu bi phong kin tu nguoi cha", PlantedAt: 1, Status: "planted"},
 	}); err != nil {
 		t.Fatalf("SaveForeshadowLedger: %v", err)
 	}

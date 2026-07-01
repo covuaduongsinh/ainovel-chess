@@ -11,23 +11,23 @@ import (
 	"github.com/voocel/ainovel-cli/internal/store"
 )
 
-// FoundationResult 是 Foundation 反推的结构化产物。
+// FoundationResult là sản phẩm có cấu trúc từ quá trình suy ngược Foundation.
 type FoundationResult struct {
-	Premise    string                 // Markdown 字符串
-	Characters []domain.Character     // 角色档案
-	WorldRules []domain.WorldRule     // 世界规则
-	Volumes    []domain.VolumeOutline // 分层大纲：导入正文作为第一卷（可续写、可扩展）
-	Compass    *domain.StoryCompass   // 续写方向锚点（ending_direction / open_threads / estimated_scale）
+	Premise    string                 // Chuỗi Markdown
+	Characters []domain.Character     // Hồ sơ nhân vật
+	WorldRules []domain.WorldRule     // Quy tắc thế giới
+	Volumes    []domain.VolumeOutline // Đại cương phân tầng: nhập nội dung làm quyển đầu tiên (có thể tiếp tục, có thể mở rộng)
+	Compass    *domain.StoryCompass   // Điểm neo định hướng tiếp tục viết (ending_direction / open_threads / estimated_scale)
 }
 
-// LLMChat 是 imp 包对 ChatModel 的最小依赖：仅需要一次普通文本生成。
-// 抽出独立接口便于单测注入 mock，避免直接耦合 agentcore 客户端。
+// LLMChat là dependency tối thiểu của gói imp đối với ChatModel: chỉ cần một lần tạo văn bản thông thường.
+// Tách thành interface độc lập để dễ inject mock trong unit test, tránh phụ thuộc trực tiếp vào agentcore client.
 type LLMChat interface {
 	Generate(ctx context.Context, messages []agentcore.Message, tools []agentcore.ToolSpec, opts ...agentcore.CallOption) (*agentcore.LLMResponse, error)
 }
 
-// ReverseFoundation 用一次 LLM 调用，从已切分的章节正文反推 foundation。
-// 不调用 save_foundation，纯函数；持久化由调用方决定。
+// ReverseFoundation dùng một lần gọi LLM để suy ngược foundation từ nội dung các chương đã phân tách.
+// Không gọi save_foundation, là hàm thuần túy; việc lưu trữ do phía gọi quyết định.
 func ReverseFoundation(ctx context.Context, llm LLMChat, systemPrompt string, chapters []Chapter) (*FoundationResult, error) {
 	if len(chapters) == 0 {
 		return nil, fmt.Errorf("no chapters to analyze")
@@ -53,21 +53,22 @@ func ReverseFoundation(ctx context.Context, llm LLMChat, systemPrompt string, ch
 	return parseFoundationOutput(resp.Message.TextContent(), len(chapters))
 }
 
-// buildFoundationUserPrompt 拼装用户提示：所有章节顺序拼接，附章号锚点便于 LLM 引用。
+// buildFoundationUserPrompt xây dựng user prompt: ghép tuần tự tất cả các chương,
+// thêm anchor số chương để LLM dễ tham chiếu.
 func buildFoundationUserPrompt(chapters []Chapter) string {
 	var sb strings.Builder
-	sb.WriteString("以下是已完成的 ")
+	sb.WriteString("Dưới đây là ")
 	fmt.Fprintf(&sb, "%d", len(chapters))
-	sb.WriteString(" 章正文。请严格按系统提示反推 foundation，输出五个 === TAG === 段。\n\n")
+	sb.WriteString(" chương nội dung đã hoàn thành. Hãy suy ngược foundation theo đúng system prompt và xuất ra năm đoạn === TAG ===.\n\n")
 	for i, ch := range chapters {
-		fmt.Fprintf(&sb, "## 第 %d 章：%s\n\n", i+1, ch.Title)
+		fmt.Fprintf(&sb, "## Chuong %d: %s\n\n", i+1, ch.Title)
 		sb.WriteString(ch.Content)
 		sb.WriteString("\n\n---\n\n")
 	}
 	return sb.String()
 }
 
-// parseFoundationOutput 解析 LLM 输出的 envelope 并校验关键约束。
+// parseFoundationOutput phân tích envelope trong đầu ra của LLM và kiểm tra các ràng buộc quan trọng.
 func parseFoundationOutput(text string, expectChapters int) (*FoundationResult, error) {
 	env := parseTaggedEnvelope(text)
 	if env == nil {
@@ -79,7 +80,7 @@ func parseFoundationOutput(text string, expectChapters int) (*FoundationResult, 
 
 	premise := stripFences(env["PREMISE"])
 	if !strings.HasPrefix(strings.TrimLeft(premise, " \t\n"), "#") {
-		return nil, fmt.Errorf("premise must start with a Markdown heading line (# 书名)")
+		return nil, fmt.Errorf("premise must start with a Markdown heading line (# tên truyện)")
 	}
 
 	var characters []domain.Character
@@ -99,8 +100,8 @@ func parseFoundationOutput(text string, expectChapters int) (*FoundationResult, 
 	if err := decodeJSON("layered_outline", env["LAYERED_OUTLINE"], &volumes); err != nil {
 		return nil, err
 	}
-	// 导入大纲必须把全部 N 章实展开（FlattenOutline 只数真实章节，骨架弧不计），
-	// 否则逐章 commit 时会有章节落在大纲范围外、被越界守卫拒绝。
+	// Đại cương nhập phải trải phẳng đủ N chương thực (FlattenOutline chỉ đếm chương thực, không tính arc khung),
+	// nếu không khi commit từng chương sẽ có chương nằm ngoài phạm vi đại cương và bị guard từ chối.
 	if got := len(domain.FlattenOutline(volumes)); got != expectChapters {
 		return nil, fmt.Errorf("layered outline chapter count mismatch: got %d, want %d", got, expectChapters)
 	}
@@ -119,12 +120,12 @@ func parseFoundationOutput(text string, expectChapters int) (*FoundationResult, 
 	}, nil
 }
 
-// PersistFoundation 把反推结果写入 Store，顺序与 Architect 长篇 prompt 一致：
-// premise → characters → world_rules → layered_outline → compass。导入正文作为第一卷
-// 落成分层大纲，使导入的书可被续写、可扩展。每步都触发 save_foundation 同款落盘逻辑。
+// PersistFoundation Ghi ket qua suy nguoc vao Store, thu tu nhat quan voi Architect long prompt:
+// premise -> characters -> world_rules -> layered_outline -> compass. Nhap noi dung lam tap dau tien
+// thanh de cuong phan tang, de sach nhap co the duoc tiep tuc viet va mo rong. Moi buoc deu kich hoat cung logic luu disk cua save_foundation.
 //
-// 不直接调 SaveFoundationTool 是因为这里是确定性回放，无需走 LLM 工具调度。
-// 但保持与 SaveFoundationTool 相同的副作用：phase 推进、checkpoint 追加。
+// Khong goi truc tiep SaveFoundationTool vi day la phuc hoi tat dinh, khong can di qua dieu phoi cong cu LLM.
+// Nhung giu cung hieu ung phu voi SaveFoundationTool: tien hanh phase, them checkpoint.
 func PersistFoundation(ctx context.Context, st *store.Store, scale domain.PlanningTier, fr *FoundationResult) error {
 	if fr == nil {
 		return fmt.Errorf("nil foundation result")
@@ -161,7 +162,7 @@ func PersistFoundation(ctx context.Context, st *store.Store, scale domain.Planni
 		return fmt.Errorf("checkpoint world_rules: %w", err)
 	}
 
-	// 4. layered outline（导入正文作为第一卷 → 分层模式，可续写、可扩展）
+	// 4. layered outline (Nhap noi dung lam tap dau tien -> che do phan tang, co the tiep tuc viet va mo rong)
 	if err := st.Outline.SaveLayeredOutline(fr.Volumes); err != nil {
 		return fmt.Errorf("save layered outline: %w", err)
 	}
@@ -178,8 +179,8 @@ func PersistFoundation(ctx context.Context, st *store.Store, scale domain.Planni
 		return fmt.Errorf("checkpoint layered outline: %w", err)
 	}
 
-	// 5. compass（续写方向锚点）：让 layeredBookComplete 据 open_threads 判定，
-	//    避免导入即被判完结；也给续写时的方向/篇幅一个基准。
+	// 5. compass (Diem neo huong di tiep tuc viet): de layeredBookComplete phan xet dua vao open_threads,
+	//    tranh bi coi la da ket thuc ngay khi nhap; cung cung cap co so ve huong di/do dai khi tiep tuc viet.
 	if err := st.Outline.SaveCompass(*fr.Compass); err != nil {
 		return fmt.Errorf("save compass: %w", err)
 	}
@@ -187,7 +188,7 @@ func PersistFoundation(ctx context.Context, st *store.Store, scale domain.Planni
 		return fmt.Errorf("checkpoint compass: %w", err)
 	}
 
-	// 6. foundation 完整 → 推进到 writing 阶段（与 save_foundation 末尾逻辑一致）
+	// 6. foundation hoan chinh -> tien den giai doan writing (nhat quan voi logic cuoi cua save_foundation)
 	if len(st.FoundationMissing()) == 0 {
 		if p, _ := st.Progress.Load(); p != nil &&
 			p.Phase != domain.PhaseWriting && p.Phase != domain.PhaseComplete {
@@ -197,7 +198,7 @@ func PersistFoundation(ctx context.Context, st *store.Store, scale domain.Planni
 	return nil
 }
 
-// decodeJSON 解析 JSON（数组或对象）并附上标签，便于调试。
+// decodeJSON Phan tich JSON (mang hoac doi tuong) va kem nhan the, tien cho viec debug.
 func decodeJSON(label, body string, out any) error {
 	body = stripFences(body)
 	if body == "" {
@@ -209,7 +210,7 @@ func decodeJSON(label, body string, out any) error {
 	return nil
 }
 
-// stripFences 去掉首尾 ``` 代码围栏（含语言标签），LLM 偶尔会自作主张包一层。
+// stripFences Bo hang rao code ``` o dau cuoi (gom ca nhan ngon ngu), LLM doi khi tu y boc them mot lop.
 func stripFences(s string) string {
 	s = strings.TrimSpace(s)
 	if !strings.HasPrefix(s, "```") {

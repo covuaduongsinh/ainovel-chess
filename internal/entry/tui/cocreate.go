@@ -212,7 +212,7 @@ func renderCoCreateBody(width, height int, state *cocreateState, errMsg, inputVi
 	// trông đều nhau với đường viền hai bên.
 	// Ở chế độ cộng tác textarea cố định 1 dòng (xem nhánh model.refitTextareaHeight),
 	// chiều cao input = 1 (textarea) + 2 (border trên/dưới) = 3 dòng, không bao giờ trôi.
-	innerW := leftW - 1 // 给外层右竖线留 1 列
+	innerW := leftW - 1 // dành 1 cột cho đường dọc phải của container ngoài
 
 	inputBox := lipgloss.NewStyle().
 		Width(innerW-6). // -2 margin -2 padding -2 border
@@ -299,7 +299,7 @@ func renderCoCreateSuggestions(width int, state *cocreateState) string {
 		lines = append(lines, digitStyle.Render(digits[i]+" ")+bodyStyle.Render(strings.TrimSpace(s)))
 	}
 
-	// 与 inputBox 左右 margin/padding 对齐：左 2 列（margin1+padding1）、右同。
+	// Căn chỉnh với margin/padding trái phải của inputBox: trái 2 cột (margin1+padding1), phải tương tự.
 	return lipgloss.NewStyle().
 		Width(width-2).
 		Padding(0, 2).
@@ -444,7 +444,7 @@ func renderCoCreateConversationPanel(width, height int, state *cocreateState, er
 		if isUser {
 			lines = append(lines, userRole)
 			for _, line := range wrapStreamText(strings.TrimSpace(item.Content), wrapW) {
-				// 整行一次 Render，避免前缀颜色 reset 与正文颜色拼接处的 ANSI 控制符 bleed。
+				// Render toàn bộ dòng một lần, tránh ANSI control bleed tại điểm nối giữa màu tiền tố reset và màu nội dung chính.
 				lines = append(lines, userBody.Render("▌ "+line))
 			}
 		} else {

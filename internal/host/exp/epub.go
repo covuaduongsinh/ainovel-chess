@@ -10,17 +10,17 @@ import (
 	"time"
 )
 
-// renderEPUB 把章节集合打包成 EPUB 3 字节流。
+// renderEPUB Dong goi tap hop chuong thanh luong byte EPUB 3.
 //
-// 包结构（OEBPS 是 OPS package 容器）：
+// Cau truc goi (OEBPS la container goi OPS):
 //
-//	mimetype                    （必须 zip 第一项 + Method=Store 不压缩）
-//	META-INF/container.xml      （指向 OEBPS/content.opf）
-//	OEBPS/content.opf           （metadata + manifest + spine）
-//	OEBPS/nav.xhtml             （EPUB 3 navigation）
-//	OEBPS/style.css             （极简排版）
-//	OEBPS/cover.xhtml           （书名，可选）
-//	OEBPS/chapterNNN.xhtml      （每章一文件）
+//	mimetype                    (Phai la muc zip dau tien + Method=Store khong nen)
+//	META-INF/container.xml      (Tro den OEBPS/content.opf)
+//	OEBPS/content.opf           (metadata + manifest + spine)
+//	OEBPS/nav.xhtml             (EPUB 3 navigation)
+//	OEBPS/style.css             (Sap xep toi gian)
+//	OEBPS/cover.xhtml           (Ten sach, tuy chon)
+//	OEBPS/chapterNNN.xhtml      (Moi chuong mot file)
 func renderEPUB(
 	novelName string,
 	chapters []int,
@@ -31,7 +31,7 @@ func renderEPUB(
 	var buf bytes.Buffer
 	zw := zip.NewWriter(&buf)
 
-	// 1. mimetype 必须是 zip 第一项 + Store（不压缩）+ 内容精确无 BOM
+	// 1. mimetype phai la muc zip dau tien + Store (khong nen) + noi dung chinh xac khong BOM
 	mt, err := zw.CreateHeader(&zip.FileHeader{
 		Name:   "mimetype",
 		Method: zip.Store,
@@ -81,7 +81,7 @@ func renderEPUB(
 	return buf.Bytes(), nil
 }
 
-// zipDeflate 写入一个普通（压缩）条目。
+// zipDeflate Ghi mot muc thuong (co nen).
 func zipDeflate(zw *zip.Writer, name, content string) error {
 	w, err := zw.Create(name)
 	if err != nil {
@@ -95,12 +95,12 @@ func chapterFileName(ch int) string {
 	return fmt.Sprintf("chapter%03d.xhtml", ch)
 }
 
-// chapterID 是 manifest item 的 id；与文件名一一对应。
+// chapterID la id cua manifest item; tuong ung 1-1 voi ten file.
 func chapterID(ch int) string {
 	return fmt.Sprintf("ch%03d", ch)
 }
 
-// 固定模板 ────────────────────────────────────────────────
+// Mau co dinh ────────────────────────────────────────────────
 
 const containerXML = `<?xml version="1.0" encoding="utf-8"?>
 <container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
@@ -117,18 +117,18 @@ h1.chapter-title { font-size: 1.4em; text-align: center; margin: 2em 0 1.5em; }
 p { text-indent: 2em; margin: 0.5em 0; }
 `
 
-// 章节 XHTML ────────────────────────────────────────────────
+// Chuong XHTML ────────────────────────────────────────────────
 
 func renderChapterXHTML(ch int, title string, loc chapterLocation, hasLoc bool, body string) string {
 	var b strings.Builder
-	displayTitle := fmt.Sprintf("第 %d 章", ch)
+	displayTitle := fmt.Sprintf("Chuong %d", ch)
 	if title != "" {
-		displayTitle = fmt.Sprintf("第 %d 章 %s", ch, title)
+		displayTitle = fmt.Sprintf("Chuong %d %s", ch, title)
 	}
 
 	fmt.Fprintf(&b, `<?xml version="1.0" encoding="utf-8"?>
 <!DOCTYPE html>
-<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="zh-CN">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="vi">
 <head>
   <title>%s</title>
   <link rel="stylesheet" type="text/css" href="style.css"/>
@@ -137,7 +137,7 @@ func renderChapterXHTML(ch int, title string, loc chapterLocation, hasLoc bool, 
 `, html.EscapeString(displayTitle))
 
 	if hasLoc && loc.IsFirstOfVolume {
-		fmt.Fprintf(&b, "  <div class=\"volume-divider\">第 %d 卷 %s</div>\n",
+		fmt.Fprintf(&b, "  <div class=\"volume-divider\">Tap %d %s</div>\n",
 			loc.VolumeIdx, html.EscapeString(strings.TrimSpace(loc.VolumeTitle)))
 	}
 
@@ -149,8 +149,8 @@ func renderChapterXHTML(ch int, title string, loc chapterLocation, hasLoc bool, 
 	return b.String()
 }
 
-// splitParagraphs 按空行切段；连续多空行视为一个分段。返回的段落都已 TrimSpace 且非空。
-// 段内换行（单个 \n）保留为段内空格——XHTML 的 <p> 不保留换行，浏览器自动 wrap。
+// splitParagraphs Cat doan theo dong trong; nhieu dong trong lien tiep coi la mot doan. Cac doan tra ve da TrimSpace va khong rong.
+// Xuong dong trong doan (don le \n) giu lai lam khoang trang trong doan -- <p> cua XHTML khong giu xuong dong, trinh duyet tu dong wrap.
 func splitParagraphs(body string) []string {
 	body = strings.ReplaceAll(body, "\r\n", "\n")
 	parts := strings.Split(body, "\n\n")
@@ -160,22 +160,22 @@ func splitParagraphs(body string) []string {
 		if p == "" {
 			continue
 		}
-		// 段内换行变空格，避免 XHTML 渲染时丢内容
+		// Xuong dong trong doan doi thanh khoang trang, tranh mat noi dung khi XHTML hien thi
 		p = strings.ReplaceAll(p, "\n", " ")
 		out = append(out, p)
 	}
 	return out
 }
 
-// 封面 ────────────────────────────────────────────────
+// Bia sach ────────────────────────────────────────────────
 
 func renderCoverXHTML(novelName string) string {
 	var b strings.Builder
 	b.WriteString(`<?xml version="1.0" encoding="utf-8"?>
 <!DOCTYPE html>
-<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="zh-CN">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="vi">
 <head>
-  <title>封面</title>
+  <title>Bia sach</title>
   <link rel="stylesheet" type="text/css" href="style.css"/>
 </head>
 <body>
@@ -187,33 +187,33 @@ func renderCoverXHTML(novelName string) string {
 	return b.String()
 }
 
-// nav.xhtml（EPUB 3 navigation）────────────────────────────────────────────────
+// nav.xhtml (EPUB 3 navigation) ────────────────────────────────────────────────
 
 func renderNavXHTML(hasCover bool, chapters []int, titleIdx chapterTitleIndex) string {
 	var b strings.Builder
 	b.WriteString(`<?xml version="1.0" encoding="utf-8"?>
 <!DOCTYPE html>
-<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" xml:lang="zh-CN">
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" xml:lang="vi">
 <head>
-  <title>目录</title>
+  <title>Muc luc</title>
   <link rel="stylesheet" type="text/css" href="style.css"/>
 </head>
 <body>
   <nav epub:type="toc">
-    <h1>目录</h1>
+    <h1>Muc luc</h1>
     <ol>
 `)
 	if hasCover {
-		b.WriteString("      <li><a href=\"cover.xhtml\">封面</a></li>\n")
+		b.WriteString("      <li><a href=\"cover.xhtml\">Bia sach</a></li>\n")
 	}
 
-	// 平铺章节列表。卷/弧分组在阅读器里反而不如单层目录清爽（阅读器自己会折叠），
-	// 而且 EPUB 3 nav 嵌套 ol 在某些阅读器上渲染怪。保持简单。
+	// Danh sach chuong phang. Nhom theo tap/cung trong trinh doc lai khong gon bang muc luc don cap (trinh doc tu gan),
+	// va EPUB 3 nav long ol tren mot so trinh doc hien thi la. Giu don gian.
 	for _, ch := range chapters {
 		title := strings.TrimSpace(titleIdx[ch])
-		display := fmt.Sprintf("第 %d 章", ch)
+		display := fmt.Sprintf("Chuong %d", ch)
 		if title != "" {
-			display = fmt.Sprintf("第 %d 章 %s", ch, title)
+			display = fmt.Sprintf("Chuong %d %s", ch, title)
 		}
 		fmt.Fprintf(&b, "      <li><a href=\"%s\">%s</a></li>\n",
 			chapterFileName(ch), html.EscapeString(display))
@@ -227,7 +227,7 @@ func renderNavXHTML(hasCover bool, chapters []int, titleIdx chapterTitleIndex) s
 	return b.String()
 }
 
-// content.opf ────────────────────────────────────────────────
+// content.opf ──────────────────────────────────────────────── (khong can dich ten file)
 
 func renderOPF(novelName string, hasCover bool, chapters []int) string {
 	bookID := bookIdentifier(novelName)
@@ -240,11 +240,11 @@ func renderOPF(novelName string, hasCover bool, chapters []int) string {
 
 	var b strings.Builder
 	fmt.Fprintf(&b, `<?xml version="1.0" encoding="utf-8"?>
-<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="bookid" xml:lang="zh-CN">
+<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="bookid" xml:lang="vi">
   <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
     <dc:identifier id="bookid">%s</dc:identifier>
     <dc:title>%s</dc:title>
-    <dc:language>zh-CN</dc:language>
+    <dc:language>vi</dc:language>
     <dc:creator>ainovel-cli</dc:creator>
     <meta property="dcterms:modified">%s</meta>
   </metadata>
@@ -273,17 +273,17 @@ func renderOPF(novelName string, hasCover bool, chapters []int) string {
 	return b.String()
 }
 
-// bookIdentifier 由小说名派生稳定 UUID 字符串。
+// bookIdentifier Suy ra chuoi UUID on dinh tu ten truyen.
 //
-// **只用 novelName，不掺章节列表**：作品身份应跟"是哪本书"绑定，不跟"导出范围"
-// 或"导出时刻已写到第几章"绑定。重导出同一本书 ID 不变，阅读器据此识别为同一作品
-// 的更新版本（更新与否由 dcterms:modified 时间戳承担）。空 novelName 共享 ID 是
-// 已知边角 case：用户给两本书都不起名时责任自负。
+// **Chi dung novelName, khong pha them danh sach chuong**: Danh tinh tac pham nen gan voi "la sach nao", khong phai "pham vi xuat"
+// hay "da viet den chuong may luc xuat". Xuat lai cung mot sach thi ID khong doi, trinh doc dua vao do de nhan dien la ban cap nhat cua cung tac pham
+// (viec co cap nhat hay khong do dau thoi gian dcterms:modified dam nhan). novelName rong chia se ID la
+// truong hop goc bien da biet: khi nguoi dung khong dat ten cho hai sach thi trach nhiem thuoc ve nguoi dung.
 func bookIdentifier(novelName string) string {
 	h := sha1.New()
 	h.Write([]byte(novelName))
 	sum := h.Sum(nil)
-	// 格式化为 UUID 风格（8-4-4-4-12），不要求严格 RFC 4122 — EPUB 只要求字符串唯一稳定。
+	// Dinh dang kieu UUID (8-4-4-4-12), khong yeu cau chat che RFC 4122 -- EPUB chi yeu cau chuoi duy nhat va on dinh.
 	return fmt.Sprintf("urn:uuid:%x-%x-%x-%x-%x",
 		sum[0:4], sum[4:6], sum[6:8], sum[8:10], sum[10:16])
 }

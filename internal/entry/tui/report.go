@@ -129,7 +129,7 @@ func renderReportText(report diag.Report, width int, exportPath string, startedA
 	}
 	b.WriteString("\n")
 
-	// Dòng 3:伏笔 + quy hoạch
+	// Dòng 3: phục bút + quy hoạch
 	if st.ForeshadowOpen > 0 || st.ForeshadowStale > 0 {
 		b.WriteString(mutedStyle.Render("Phục bút "))
 		b.WriteString(fmt.Sprintf("Đang mở %d", st.ForeshadowOpen))

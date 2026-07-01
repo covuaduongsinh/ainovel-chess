@@ -14,16 +14,16 @@ func TestStripChapterTitleHeader(t *testing.T) {
 		title string
 		want  string
 	}{
-		{"plain body untouched", "他望着窗外。", "雨夜归人", "他望着窗外。"},
-		{"strip h1 chinese title", "# 第 1 章  雨夜归人\n\n他望着窗外。", "雨夜归人", "他望着窗外。"},
-		{"strip h2 with chapter token", "## 第二章\n\n他望着窗外。", "", "他望着窗外。"},
-		{"keep body even if no header", "正文第一句。\n第二句。", "", "正文第一句。\n第二句。"},
-		{"do not strip non-chapter heading", "# 序章\n他望着窗外。", "边村浮生", "# 序章\n他望着窗外。"},
+		{"plain body untouched", "Hắn nhìn ra ngoài cửa sổ.", "Người về đêm mưa", "Hắn nhìn ra ngoài cửa sổ."},
+		{"strip h1 chapter header", "# 第 1 章  Người về đêm mưa\n\nHắn nhìn ra ngoài cửa sổ.", "Người về đêm mưa", "Hắn nhìn ra ngoài cửa sổ."},
+		{"strip h2 with chapter token", "## 第二章\n\nHắn nhìn ra ngoài cửa sổ.", "", "Hắn nhìn ra ngoài cửa sổ."},
+		{"keep body even if no header", "Câu đầu tiên của nội dung.\nCâu thứ hai.", "", "Câu đầu tiên của nội dung.\nCâu thứ hai."},
+		{"do not strip non-chapter heading", "# Lời mở đầu\nHắn nhìn ra ngoài cửa sổ.", "Phù sinh thôn biên", "# Lời mở đầu\nHắn nhìn ra ngoài cửa sổ."},
 		{"single line header only", "# 第 1 章", "", ""},
-		// writer 把纯章节名当标题写进首行 → 与导出器统一标题重复，应剥掉
-		{"strip h1 matching chapter title", "# 边村浮生\n\n天还没亮。", "边村浮生", "天还没亮。"},
-		// 首行 h1 但文字不等于本章标题 → 视为正文，保留
-		{"keep h1 not matching title", "# 别的小标题\n正文。", "边村浮生", "# 别的小标题\n正文。"},
+		// writer viet ten chuong thuan tuy lam tieu de vao dong dau -> trung lap voi tieu de thong nhat cua trinh xuat, nen loai bo
+		{"strip h1 matching chapter title", "# Phù sinh thôn biên\n\nTrời chưa sáng.", "Phù sinh thôn biên", "Trời chưa sáng."},
+		// Dong dau h1 nhung noi dung khong bang tieu de chuong nay -> coi la noi dung, giu lai
+		{"keep h1 not matching title", "# Tiêu đề khác\nNội dung.", "Phù sinh thôn biên", "# Tiêu đề khác\nNội dung."},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -37,42 +37,42 @@ func TestStripChapterTitleHeader(t *testing.T) {
 
 func TestBuildTitleIndex(t *testing.T) {
 	outline := []domain.OutlineEntry{
-		{Chapter: 1, Title: "雨夜归人"},
-		{Chapter: 2, Title: ""}, // 空标题应被过滤
-		{Chapter: 3, Title: "破晓"},
+		{Chapter: 1, Title: "Người về đêm mưa"},
+		{Chapter: 2, Title: ""}, // Tieu de rong nen bi loc bo
+		{Chapter: 3, Title: "Bình minh"},
 	}
 	idx := buildTitleIndex(outline)
-	if got := idx[1]; got != "雨夜归人" {
-		t.Errorf("ch1 title: got %q want 雨夜归人", got)
+	if got := idx[1]; got != "Người về đêm mưa" {
+		t.Errorf("ch1 title: got %q want Người về đêm mưa", got)
 	}
 	if _, ok := idx[2]; ok {
 		t.Errorf("ch2 should be absent (empty title)")
 	}
-	if got := idx[3]; got != "破晓" {
-		t.Errorf("ch3 title: got %q want 破晓", got)
+	if got := idx[3]; got != "Bình minh" {
+		t.Errorf("ch3 title: got %q want Bình minh", got)
 	}
 }
 
 func TestBuildLocations(t *testing.T) {
 	volumes := []domain.VolumeOutline{
-		{Index: 1, Title: "起源", Arcs: []domain.ArcOutline{
-			{Index: 1, Title: "少年初登场", Chapters: []domain.OutlineEntry{{}, {}}}, // 2 章
-			{Index: 2, Title: "宗门试炼", Chapters: []domain.OutlineEntry{{}}},      // 1 章
+		{Index: 1, Title: "Khởi nguyên", Arcs: []domain.ArcOutline{
+			{Index: 1, Title: "Thiếu niên lần đầu xuất hiện", Chapters: []domain.OutlineEntry{{}, {}}}, // 2 chuong
+			{Index: 2, Title: "Thử thách tông môn", Chapters: []domain.OutlineEntry{{}}},              // 1 chuong
 		}},
-		{Index: 2, Title: "崛起", Arcs: []domain.ArcOutline{
-			{Index: 1, Title: "初战", Chapters: []domain.OutlineEntry{{}}},
+		{Index: 2, Title: "Trỗi dậy", Arcs: []domain.ArcOutline{
+			{Index: 1, Title: "Trận đầu", Chapters: []domain.OutlineEntry{{}}},
 		}},
 	}
 	locs := buildLocations(volumes)
 
-	// 只验卷归属：弧不再进 location，但弧层仍参与全局章号累加。
+	// Chi kiem tra thuoc tap: cung khong vao location, nhung lop cung van tham gia tinh so chuong toan cuc.
 	if loc := locs[1]; !loc.IsFirstOfVolume || loc.VolumeIdx != 1 {
 		t.Errorf("ch1 should be first of volume 1: %+v", loc)
 	}
 	if loc := locs[2]; loc.IsFirstOfVolume || loc.VolumeIdx != 1 {
 		t.Errorf("ch2 should be volume 1, not first: %+v", loc)
 	}
-	// ch3 是弧 2 的首章，但仍在卷 1 内 → 不是卷首。
+	// ch3 la chuong dau cua cung 2, nhung van nam trong tap 1 -> khong phai dau tap.
 	if loc := locs[3]; loc.IsFirstOfVolume || loc.VolumeIdx != 1 {
 		t.Errorf("ch3 (arc 2, same volume) should not be first of volume: %+v", loc)
 	}
@@ -83,29 +83,29 @@ func TestBuildLocations(t *testing.T) {
 
 func TestRenderTXT_TitleAndChapter(t *testing.T) {
 	got := renderTXT(
-		"光斑",
+		"Ánh Chớp",
 		[]int{1, 2},
-		chapterTitleIndex{1: "雨夜归人", 2: "破晓"},
+		chapterTitleIndex{1: "Người về đêm mưa", 2: "Bình minh"},
 		nil,
 		map[int]string{
-			1: "# 第 1 章 雨夜归人\n\n他望着窗外。",
-			2: "她推开门。",
+			1: "# 第 1 章 Người về đêm mưa\n\nHắn nhìn ra ngoài cửa sổ.",
+			2: "Cô ấy mở cửa.",
 		},
 	)
-	if !strings.HasPrefix(got, "《光斑》\n\n") {
+	if !strings.HasPrefix(got, "《Ánh Chớp》\n\n") {
 		t.Errorf("missing book title at start:\n%s", got)
 	}
-	// premise 不进导出：书名后应直接是章节，不夹任何前情提要
-	if !strings.Contains(got, "第 1 章  雨夜归人") {
+	// premise khong vao xuat: sau ten sach nen la chuong ngay, khong chen bat ky tien de nao
+	if !strings.Contains(got, "Chuong 1  Người về đêm mưa") {
 		t.Errorf("missing ch1 header")
 	}
-	if !strings.Contains(got, "他望着窗外。") {
+	if !strings.Contains(got, "Hắn nhìn ra ngoài cửa sổ.") {
 		t.Errorf("missing ch1 body")
 	}
 	if strings.Contains(got, "# 第 1 章") {
 		t.Errorf("body markdown header not stripped:\n%s", got)
 	}
-	if !strings.Contains(got, "第 2 章  破晓") {
+	if !strings.Contains(got, "Chuong 2  Bình minh") {
 		t.Errorf("missing ch2 header")
 	}
 }
@@ -114,39 +114,39 @@ func TestRenderTXT_EmptyNovelNameNoTitleLine(t *testing.T) {
 	got := renderTXT(
 		"",
 		[]int{1},
-		chapterTitleIndex{1: "雨夜归人"},
+		chapterTitleIndex{1: "Người về đêm mưa"},
 		nil,
-		map[int]string{1: "正文。"},
+		map[int]string{1: "Nội dung."},
 	)
 	if strings.Contains(got, "《") {
 		t.Errorf("should not contain book title brackets: %s", got)
 	}
-	if !strings.HasPrefix(got, "第 1 章  雨夜归人") {
+	if !strings.HasPrefix(got, "Chuong 1  Người về đêm mưa") {
 		t.Errorf("expect chapter header at very start: %s", got)
 	}
 }
 
-// TestRenderTXT_LayeredVolume 验证分层大纲只在卷首插卷分隔，弧分隔永不出现
-// （issue #27：版式定为"《书名》→卷分隔→章节正文"）。
+// TestRenderTXT_LayeredVolume Kiem tra de cuong phan tang chi chen phan cach tap o dau tap, phan cach cung khong bao gio xuat hien
+// (issue #27: dinh dang la "Ten sach -> phan cach tap -> noi dung chuong").
 func TestRenderTXT_LayeredVolume(t *testing.T) {
 	locs := map[int]chapterLocation{
-		1: {VolumeIdx: 1, VolumeTitle: "起源", IsFirstOfVolume: true},
-		2: {VolumeIdx: 1, VolumeTitle: "起源"},
+		1: {VolumeIdx: 1, VolumeTitle: "Khởi nguyên", IsFirstOfVolume: true},
+		2: {VolumeIdx: 1, VolumeTitle: "Khởi nguyên"},
 	}
 	got := renderTXT(
 		"X", []int{1, 2},
 		chapterTitleIndex{1: "A", 2: "B"},
 		locs,
-		map[int]string{1: "正文一。", 2: "正文二。"},
+		map[int]string{1: "Nội dung một.", 2: "Nội dung hai."},
 	)
-	if !strings.Contains(got, "第 1 卷  起源") {
+	if !strings.Contains(got, "Tap 1  Khởi nguyên") {
 		t.Errorf("missing volume header: %s", got)
 	}
 	if strings.Contains(got, "弧") {
 		t.Errorf("arc divider should never appear: %s", got)
 	}
-	// 卷标题只在第一章前出现一次
-	if strings.Count(got, "第 1 卷") != 1 {
+	// Tieu de tap chi xuat hien mot lan truoc chuong dau
+	if strings.Count(got, "Tap 1") != 1 {
 		t.Errorf("volume header should appear exactly once: %s", got)
 	}
 }
@@ -154,11 +154,11 @@ func TestRenderTXT_LayeredVolume(t *testing.T) {
 func TestRenderTXT_ChapterWithoutTitleFallsBackToNumberOnly(t *testing.T) {
 	got := renderTXT(
 		"", []int{5},
-		chapterTitleIndex{}, // 没有标题
+		chapterTitleIndex{}, // Khong co tieu de
 		nil,
-		map[int]string{5: "正文。"},
+		map[int]string{5: "Nội dung."},
 	)
-	if !strings.Contains(got, "第 5 章\n\n") {
-		t.Errorf("expect 'first 5 章' fallback header: %s", got)
+	if !strings.Contains(got, "Chuong 5\n\n") {
+		t.Errorf("expect 'Chuong 5' fallback header: %s", got)
 	}
 }

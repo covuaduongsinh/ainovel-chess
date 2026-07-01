@@ -12,13 +12,13 @@ import (
 	"github.com/voocel/ainovel-cli/internal/tools"
 )
 
-// validHookTypes / validStrands 与 commit_chapter schema 保持一致。
+// validHookTypes / validStrands Giu nhat quan voi schema commit_chapter.
 var (
 	validHookTypes = map[string]bool{"crisis": true, "mystery": true, "desire": true, "emotion": true, "choice": true}
 	validStrands   = map[string]bool{"quest": true, "fire": true, "constellation": true}
 )
 
-// ChapterAnalysis 是单章反推的结构化产物，字段直接对齐 commit_chapter 入参。
+// ChapterAnalysis La san pham co cau truc cua viec suy nguoc tung chuong, cac truong truc tiep tuong ung voi tham so commit_chapter.
 type ChapterAnalysis struct {
 	Summary             string
 	Characters          []string
@@ -31,8 +31,8 @@ type ChapterAnalysis struct {
 	DominantStrand      string
 }
 
-// AnalyzeChapter 用一次 LLM 调用，从单章正文反推 commit_chapter 所需事实。
-// hooksContext 是已知伏笔池的快照（可空），用于让 LLM 复用既有 ID。
+// AnalyzeChapter Dung mot lan goi LLM, suy nguoc cac su kien can thiet cho commit_chapter tu noi dung tung chuong.
+// hooksContext la anh chup cua pool fu but da biet (co the rong), dung de LLM tai su dung ID hien co.
 func AnalyzeChapter(
 	ctx context.Context,
 	llm LLMChat,
@@ -69,32 +69,32 @@ func buildAnalyzerUserPrompt(
 	hooks []domain.ForeshadowEntry,
 ) string {
 	var sb strings.Builder
-	fmt.Fprintf(&sb, "请分析第 %d 章正文，输出 9 个 === TAG === 段。\n\n", chapter)
+	fmt.Fprintf(&sb, "Hay phan tich noi dung chuong %d, xuat 9 doan === TAG ===.\n\n", chapter)
 	if title != "" {
-		fmt.Fprintf(&sb, "章节标题：%s\n\n", title)
+		fmt.Fprintf(&sb, "Tieu de chuong: %s\n\n", title)
 	}
 
 	if strings.TrimSpace(premise) != "" {
-		sb.WriteString("## 故事前提（参考）\n\n")
+		sb.WriteString("## Tien de truyen (tham khao)\n\n")
 		sb.WriteString(premise)
 		sb.WriteString("\n\n")
 	}
 	if strings.TrimSpace(charactersBlock) != "" {
-		sb.WriteString("## 已知角色（参考）\n\n")
+		sb.WriteString("## Nhan vat da biet (tham khao)\n\n")
 		sb.WriteString(charactersBlock)
 		sb.WriteString("\n\n")
 	}
 
 	if len(hooks) > 0 {
-		sb.WriteString("## 已知伏笔池（请复用 ID，不要新造）\n\n")
+		sb.WriteString("## Pool fu but da biet (vui long tai su dung ID, khong tao moi)\n\n")
 		for _, h := range hooks {
-			fmt.Fprintf(&sb, "- `%s` [%s]：%s（埋设于第 %d 章）\n",
+			fmt.Fprintf(&sb, "- `%s` [%s]: %s (dat vao chuong %d)\n",
 				h.ID, h.Status, h.Description, h.PlantedAt)
 		}
 		sb.WriteString("\n")
 	}
 
-	sb.WriteString("## 本章正文\n\n")
+	sb.WriteString("## Noi dung chuong nay\n\n")
 	sb.WriteString(content)
 	sb.WriteString("\n")
 	return sb.String()
@@ -157,7 +157,7 @@ func parseAnalyzerOutput(text string) (*ChapterAnalysis, error) {
 	return a, nil
 }
 
-// decodeOptionalArray 允许标签缺失或为空字符串；只在非空时解析。
+// decodeOptionalArray Cho phep the bi thieu hoac la chuoi rong; chi phan tich khi khong rong.
 func decodeOptionalArray(label, body string, out any) error {
 	body = stripFences(body)
 	if body == "" || body == "[]" {
@@ -169,8 +169,8 @@ func decodeOptionalArray(label, body string, out any) error {
 	return nil
 }
 
-// PersistChapter 把分析结果落盘：先写章节草稿，再调 commit_chapter 执行原子三件套。
-// 已完成章节会被 commit_chapter 自身的幂等检查跳过，仍返回 nil 让循环继续。
+// PersistChapter Luu ket qua phan tich xuong dia: truoc tien ghi ban thao chuong, sau do goi commit_chapter thuc hien bo ba nguyen tu.
+// Chuong da hoan thanh se bi bo qua boi kiem tra idempotent cua chinh commit_chapter, van tra ve nil de vong lap tiep tuc.
 func PersistChapter(
 	ctx context.Context,
 	st *store.Store,
@@ -186,17 +186,17 @@ func PersistChapter(
 		return fmt.Errorf("nil commit tool")
 	}
 
-	// 1. 落盘草稿（commit_chapter 从 drafts/{ch}.draft.md 读正文）
+	// 1. Luu ban thao xuong dia (commit_chapter doc noi dung tu drafts/{ch}.draft.md)
 	if err := st.Drafts.SaveDraft(chapter, content); err != nil {
 		return fmt.Errorf("save draft ch%d: %w", chapter, err)
 	}
 
-	// 2. 标记进入写作中（ValidateChapterWork 在 FlowWriting 下不阻塞，但 progress 需要这一步保持一致）
+	// 2. Danh dau vao trang thai dang viet (ValidateChapterWork khong bi chan duoi FlowWriting, nhung progress can buoc nay de nhat quan)
 	if err := st.Progress.StartChapter(chapter); err != nil {
 		return fmt.Errorf("start chapter ch%d: %w", chapter, err)
 	}
 
-	// 3. 构造 commit_chapter 入参（注入 chapter title 仅记录用，commit_chapter 不读 title）
+	// 3. Xay dung tham so commit_chapter (chen chapter title chi de luu, commit_chapter khong doc title)
 	args := map[string]any{
 		"chapter":         chapter,
 		"summary":         a.Summary,

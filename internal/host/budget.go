@@ -133,7 +133,7 @@ func (s *BudgetSentinel) Refuse() error {
 	return nil
 }
 
-// Limit 返回预算上限（UI 展示用）；未启用返回 0。
+// Limit tra ve gioi han ngan sach (de hien thi UI); tra ve 0 neu chua bat.
 func (s *BudgetSentinel) Limit() float64 {
 	if s == nil {
 		return 0

@@ -65,13 +65,13 @@ func RunImport(ctx context.Context, st *store.Store, path string) (<-chan Event,
 			case <-ctx.Done():
 			}
 		}
-		emit(StageImport, "导入仿写画像...", nil)
+		emit(StageImport, "Dang nhap ho so phuong phap viet...", nil)
 		result, err := ImportProfile(ctx, st, path)
 		if err != nil {
-			emit(StageError, "导入仿写画像失败", err)
+			emit(StageError, "Nhap ho so phuong phap viet that bai", err)
 			return
 		}
-		emit(StageDone, fmt.Sprintf("仿写画像已导入：新增 %d 篇，跳过重复 %d 篇", result.ImportedSources, result.SkippedSources), nil)
+		emit(StageDone, fmt.Sprintf("Ho so phuong phap viet da nhap: them moi %d bai, bo qua trung lap %d bai", result.ImportedSources, result.SkippedSources), nil)
 	}()
 	return events, nil
 }

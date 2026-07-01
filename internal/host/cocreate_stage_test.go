@@ -10,10 +10,10 @@ import (
 	"github.com/voocel/ainovel-cli/internal/store"
 )
 
-// newFlagTestHost 造一个最小 Host，只够驱动 cocreating 标记状态机与并发守卫。
-// emitEvent 用 recover + 非阻塞 select，缓冲 events 通道即可，无需 coordinator/observer。
-// PauseForCoCreate 的运行态分支会调 coordinator.Abort（复用已验证的 Esc 暂停路径），
-// 不在此单测；这里只覆盖不依赖 coordinator 的非运行态与标记/守卫逻辑。
+// newFlagTestHost tao mot Host toi thieu, du de dieu khien may trang thai co cocreating va guard dong thoi.
+// emitEvent dung recover + select khong chan, dem may kenh events la du, khong can coordinator/observer.
+// Nhanh trang thai chay cua PauseForCoCreate se goi coordinator.Abort (tai su dung duong tam dung Esc da kiem tra),
+// khong o day trong unit test; o day chi bao phu trang thai khong chay va logic co/guard khong phu thuoc coordinator.
 func newFlagTestHost(lc lifecycle, cocreating bool) *Host {
 	return &Host{
 		lifecycle:  lc,
@@ -25,30 +25,30 @@ func newFlagTestHost(lc lifecycle, cocreating bool) *Host {
 func TestPauseForCoCreate_NonRunningSetsFlag(t *testing.T) {
 	h := newFlagTestHost(lifecycleIdle, false)
 	if !h.PauseForCoCreate() {
-		t.Fatal("idle 态应允许进入阶段共创")
+		t.Fatal("Trang thai idle nen cho phep vao dong sang tao giai doan")
 	}
 	if !h.cocreating {
-		t.Error("进入后 cocreating 应为 true")
+		t.Error("Sau khi vao, cocreating nen la true")
 	}
 	if h.lifecycle != lifecycleIdle {
-		t.Errorf("非运行态进入不应改 lifecycle，得 %s", h.lifecycle)
+		t.Errorf("Vao khi khong chay khong nen thay doi lifecycle, got %s", h.lifecycle)
 	}
 }
 
 func TestPauseForCoCreate_RejectsCompleted(t *testing.T) {
 	h := newFlagTestHost(lifecycleCompleted, false)
 	if h.PauseForCoCreate() {
-		t.Error("全书完成后不应允许进入阶段共创")
+		t.Error("Sau khi ca cuon sach hoan thanh khong nen cho phep vao dong sang tao giai doan")
 	}
 	if h.cocreating {
-		t.Error("拒绝后不应置位 cocreating")
+		t.Error("Sau khi tu choi khong nen dat cocreating")
 	}
 }
 
 func TestPauseForCoCreate_RejectsReentrant(t *testing.T) {
 	h := newFlagTestHost(lifecyclePaused, true)
 	if h.PauseForCoCreate() {
-		t.Error("已在共创中应拒绝重入")
+		t.Error("Da trong dong sang tao nen tu choi tai nhap")
 	}
 }
 
@@ -56,36 +56,36 @@ func TestCancelCoCreate_ClearsFlag(t *testing.T) {
 	h := newFlagTestHost(lifecyclePaused, true)
 	h.CancelCoCreate()
 	if h.cocreating {
-		t.Error("取消后 cocreating 应清空")
+		t.Error("Sau khi huy, cocreating nen duoc xoa")
 	}
 	if h.lifecycle != lifecyclePaused {
-		t.Errorf("取消不应改 lifecycle，得 %s", h.lifecycle)
+		t.Errorf("Huy khong nen thay doi lifecycle, got %s", h.lifecycle)
 	}
 }
 
 func TestCancelCoCreate_NoopWhenNotCocreating(t *testing.T) {
 	h := newFlagTestHost(lifecycleRunning, false)
-	h.CancelCoCreate() // 不应 panic，不应改状态
+	h.CancelCoCreate() // Khong nen panic, khong nen thay doi trang thai
 	if h.cocreating || h.lifecycle != lifecycleRunning {
-		t.Error("非共创态 CancelCoCreate 应为 no-op")
+		t.Error("CancelCoCreate khi khong trong dong sang tao nen la no-op")
 	}
 }
 
 func TestResumeFromCoCreate_RejectsEmptyDraft(t *testing.T) {
 	h := newFlagTestHost(lifecyclePaused, true)
 	if err := h.ResumeFromCoCreate("   "); err == nil {
-		t.Fatal("空 draft 应报错")
+		t.Fatal("Draft rong nen bao loi")
 	}
 	if !h.cocreating {
-		t.Error("空 draft 在清标记前返回，cocreating 应保持 true")
+		t.Error("Draft rong tra ve truoc khi xoa co, cocreating nen giu true")
 	}
 }
 
 func TestResumeFromCoCreate_RejectsWhenNotCocreating(t *testing.T) {
 	h := newFlagTestHost(lifecyclePaused, false)
-	err := h.ResumeFromCoCreate("## 后续走向\n- 进入第二卷")
+	err := h.ResumeFromCoCreate("## Hướng đi tiếp theo\n- Bước vào tập 2")
 	if err == nil || !strings.Contains(err.Error(), "not in co-create") {
-		t.Fatalf("非共创态应报 not in co-create，得 %v", err)
+		t.Fatalf("Khi khong trong dong sang tao nen bao not in co-create, got %v", err)
 	}
 }
 
@@ -94,64 +94,64 @@ func TestGuardExclusive(t *testing.T) {
 		name       string
 		lc         lifecycle
 		cocreating bool
-		wantErr    string // 空=期望放行
+		wantErr    string // Rong = ky vong cho phep
 	}{
-		{"running", lifecycleRunning, false, "运行中"},
-		{"cocreating", lifecyclePaused, true, "阶段共创"},
+		{"running", lifecycleRunning, false, "dang chay"},
+		{"cocreating", lifecyclePaused, true, "dong sang tao"},
 		{"idle free", lifecycleIdle, false, ""},
 		{"paused free", lifecyclePaused, false, ""},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			h := newFlagTestHost(c.lc, c.cocreating)
-			err := h.guardExclusive("导入")
+			err := h.guardExclusive("nhap")
 			if c.wantErr == "" {
 				if err != nil {
-					t.Fatalf("应放行，得 %v", err)
+					t.Fatalf("Nen cho phep, got %v", err)
 				}
 				return
 			}
 			if err == nil || !strings.Contains(err.Error(), c.wantErr) {
-				t.Fatalf("应含 %q，得 %v", c.wantErr, err)
+				t.Fatalf("Nen chua %q, got %v", c.wantErr, err)
 			}
-			if !strings.Contains(err.Error(), "导入") {
-				t.Errorf("错误文案应带 action %q，得 %v", "导入", err)
+			if !strings.Contains(err.Error(), "nhap") {
+				t.Errorf("Thong bao loi nen chua action %q, got %v", "nhap", err)
 			}
 		})
 	}
 }
 
-// TestStageCoCreate_OccupancyBlocksConcurrentEntries 验证共创窗口内独占性入口全部被堵：
-// import/start/resume/continue 在 cocreating 期间都应被拒，补上 paused 期只查 ==running 的缺口。
+// TestStageCoCreate_OccupancyBlocksConcurrentEntries kiem tra tat ca diem vao doc quyen trong cua so dong sang tao deu bi chan:
+// import/start/resume/continue trong khi cocreating deu nen bi tu choi, bu vao khe chi kiem tra ==running trong khi paused.
 func TestStageCoCreate_OccupancyBlocksConcurrentEntries(t *testing.T) {
 	h := newFlagTestHost(lifecycleIdle, false)
 	if !h.PauseForCoCreate() {
-		t.Fatal("进入阶段共创失败")
+		t.Fatal("Vao dong sang tao giai doan that bai")
 	}
 
 	if _, err := h.ImportFrom(context.Background(), imp.Options{}); err == nil {
-		t.Error("共创窗口内 ImportFrom 应被拒")
+		t.Error("ImportFrom trong cua so dong sang tao nen bi tu choi")
 	}
-	if err := h.StartPrepared("写个新故事"); err == nil {
-		t.Error("共创窗口内 StartPrepared 应被拒")
+	if err := h.StartPrepared("viet mot cau chuyen moi"); err == nil {
+		t.Error("StartPrepared trong cua so dong sang tao nen bi tu choi")
 	}
 	if _, err := h.Resume(); err == nil {
-		t.Error("共创窗口内 Resume 应被拒")
+		t.Error("Resume trong cua so dong sang tao nen bi tu choi")
 	}
-	if err := h.Continue("继续写"); err == nil {
-		t.Error("共创窗口内 Continue 应被拒")
+	if err := h.Continue("tiep tuc viet"); err == nil {
+		t.Error("Continue trong cua so dong sang tao nen bi tu choi")
 	}
 
-	// 退出共创后占用解除（这里走 Cancel；Resume 注入路径需 coordinator，归集成验证）
+	// Giai phong chiem dung sau khi thoat dong sang tao (o day dung Cancel; duong nap Resume can coordinator, kiem tra o lop tich hop)
 	h.CancelCoCreate()
 	if h.cocreating {
-		t.Fatal("退出后占用标记应解除")
+		t.Fatal("Sau khi thoat co chiem dung nen duoc giai phong")
 	}
 }
 
 func TestBuildStoryStateSummary_NilStore(t *testing.T) {
 	if got := buildStoryStateSummary(nil); got != "" {
-		t.Errorf("nil store 应返回空串，得 %q", got)
+		t.Errorf("nil store nen tra ve chuoi rong, got %q", got)
 	}
 }
 
@@ -161,7 +161,7 @@ func TestBuildStoryStateSummary_Populated(t *testing.T) {
 	if err := st.Init(); err != nil {
 		t.Fatal(err)
 	}
-	if err := st.Progress.Init("影之诗", 100); err != nil {
+	if err := st.Progress.Init("Bài thơ bóng tối", 100); err != nil {
 		t.Fatal(err)
 	}
 	p, _ := st.Progress.Load()
@@ -171,17 +171,17 @@ func TestBuildStoryStateSummary_Populated(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := st.Outline.SaveCompass(domain.StoryCompass{
-		EndingDirection: "主角登临绝巅",
-		OpenThreads:     []string{"师门血仇未报"},
-		EstimatedScale:  "预计 4-6 卷",
+		EndingDirection: "Nhân vật chính leo đến đỉnh tuyệt đối",
+		OpenThreads:     []string{"Mối thù huyết môn phái chưa trả"},
+		EstimatedScale:  "Dự kiến 4-6 tập",
 	}); err != nil {
 		t.Fatal(err)
 	}
 
 	got := buildStoryStateSummary(st)
-	for _, want := range []string{"影之诗", "已完成 3 章", "下一章为第 4 章", "主角登临绝巅", "师门血仇未报", "预计 4-6 卷"} {
+	for _, want := range []string{"Bài thơ bóng tối", "đã hoàn thành 3 chương", "chương tiếp theo là chương 4", "Nhân vật chính leo đến đỉnh tuyệt đối", "Mối thù huyết môn phái chưa trả", "Dự kiến 4-6 tập"} {
 		if !strings.Contains(got, want) {
-			t.Errorf("摘要应含 %q，实际:\n%s", want, got)
+			t.Errorf("Tom tat nen chua %q, thuc te:\n%s", want, got)
 		}
 	}
 }
