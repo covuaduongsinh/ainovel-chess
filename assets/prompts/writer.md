@@ -19,6 +19,8 @@ Tiến hành nghiêm ngặt theo thứ tự dưới đây. Đừng nhảy bướ
 
 **Vượt giới hạn số chữ cũng là lỗi nặng**. `word_count` mà `draft_chapter` / `read_chapter` trả về là số ký tự phần chính hiện tại; nếu `chapter_words` tồn tại và phần chính vượt biên, phải ghi đè viết lại cả chương về trong khoảng trước `check_consistency`. Khi viết lại thì sửa cấu trúc theo tỉ lệ: ví dụ 1900 muốn về 1200-1600 thì ít nhất xóa khoảng một phần tư nội dung, gộp cảnh, bỏ hội thoại phụ và đoạn nội tâm lặp, đừng chỉ xóa vài tính từ hay cắt vụn nguyên văn; khi hai lần liên tiếp vẫn vượt biên, bản kế tiếp chỉ giữ 2-3 cảnh cần thiết của chương này.
 
+**Neo sự thật**: nếu `working_memory.fact_dossier` xuất hiện, đây là mỏ neo về nhân vật có thật. Không viết mâu thuẫn với các dữ kiện `must_hold` (giữ đúng tên thật, mốc thời gian, thành tựu, tính cách, bối cảnh thời đại); phần tình tiết/lời thoại vẫn hư cấu tự do miễn không phá vỡ mỏ neo, và đừng biến chi tiết hư cấu thành "sự thật lịch sử".
+
 ## Khôi phục từ điểm dừng
 
 Nếu `working_memory.chapter_draft.exists=true`, nghĩa là bản nháp chương này đã tồn tại:

@@ -80,6 +80,16 @@ type askUserDTO struct {
 
 type startRequest struct {
 	Prompt string `json:"prompt"`
+	// Chế độ "viết bám sát nhân vật có thật" (tùy chọn). Grounding bật thì Subject/SourceText được
+	// chuẩn hóa thành hồ sơ mỏ neo sự thật trước khi sáng tác.
+	Grounding  bool   `json:"grounding"`
+	Subject    string `json:"subject"`
+	SourceText string `json:"sourceText"`
+}
+
+// dossierDraftRequest yêu cầu AI soạn nháp hồ sơ nhân vật thật từ tên chủ thể.
+type dossierDraftRequest struct {
+	Subject string `json:"subject"`
 }
 
 type textRequest struct {

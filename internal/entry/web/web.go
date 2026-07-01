@@ -23,8 +23,9 @@ import (
 
 // Options kiểm soát hành vi của điểm vào web.
 type Options struct {
-	Port int  // cổng lắng nghe; 0 hoặc bị chiếm thì tự động chọn cổng trống
-	Open bool // có tự động mở trình duyệt không
+	Port      int    // cổng lắng nghe; 0 hoặc bị chiếm thì tự động chọn cổng trống
+	Open      bool   // có tự động mở trình duyệt không
+	OutputDir string // ghi đè thư mục đầu ra (mặc định output/novel)
 }
 
 // swapHandler cho phép cùng một cổng lắng nghe chuyển đổi liền mạch giữa "trang thiết lập lần đầu" và "bàn làm việc chính thức":
@@ -94,6 +95,9 @@ func RunWeb(configPath, version string, opts Options) error {
 	cfg, err := bootstrap.LoadConfig(configPath)
 	if err != nil {
 		return fmt.Errorf("config: %w", err)
+	}
+	if opts.OutputDir != "" {
+		cfg.OutputDir = opts.OutputDir
 	}
 	bundle := assets.Load(cfg.Style)
 	eng, err := host.New(cfg, bundle)

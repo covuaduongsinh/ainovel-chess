@@ -51,7 +51,7 @@ func main() {
 
 	// Chế độ Web tự có hướng dẫn lần đầu trong trình duyệt, không đi qua setup wizard trên terminal.
 	if opts.Web {
-		if err := web.RunWeb(opts.ConfigPath, versionInfo().Version, web.Options{Port: opts.Port, Open: true}); err != nil {
+		if err := web.RunWeb(opts.ConfigPath, versionInfo().Version, web.Options{Port: opts.Port, Open: true, OutputDir: opts.OutputDir}); err != nil {
 			die("lỗi: %v", err)
 		}
 		return
@@ -136,6 +136,7 @@ func runWithConfig(cfg bootstrap.Config, opts cliOptions, args []string) {
 
 type cliOptions struct {
 	ConfigPath    string
+	OutputDir     string
 	Headless      bool
 	Web           bool
 	Port          int
@@ -179,6 +180,12 @@ func parseCLIOptions(argv []string) (cliOptions, []string, error) {
 				return opts, nil, fmt.Errorf("--config thiếu giá trị")
 			}
 			opts.ConfigPath = argv[i+1]
+			i++
+		case "--output":
+			if i+1 >= len(argv) {
+				return opts, nil, fmt.Errorf("--output thiếu giá trị")
+			}
+			opts.OutputDir = argv[i+1]
 			i++
 		case "--headless":
 			opts.Headless = true

@@ -58,6 +58,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/continue", s.handleContinue)
 	s.mux.HandleFunc("POST /api/abort", s.handleAbort)
 	s.mux.HandleFunc("POST /api/answer", s.handleAnswer)
+	s.mux.HandleFunc("POST /api/dossier/draft", s.handleDossierDraft)
 
 	// Mô hình / mức độ suy luận
 	s.mux.HandleFunc("GET /api/models", s.handleModels)

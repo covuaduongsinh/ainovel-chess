@@ -116,6 +116,7 @@ func (t *ContextTool) Execute(_ context.Context, args json.RawMessage) (json.Raw
 	}
 
 	t.buildUserRules(result)
+	t.buildDossier(result)
 
 	if len(warnings) > 0 {
 		result["_warnings"] = warnings

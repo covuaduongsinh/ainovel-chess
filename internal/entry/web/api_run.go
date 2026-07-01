@@ -30,6 +30,10 @@ func (s *Server) handleStart(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
+	if err := s.eng.PrepareDossier(strings.TrimSpace(req.Subject), req.SourceText, req.Grounding); err != nil {
+		writeErr(w, http.StatusInternalServerError, err)
+		return
+	}
 	if err := s.eng.PrepareUserRules(plan.RawPrompt); err != nil {
 		writeErr(w, http.StatusInternalServerError, err)
 		return

@@ -151,6 +151,24 @@ func (t *ContextTool) buildUserRules(result map[string]any) {
 	working["user_rules"] = snap.Payload()
 }
 
+// buildDossier tiem ho so "nhan vat that" (mo neo su that) vao working_memory.fact_dossier khi che do grounding bat.
+//
+// Cung duong canonical voi user_rules: architect (chapter=0) va writer (chapter>0) deu doc duoc tu cung mot khoa.
+// Chi bom khi Enabled va co noi dung; khong bom thi khong tao khoa (LLM khong thay fact_dossier = che do tat).
+// working_memory khong nam trong danh sach cat ngan sach (trimByBudget) nen mo neo su that khong bao gio bi trim mat.
+func (t *ContextTool) buildDossier(result map[string]any) {
+	d, err := t.store.Dossier.Load()
+	if err != nil || !d.HasContent() {
+		return
+	}
+	working, ok := result["working_memory"].(map[string]any)
+	if !ok {
+		working = map[string]any{}
+		result["working_memory"] = working
+	}
+	working["fact_dossier"] = d.Payload()
+}
+
 func (t *ContextTool) buildSimulationProfile(result map[string]any, sectionKey string, warn func(string, error)) {
 	profile, err := t.store.Simulation.Load()
 	if err != nil {

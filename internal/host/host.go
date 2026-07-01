@@ -18,6 +18,7 @@ import (
 	"github.com/voocel/ainovel-cli/internal/agents/ctxpack"
 	"github.com/voocel/ainovel-cli/internal/bootstrap"
 	"github.com/voocel/ainovel-cli/internal/domain"
+	"github.com/voocel/ainovel-cli/internal/dossier"
 	"github.com/voocel/ainovel-cli/internal/host/exp"
 	"github.com/voocel/ainovel-cli/internal/host/flow"
 	"github.com/voocel/ainovel-cli/internal/host/imp"
@@ -203,6 +204,38 @@ func (h *Host) PrepareUserRules(rawPrompt string) error {
 	}
 	logUserRulesSnapshot(snap)
 	return nil
+}
+
+// PrepareDossier tạo hồ sơ "nhân vật thật" (mỏ neo sự thật) của cuốn sách này khi bắt đầu sáng tác.
+// Xác định từ phía khởi động (không qua Coordinator), gọi một lần trước StartPrepared cùng chỗ với PrepareUserRules.
+//
+// Khi enabled=false vẫn ghi một hồ sơ tắt để downstream nhất quán (novel_context bỏ qua khi !Enabled).
+// Khi bật: chuẩn hóa sourceText người dùng đã duyệt thành dữ kiện có cấu trúc rồi lưu với Confirmed=true.
+// Chuẩn hóa thất bại chỉ giáng cấp (giữ tư liệu thô), chỉ lỗi ghi đĩa mới trả error.
+func (h *Host) PrepareDossier(subject, sourceText string, enabled bool) error {
+	if !enabled {
+		return h.store.Dossier.Save(&domain.Dossier{Enabled: false, Fidelity: domain.FidelityAnchored})
+	}
+	svc := dossier.NewService(h.models.Default)
+	d, err := svc.NormalizeSource(context.Background(), subject, sourceText)
+	if err != nil {
+		return fmt.Errorf("chuẩn hóa hồ sơ nhân vật thất bại: %w", err)
+	}
+	d.Enabled = true
+	d.Draft = false
+	d.Confirmed = true
+	if err := h.store.Dossier.Save(&d); err != nil {
+		return fmt.Errorf("ghi hồ sơ nhân vật thất bại, không thể tiếp tục: %w", err)
+	}
+	slog.Info("Đã tạo hồ sơ nhân vật thật", "module", "dossier", "subject", d.Subject, "facts", len(d.Facts))
+	return nil
+}
+
+// DraftDossier để AI soạn nháp hồ sơ từ tên nhân vật, phục vụ nút "Soạn hồ sơ" trên giao diện.
+// KHÔNG ghi store — chỉ trả bản nháp để người dùng duyệt/sửa; hồ sơ chính thức được lưu ở PrepareDossier.
+func (h *Host) DraftDossier(subject string) (domain.Dossier, error) {
+	svc := dossier.NewService(h.models.Default)
+	return svc.DraftFromSubject(context.Background(), subject)
 }
 
 // ensureUserRules lazily đảm bảo snapshot tồn tại (khi sách cũ không có snapshot thì tạo theo system_defaults + file rules).

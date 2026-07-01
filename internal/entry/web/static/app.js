@@ -1,7 +1,7 @@
 'use strict';
 
 // ── State ──
-const state = { snapshot: null, cc: null };
+const state = { snapshot: null, cc: null, grounding: { enabled: false, subject: '', sourceText: '' } };
 const $ = (id) => document.getElementById(id);
 
 function api(path, body) {
@@ -505,6 +505,40 @@ function openSimulate() {
   };
 }
 
+function openGrounding() {
+  const g = state.grounding;
+  openModal(`<h2>Viết bám sát nhân vật có thật</h2><div class="sub">Neo truyện vào một nhân vật/chủ thể CÓ THẬT: giữ đúng tên, mốc thời gian, thành tựu, tính cách thật làm mỏ neo; phần phiêu lưu vẫn hư cấu tự do. Áp dụng cho lần "Bắt đầu" kế tiếp.</div>
+    <label class="opt"><input type="checkbox" id="grEnabled" ${g.enabled ? 'checked' : ''} /><span class="opt-label">Bật chế độ bám sát nhân vật có thật</span></label>
+    <label style="margin-top:12px">Tên nhân vật có thật</label>
+    <input type="text" id="grSubject" placeholder="vd: Wilhelm Steinitz" value="${escapeHTML(g.subject)}" />
+    <label style="margin-top:12px">Tư liệu tham khảo (dán tiểu sử/dữ kiện thật — để trống rồi bấm “Soạn hồ sơ” để AI soạn nháp)</label>
+    <textarea id="grSource" rows="8" placeholder="Dán tiểu sử, mốc thời gian, thành tựu, tính cách… của nhân vật.">${escapeHTML(g.sourceText)}</textarea>
+    <div class="sub" id="grNote" style="margin-top:6px"></div>
+    <div class="modal-actions">
+      <button class="btn" id="grDraft">✦ Soạn hồ sơ (AI)</button>
+      <button class="btn" onclick="closeModal()">Hủy</button>
+      <button class="btn primary" id="grSave">Lưu</button></div>`);
+  $('grDraft').onclick = () => {
+    const subject = $('grSubject').value.trim();
+    if (!subject) return toast('Nhập tên nhân vật có thật trước', 'err');
+    $('grDraft').disabled = true;
+    $('grNote').textContent = '⏳ AI đang soạn nháp… (dựa vào trí nhớ mô hình, cần bạn kiểm chứng)';
+    api('/api/dossier/draft', { subject }).then((r) => {
+      $('grSource').value = r.markdown || '';
+      $('grNote').textContent = '⚠ ' + (r.disclaimer || 'Bản nháp AI — hãy kiểm chứng và chỉnh sửa trước khi dùng.');
+    }).catch((e) => toast(e.message, 'err')).finally(() => { $('grDraft').disabled = false; });
+  };
+  $('grSave').onclick = () => {
+    state.grounding = {
+      enabled: $('grEnabled').checked,
+      subject: $('grSubject').value.trim(),
+      sourceText: $('grSource').value.trim(),
+    };
+    closeModal();
+    toast(state.grounding.enabled ? '✓ Đã bật bám sát nhân vật thật cho lần Bắt đầu kế tiếp' : 'Đã tắt bám sát nhân vật thật', 'ok');
+  };
+}
+
 function openDiag() {
   openModal(`<h2>Chẩn đoán</h2><div class="sub">Đang phân tích sức khỏe sáng tác… có thể mất vài giây.</div><div id="diagBody">⏳ Đang chạy…</div>`);
   api('/api/diag').then((r) => renderDiag(r)).catch((e) => { $('diagBody').innerHTML = `<div class="errline">${escapeHTML(e.message)}</div>`; });
@@ -592,7 +626,9 @@ function onPrimary() {
   if (isFresh(s)) {
     if (!text) return toast('Nhập yêu cầu sáng tác', 'err');
     $('btnPrimary').disabled = true;
-    api('/api/start', { prompt: text }).then(() => { input.value = ''; }).catch((e) => toast(e.message, 'err'))
+    const g = state.grounding || {};
+    api('/api/start', { prompt: text, grounding: !!g.enabled, subject: g.subject || '', sourceText: g.sourceText || '' })
+      .then(() => { input.value = ''; }).catch((e) => toast(e.message, 'err'))
       .finally(() => { $('btnPrimary').disabled = false; });
     return;
   }
@@ -621,6 +657,7 @@ function bindUI() {
       if (cmd === 'export') return openExport();
       if (cmd === 'import') return openImport();
       if (cmd === 'simulate') return openSimulate();
+      if (cmd === 'grounding') return openGrounding();
       if (cmd === 'diag') return openDiag();
       if (cmd === 'cocreate') return openCoCreate(!isFresh(state.snapshot));
     };
