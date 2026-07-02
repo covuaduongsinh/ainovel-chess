@@ -450,16 +450,19 @@ Có thể dùng chính bộ mô hình trong Claude Code (Opus 4.8, Opus 4.7, Son
 1. **Chuẩn bị backend:** khởi động cầu nối Meridian ở `http://127.0.0.1:3456` (đường thuê bao), hoặc chuẩn bị một API key (đường trả-theo-token).
 2. **Thiết lập:** chạy `ainovel-cli` (hoặc `--web`), ở wizard chọn **"Claude Code"**, để Base URL mặc định `http://127.0.0.1:3456` (Meridian) — hoặc đổi thành `https://api.anthropic.com` + điền API key, rồi đồng ý **bật preset tự-chọn cân bằng**. Wizard sẽ dựng sẵn provider `claude-code` (type anthropic) kèm danh mục 4 model.
 3. **Tự chọn tay:** gõ `/model` (TUI) hoặc mở bảng Mô hình (Web) — 4 model Claude hiện sẵn để đổi theo từng vai.
-4. **Tự động chọn:** gõ `/model auto` (TUI) hoặc bấm nút **"Tự chọn (Claude cân bằng)"** (Web) để áp preset cân bằng:
+4. **Tự động chọn (2 preset):** gõ `/model auto` (TUI) hoặc bấm nút **"Tự chọn: Chuẩn / Tiết kiệm"** (Web) để áp một trong hai preset:
 
-| Vai trò | Model | Cường độ suy luận |
+| Vai trò | **Chuẩn** (`/model auto`) | **Tiết kiệm** (`/model auto tietkiem`) |
 |---|---|---|
-| Writer | `claude-opus-4-8` | high |
-| Architect | `claude-opus-4-8` | high |
-| Editor | `claude-sonnet-4-6` | medium |
-| Coordinator | `claude-sonnet-4-6` | medium |
+| Writer | `claude-opus-4-8` · high | `claude-sonnet-4-6` · high |
+| Architect | `claude-opus-4-8` · high | `claude-sonnet-4-6` · medium |
+| Editor | `claude-sonnet-4-6` · medium | `claude-sonnet-4-6` · medium |
+| Coordinator | `claude-sonnet-4-6` · medium | `claude-haiku-4-5` · medium |
 
-Preset ưu tiên chất lượng nơi quan trọng (viết prose, dựng thế giới) và tiết kiệm cho điều phối/xét duyệt; mọi thay đổi được ghi vào `~/.ainovel/config.json`. Muốn chỉnh khác vai nào thì đổi tay trong `/model` (ví dụ đưa Editor lên Opus, hoặc chọn `claude-haiku-4-5` cho rẻ hơn). Với "viết tiếp bộ truyện hiện có": `cd` vào thư mục truyện cũ rồi khởi động — engine tự khôi phục và viết tiếp bằng model Claude đã chọn.
+- **Chuẩn** — chất lượng cao nhất: Opus cho viết prose + dựng thế giới.
+- **Tiết kiệm** — bỏ Opus (khoản tốn nhất vì Writer chạy mỗi chương), giữ Writer/Architect/Editor ở Sonnet, Coordinator xuống Haiku. Rẻ hơn ~40–50% nhưng prose vẫn ở mức Sonnet — hợp khi hạn mức thuê bao eo hẹp hoặc viết truyện rất dài.
+
+Mọi thay đổi được ghi vào `~/.ainovel/config.json`. Muốn tinh chỉnh riêng vai nào thì đổi tay trong `/model` (ví dụ đưa Editor lên Opus, hoặc hạ Writer xuống `claude-haiku-4-5` cho rẻ nhất). Với "viết tiếp bộ truyện hiện có": `cd` vào thư mục truyện cũ rồi khởi động — engine tự khôi phục và viết tiếp bằng model Claude đã chọn.
 
 Ví dụ khối `providers.claude-code` tương ứng (tham chiếu `config.example.jsonc`):
 

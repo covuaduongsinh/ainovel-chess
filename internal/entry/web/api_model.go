@@ -1,6 +1,7 @@
 package web
 
 import (
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -60,20 +61,31 @@ func (s *Server) handleSwitchModel(w http.ResponseWriter, r *http.Request) {
 	writeOK(w, nil)
 }
 
-// handleModelAuto áp preset Claude "cân bằng" cho cả bốn vai qua provider claude-code.
-// Yêu cầu provider "claude-code" đã được cấu hình (chạy setup chọn Claude Code).
-func (s *Server) handleModelAuto(w http.ResponseWriter, _ *http.Request) {
-	for _, p := range bootstrap.BalancedClaudeRoles() {
-		if err := s.eng.SwitchModel(p.Role, bootstrap.ClaudeCodeProvider, p.Model); err != nil {
+type modelAutoRequest struct {
+	Preset string `json:"preset"` // standard (mặc định) | economy
+}
+
+// handleModelAuto áp một preset Claude (theo body {preset}) cho cả bốn vai qua provider
+// claude-code. Body rỗng = preset "Chuẩn". Yêu cầu provider "claude-code" đã được cấu hình.
+func (s *Server) handleModelAuto(w http.ResponseWriter, r *http.Request) {
+	var req modelAutoRequest
+	_ = decodeBody(r, &req) // body tùy chọn: rỗng → preset mặc định
+	preset, ok := bootstrap.ClaudePresetByKey(req.Preset)
+	if !ok {
+		writeErr(w, http.StatusBadRequest, fmt.Errorf("preset không hợp lệ %q (chọn: %s)", req.Preset, bootstrap.PresetKeysHint()))
+		return
+	}
+	for _, rp := range preset.Roles {
+		if err := s.eng.SwitchModel(rp.Role, bootstrap.ClaudeCodeProvider, rp.Model); err != nil {
 			writeErr(w, http.StatusBadRequest, err)
 			return
 		}
-		if err := s.eng.SetRoleThinking(p.Role, p.Effort); err != nil {
+		if err := s.eng.SetRoleThinking(rp.Role, rp.Effort); err != nil {
 			writeErr(w, http.StatusBadRequest, err)
 			return
 		}
 	}
-	writeOK(w, nil)
+	writeOK(w, map[string]any{"preset": preset.Key, "label": preset.Label})
 }
 
 type thinkingResponse struct {

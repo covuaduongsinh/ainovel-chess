@@ -83,3 +83,77 @@ func TestBalancedClaudeRolesCoverKnownRoles(t *testing.T) {
 		}
 	}
 }
+
+// Registry preset: cả hai preset (Chuẩn + Tiết kiệm) phải hợp lệ, và mỗi preset thể hiện đúng
+// ý đồ — Chuẩn dùng Opus cho writer/architect; Tiết kiệm bỏ Opus nhưng giữ writer ở Sonnet.
+func TestClaudePresets(t *testing.T) {
+	inCatalog := make(map[string]bool, len(ClaudeModelCatalog))
+	for _, id := range ClaudeModelCatalog {
+		inCatalog[id] = true
+	}
+	validEffort := map[string]bool{"": true, "off": true, "low": true, "medium": true, "high": true, "xhigh": true, "max": true}
+
+	presets := ClaudePresets()
+	if len(presets) < 2 {
+		t.Fatalf("cần ít nhất 2 preset (Chuẩn + Tiết kiệm), có %d", len(presets))
+	}
+	for _, p := range presets {
+		if p.Key == "" || p.Label == "" {
+			t.Errorf("preset thiếu Key/Label: %+v", p)
+		}
+		seen := make(map[string]bool)
+		for _, r := range p.Roles {
+			if !knownRoles[r.Role] {
+				t.Errorf("preset %q: vai %q không hợp lệ", p.Key, r.Role)
+			}
+			if !inCatalog[r.Model] {
+				t.Errorf("preset %q: vai %q model %q ngoài danh mục", p.Key, r.Role, r.Model)
+			}
+			if !validEffort[r.Effort] {
+				t.Errorf("preset %q: vai %q effort %q không hợp lệ", p.Key, r.Role, r.Effort)
+			}
+			seen[r.Role] = true
+		}
+		for role := range knownRoles {
+			if !seen[role] {
+				t.Errorf("preset %q thiếu vai %q", p.Key, role)
+			}
+		}
+	}
+
+	// Tiết kiệm: không dùng Opus, writer vẫn Sonnet (giữ chất lượng prose).
+	eco, ok := ClaudePresetByKey(PresetEconomy)
+	if !ok {
+		t.Fatal("không tìm thấy preset economy")
+	}
+	for _, r := range eco.Roles {
+		if strings.Contains(r.Model, "opus") {
+			t.Errorf("preset Tiết kiệm không nên dùng Opus, nhưng vai %q = %q", r.Role, r.Model)
+		}
+		if r.Role == "writer" && r.Model != "claude-sonnet-4-6" {
+			t.Errorf("preset Tiết kiệm: writer nên là Sonnet (giữ chất lượng), nhận %q", r.Model)
+		}
+	}
+
+	// Chuẩn: writer + architect dùng Opus.
+	std, ok := ClaudePresetByKey(PresetStandard)
+	if !ok {
+		t.Fatal("không tìm thấy preset standard")
+	}
+	for _, r := range std.Roles {
+		if (r.Role == "writer" || r.Role == "architect") && !strings.Contains(r.Model, "opus") {
+			t.Errorf("preset Chuẩn: vai %q nên dùng Opus, nhận %q", r.Role, r.Model)
+		}
+	}
+
+	// Bí danh + mặc định + key lạ.
+	if p, ok := ClaudePresetByKey(""); !ok || p.Key != PresetStandard {
+		t.Errorf("key rỗng phải về standard, nhận %q ok=%v", p.Key, ok)
+	}
+	if p, ok := ClaudePresetByKey("tietkiem"); !ok || p.Key != PresetEconomy {
+		t.Errorf("alias 'tietkiem' phải về economy, nhận %q ok=%v", p.Key, ok)
+	}
+	if _, ok := ClaudePresetByKey("khong-ton-tai"); ok {
+		t.Error("key lạ phải trả về ok=false")
+	}
+}

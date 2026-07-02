@@ -60,28 +60,99 @@ type RolePreset struct {
 	Effort string // off/low/medium/high/xhigh/max — rỗng = kế thừa mặc định
 }
 
-// BalancedClaudeRoles trả về preset "cân bằng chất lượng/chi phí": Opus cho công việc
-// sáng tạo nặng (writer/architect), Sonnet cho điều phối và xét duyệt. Trả về theo thứ tự
-// cố định để lặp xác định. Đây là nguồn duy nhất cho setup wizard, lệnh /model auto và API web.
-func BalancedClaudeRoles() []RolePreset {
-	return []RolePreset{
-		{Role: "coordinator", Model: "claude-sonnet-4-6", Effort: "medium"},
-		{Role: "architect", Model: "claude-opus-4-8", Effort: "high"},
-		{Role: "writer", Model: "claude-opus-4-8", Effort: "high"},
-		{Role: "editor", Model: "claude-sonnet-4-6", Effort: "medium"},
+// Preset keys cho tự-chọn model Claude.
+const (
+	PresetStandard = "standard" // "Chuẩn": Opus cho writer/architect, Sonnet cho coordinator/editor
+	PresetEconomy  = "economy"  // "Tiết kiệm": bỏ Opus — Sonnet cho writer/architect/editor, Haiku cho coordinator
+)
+
+// ClaudePreset là một cấu hình gán model theo vai có tên, dùng cho tự-chọn nhanh.
+type ClaudePreset struct {
+	Key   string // định danh máy (standard/economy)
+	Label string // nhãn hiển thị (thông báo TUI, nút Web)
+	Desc  string // mô tả ngắn
+	Roles []RolePreset
+}
+
+// ClaudePresets trả về các preset tự-chọn theo thứ tự cố định (standard trước).
+// Đây là nguồn duy nhất cho setup wizard, lệnh /model auto và API web.
+func ClaudePresets() []ClaudePreset {
+	return []ClaudePreset{
+		{
+			Key:   PresetStandard,
+			Label: "Chuẩn (cân bằng)",
+			Desc:  "Opus cho Writer/Architect, Sonnet cho Coordinator/Editor — chất lượng cao nhất",
+			Roles: []RolePreset{
+				{Role: "coordinator", Model: "claude-sonnet-4-6", Effort: "medium"},
+				{Role: "architect", Model: "claude-opus-4-8", Effort: "high"},
+				{Role: "writer", Model: "claude-opus-4-8", Effort: "high"},
+				{Role: "editor", Model: "claude-sonnet-4-6", Effort: "medium"},
+			},
+		},
+		{
+			Key:   PresetEconomy,
+			Label: "Tiết kiệm (vẫn tối ưu chất lượng)",
+			Desc:  "Bỏ Opus: Sonnet cho Writer/Architect/Editor, Haiku cho Coordinator — rẻ hơn nhưng giữ prose ở Sonnet",
+			Roles: []RolePreset{
+				{Role: "coordinator", Model: "claude-haiku-4-5", Effort: "medium"},
+				{Role: "architect", Model: "claude-sonnet-4-6", Effort: "medium"},
+				{Role: "writer", Model: "claude-sonnet-4-6", Effort: "high"},
+				{Role: "editor", Model: "claude-sonnet-4-6", Effort: "medium"},
+			},
+		},
 	}
 }
 
-// BalancedRoleConfigs chuyển preset cân bằng thành map[string]RoleConfig sẵn sàng ghi
-// vào Config.Roles cho provider chỉ định (mặc định là ClaudeCodeProvider).
-func BalancedRoleConfigs(provider string) map[string]RoleConfig {
-	roles := make(map[string]RoleConfig, 4)
-	for _, p := range BalancedClaudeRoles() {
-		roles[p.Role] = RoleConfig{
+// ClaudePresetByKey giải quyết preset theo key, chấp nhận một số bí danh thân thiện.
+// Key rỗng → preset "standard" (mặc định). Trả về false nếu key không nhận ra.
+func ClaudePresetByKey(key string) (ClaudePreset, bool) {
+	switch strings.ToLower(strings.TrimSpace(key)) {
+	case "", PresetStandard, "chuan", "balanced", "canbang", "default":
+		key = PresetStandard
+	case PresetEconomy, "tietkiem", "tiet-kiem", "tiet_kiem", "save", "cheap", "tk":
+		key = PresetEconomy
+	default:
+		return ClaudePreset{}, false
+	}
+	for _, p := range ClaudePresets() {
+		if p.Key == key {
+			return p, true
+		}
+	}
+	return ClaudePreset{}, false
+}
+
+// PresetKeysHint trả về danh sách key hợp lệ để hiển thị trong thông báo lỗi.
+func PresetKeysHint() string {
+	keys := make([]string, 0, 2)
+	for _, p := range ClaudePresets() {
+		keys = append(keys, p.Key)
+	}
+	return strings.Join(keys, " / ")
+}
+
+// RoleConfigs chuyển preset thành map[string]RoleConfig sẵn sàng ghi vào Config.Roles cho provider chỉ định.
+func (p ClaudePreset) RoleConfigs(provider string) map[string]RoleConfig {
+	roles := make(map[string]RoleConfig, len(p.Roles))
+	for _, r := range p.Roles {
+		roles[r.Role] = RoleConfig{
 			Provider:        provider,
-			Model:           p.Model,
-			ReasoningEffort: p.Effort,
+			Model:           r.Model,
+			ReasoningEffort: r.Effort,
 		}
 	}
 	return roles
+}
+
+// BalancedClaudeRoles trả về roles của preset mặc định ("Chuẩn"). Giữ để tương thích
+// với setup wizard + test hiện có (cài đặt lần đầu luôn dùng preset Chuẩn).
+func BalancedClaudeRoles() []RolePreset {
+	p, _ := ClaudePresetByKey(PresetStandard)
+	return p.Roles
+}
+
+// BalancedRoleConfigs = RoleConfigs của preset "Chuẩn" cho provider chỉ định.
+func BalancedRoleConfigs(provider string) map[string]RoleConfig {
+	p, _ := ClaudePresetByKey(PresetStandard)
+	return p.RoleConfigs(provider)
 }

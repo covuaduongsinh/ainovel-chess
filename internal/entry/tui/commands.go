@@ -66,12 +66,16 @@ func commandRegistryInstance() commandRegistry {
 		{
 			Name:        "model",
 			Group:       "system",
-			Usage:       "/model [role|auto]",
-			Description: "Chuyển model mặc định/theo vai; 'auto' áp preset Claude cân bằng",
+			Usage:       "/model [role|auto [chuan|tietkiem]]",
+			Description: "Chuyển model theo vai; 'auto' áp preset Claude (chuan=Chuẩn, tietkiem=Tiết kiệm)",
 			AutoExecute: true,
 			Run: func(m Model, args []string) (tea.Model, tea.Cmd) {
 				if len(args) > 0 && strings.EqualFold(args[0], "auto") {
-					return m.applyModelAutoPreset()
+					preset := ""
+					if len(args) > 1 {
+						preset = args[1]
+					}
+					return m.applyModelAutoPreset(preset)
 				}
 				roleHint := ""
 				if len(args) > 0 {

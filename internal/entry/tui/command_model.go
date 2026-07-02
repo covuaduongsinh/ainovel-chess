@@ -256,12 +256,21 @@ func (s *modelSwitchState) apply(rt modelRuntime) error {
 	return nil
 }
 
-// applyModelAutoPreset áp preset Claude "cân bằng" cho cả bốn vai (writer/architect → Opus 4.8,
-// coordinator/editor → Sonnet 4.6) qua provider claude-code, mỗi thay đổi tự lưu vào config.
+// applyModelAutoPreset áp một preset Claude (theo presetKey) cho cả bốn vai qua provider
+// claude-code, mỗi thay đổi tự lưu vào config. presetKey rỗng = "Chuẩn"; key lạ = báo lỗi.
 // Yêu cầu provider "claude-code" đã được cấu hình (chạy setup chọn Claude Code).
-func (m Model) applyModelAutoPreset() (tea.Model, tea.Cmd) {
-	for _, p := range bootstrap.BalancedClaudeRoles() {
-		if err := m.runtime.SwitchModel(p.Role, bootstrap.ClaudeCodeProvider, p.Model); err != nil {
+func (m Model) applyModelAutoPreset(presetKey string) (tea.Model, tea.Cmd) {
+	preset, ok := bootstrap.ClaudePresetByKey(presetKey)
+	if !ok {
+		m.applyEvent(host.Event{
+			Time: time.Now(), Category: "ERROR", Level: "error",
+			Summary: "Preset không hợp lệ: " + presetKey + " (chọn: " + bootstrap.PresetKeysHint() + ")",
+		})
+		m.refreshEventViewport()
+		return m, nil
+	}
+	for _, r := range preset.Roles {
+		if err := m.runtime.SwitchModel(r.Role, bootstrap.ClaudeCodeProvider, r.Model); err != nil {
 			m.applyEvent(host.Event{
 				Time: time.Now(), Category: "ERROR", Level: "error",
 				Summary: "Tự-chọn model thất bại (cần cấu hình provider \"claude-code\"): " + err.Error(),
@@ -269,7 +278,7 @@ func (m Model) applyModelAutoPreset() (tea.Model, tea.Cmd) {
 			m.refreshEventViewport()
 			return m, nil
 		}
-		if err := m.runtime.SetRoleThinking(p.Role, p.Effort); err != nil {
+		if err := m.runtime.SetRoleThinking(r.Role, r.Effort); err != nil {
 			m.applyEvent(host.Event{
 				Time: time.Now(), Category: "ERROR", Level: "error",
 				Summary: "Đặt cường độ suy luận thất bại: " + err.Error(),
@@ -280,7 +289,7 @@ func (m Model) applyModelAutoPreset() (tea.Model, tea.Cmd) {
 	}
 	m.applyEvent(host.Event{
 		Time: time.Now(), Category: "SYSTEM", Level: "info",
-		Summary: "Đã áp tự-chọn model Claude (cân bằng): Writer/Architect → Opus 4.8, Coordinator/Editor → Sonnet 4.6",
+		Summary: "Đã áp preset model Claude: " + preset.Label,
 	})
 	m.refreshEventViewport()
 	return m, fetchSnapshot(m.runtime)

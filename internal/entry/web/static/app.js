@@ -588,14 +588,20 @@ function openModels() {
       <table style="width:100%;border-collapse:collapse;font-size:13px">
         <thead><tr style="color:var(--dim);text-align:left"><th style="padding:6px 8px">Vai trò</th><th>Provider</th><th>Mô hình</th><th>Suy luận</th><th></th></tr></thead>
         <tbody>${rows}</tbody></table>
-      <div class="modal-actions"><button class="btn mAuto">Tự chọn (Claude cân bằng)</button><button class="btn" onclick="closeModal()">Đóng</button></div>`, { wide: true });
-    const auto = document.querySelector('.mAuto');
-    if (auto) auto.onclick = () => {
-      auto.disabled = true;
-      api('/api/model/auto', {})
-        .then(() => { toast('Đã áp tự chọn model Claude (cân bằng)', 'ok'); openModels(); })
-        .catch((e) => { auto.disabled = false; toast(e.message, 'err'); });
-    };
+      <div class="modal-actions">
+        <button class="btn mAuto" data-preset="standard">Tự chọn: Chuẩn</button>
+        <button class="btn mAuto" data-preset="economy">Tự chọn: Tiết kiệm</button>
+        <button class="btn" onclick="closeModal()">Đóng</button>
+      </div>`, { wide: true });
+    const autoBtns = document.querySelectorAll('.mAuto');
+    autoBtns.forEach((auto) => {
+      auto.onclick = () => {
+        autoBtns.forEach((b) => (b.disabled = true));
+        api('/api/model/auto', { preset: auto.dataset.preset })
+          .then((r) => { toast('Đã áp preset: ' + ((r && r.label) || auto.dataset.preset), 'ok'); openModels(); })
+          .catch((e) => { autoBtns.forEach((b) => (b.disabled = false)); toast(e.message, 'err'); });
+      };
+    });
     document.querySelectorAll('.mApply').forEach((b) => {
       b.onclick = () => {
         const tr = b.closest('tr');
