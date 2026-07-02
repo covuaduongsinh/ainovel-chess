@@ -75,7 +75,7 @@ func (s *Server) handleModelAuto(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, fmt.Errorf("preset không hợp lệ %q (chọn: %s)", req.Preset, bootstrap.PresetKeysHint()))
 		return
 	}
-	for _, rp := range preset.Roles {
+	for _, rp := range preset.Assignments() {
 		if err := s.eng.SwitchModel(rp.Role, bootstrap.ClaudeCodeProvider, rp.Model); err != nil {
 			writeErr(w, http.StatusBadRequest, err)
 			return

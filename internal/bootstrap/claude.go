@@ -144,6 +144,30 @@ func (p ClaudePreset) RoleConfigs(provider string) map[string]RoleConfig {
 	return roles
 }
 
+// HeadlineModel trả về (model, effort) đại diện cho preset — lấy theo vai writer (vai sản
+// xuất văn chính). Dùng để đồng bộ model "mặc định" (top-level) => thanh MÔ HÌNH phản ánh preset.
+func (p ClaudePreset) HeadlineModel() (model, effort string) {
+	for _, r := range p.Roles {
+		if r.Role == "writer" {
+			return r.Model, r.Effort
+		}
+	}
+	if len(p.Roles) > 0 {
+		return p.Roles[0].Model, p.Roles[0].Effort
+	}
+	return "", ""
+}
+
+// Assignments trả về danh sách gán để áp preset: 4 vai + một mục "default" (theo writer),
+// nhờ đó thanh MÔ HÌNH (hiển thị model mặc định) đổi theo preset thay vì đứng yên.
+func (p ClaudePreset) Assignments() []RolePreset {
+	out := append([]RolePreset(nil), p.Roles...)
+	if hm, he := p.HeadlineModel(); hm != "" {
+		out = append(out, RolePreset{Role: "default", Model: hm, Effort: he})
+	}
+	return out
+}
+
 // BalancedClaudeRoles trả về roles của preset mặc định ("Chuẩn"). Giữ để tương thích
 // với setup wizard + test hiện có (cài đặt lần đầu luôn dùng preset Chuẩn).
 func BalancedClaudeRoles() []RolePreset {

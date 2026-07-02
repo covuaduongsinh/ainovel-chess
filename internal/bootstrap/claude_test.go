@@ -157,3 +157,29 @@ func TestClaudePresets(t *testing.T) {
 		t.Error("key lạ phải trả về ok=false")
 	}
 }
+
+// Assignments phải kèm một mục "default" khớp vai writer — để thanh MÔ HÌNH (model mặc định) đổi theo preset.
+func TestClaudePresetAssignmentsSyncDefault(t *testing.T) {
+	for _, p := range ClaudePresets() {
+		var writerModel string
+		for _, r := range p.Roles {
+			if r.Role == "writer" {
+				writerModel = r.Model
+			}
+		}
+		var defModel string
+		hasDefault := false
+		for _, a := range p.Assignments() {
+			if a.Role == "default" {
+				hasDefault = true
+				defModel = a.Model
+			}
+		}
+		if !hasDefault {
+			t.Errorf("preset %q: Assignments thiếu mục 'default'", p.Key)
+		}
+		if defModel != writerModel {
+			t.Errorf("preset %q: default model %q phải khớp writer %q", p.Key, defModel, writerModel)
+		}
+	}
+}

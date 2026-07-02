@@ -269,7 +269,7 @@ func (m Model) applyModelAutoPreset(presetKey string) (tea.Model, tea.Cmd) {
 		m.refreshEventViewport()
 		return m, nil
 	}
-	for _, r := range preset.Roles {
+	for _, r := range preset.Assignments() {
 		if err := m.runtime.SwitchModel(r.Role, bootstrap.ClaudeCodeProvider, r.Model); err != nil {
 			m.applyEvent(host.Event{
 				Time: time.Now(), Category: "ERROR", Level: "error",
