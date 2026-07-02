@@ -28,6 +28,12 @@ type Prompts struct {
 	ImportAnalyzer   string
 	SimulationSource string
 	SimulationMerge  string
+	AdaptConcept     string
+	AdaptCharacter   string
+	AdaptProp        string
+	AdaptConsistency string
+	AdaptScreenplay  string
+	AdaptStoryboard  string
 }
 
 // Bundle là tập hợp tài nguyên tĩnh cần cho việc chạy.
@@ -87,6 +93,12 @@ func loadPrompts() Prompts {
 		ImportAnalyzer:   mustRead(promptsFS, "prompts/import-chapter-analyzer.md"),
 		SimulationSource: mustRead(promptsFS, "prompts/simulation-source.md"),
 		SimulationMerge:  mustRead(promptsFS, "prompts/simulation-merge.md"),
+		AdaptConcept:     mustRead(promptsFS, "prompts/adapt-concept.md"),
+		AdaptCharacter:   mustRead(promptsFS, "prompts/adapt-character.md"),
+		AdaptProp:        mustRead(promptsFS, "prompts/adapt-prop.md"),
+		AdaptConsistency: mustRead(promptsFS, "prompts/adapt-consistency.md"),
+		AdaptScreenplay:  mustRead(promptsFS, "prompts/adapt-screenplay.md"),
+		AdaptStoryboard:  mustRead(promptsFS, "prompts/adapt-storyboard.md"),
 	}
 }
 

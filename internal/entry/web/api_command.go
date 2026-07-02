@@ -10,11 +10,16 @@ import (
 	"github.com/voocel/ainovel-cli/internal/store"
 )
 
+type exportFile struct {
+	Format string `json:"format"`
+	Path   string `json:"path"`
+	Bytes  int    `json:"bytes"`
+}
+
 type exportResult struct {
-	Path     string `json:"path"`
-	Chapters int    `json:"chapters"`
-	Bytes    int    `json:"bytes"`
-	Skipped  []int  `json:"skipped"`
+	Files    []exportFile `json:"files"`
+	Chapters int          `json:"chapters"`
+	Skipped  []int        `json:"skipped"`
 }
 
 func (s *Server) handleExport(w http.ResponseWriter, r *http.Request) {
@@ -27,6 +32,7 @@ func (s *Server) handleExport(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	res, err := s.eng.Export(ctx, exp.Options{
 		OutPath:   req.Path,
+		Formats:   exp.FormatsForPath(req.Path),
 		From:      req.From,
 		To:        req.To,
 		Overwrite: req.Overwrite,
@@ -35,10 +41,13 @@ func (s *Server) handleExport(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
+	files := make([]exportFile, 0, len(res.Outputs))
+	for _, o := range res.Outputs {
+		files = append(files, exportFile{Format: string(o.Format), Path: o.Path, Bytes: o.Bytes})
+	}
 	writeOK(w, exportResult{
-		Path:     res.Path,
+		Files:    files,
 		Chapters: res.Chapters,
-		Bytes:    res.Bytes,
 		Skipped:  res.Skipped,
 	})
 }

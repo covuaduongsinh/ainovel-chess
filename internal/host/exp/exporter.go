@@ -27,15 +27,24 @@ func Run(ctx context.Context, deps Deps, opts Options) (*Result, error) {
 		return nil, fmt.Errorf("exp: deps.Store is nil")
 	}
 
-	if opts.Format == "" {
-		f, err := inferFormat(opts.OutPath)
-		if err != nil {
-			return nil, err
+	// Xac dinh danh sach dinh dang can xuat. Formats non-empty -> nhieu dinh dang (OutPath la base);
+	// rong -> hanh vi 1-dinh-dang cu (suy ra tu Format hoac hau to OutPath).
+	formats := opts.Formats
+	if len(formats) == 0 {
+		f := opts.Format
+		if f == "" {
+			inferred, err := inferFormat(opts.OutPath)
+			if err != nil {
+				return nil, err
+			}
+			f = inferred
 		}
-		opts.Format = f
+		formats = []Format{f}
 	}
-	if opts.Format != FormatTXT && opts.Format != FormatEPUB {
-		return nil, fmt.Errorf("exp: dinh dang chua duoc ho tro %q", opts.Format)
+	for _, f := range formats {
+		if !supportedFormat(f) {
+			return nil, fmt.Errorf("exp: dinh dang chua duoc ho tro %q", f)
+		}
 	}
 
 	progress, err := deps.Store.Progress.Load()
@@ -97,21 +106,14 @@ func Run(ctx context.Context, deps Deps, opts Options) (*Result, error) {
 		volumes, _ = deps.Store.Outline.LoadLayeredOutline()
 	}
 
-	outPath := opts.OutPath
-	if outPath == "" {
+	// Base khong hau to: bo hau to nhan biet duoc khoi OutPath (moi dinh dang tu them ".ext").
+	base := stripRecognizedExt(opts.OutPath)
+	if base == "" {
 		name := strings.TrimSpace(progress.NovelName)
 		if name == "" {
 			name = filepath.Base(deps.Store.Dir())
 		}
-		outPath = filepath.Join(deps.Store.Dir(), sanitizeFileName(name)+"."+string(opts.Format))
-	}
-
-	if !opts.Overwrite {
-		if _, err := os.Stat(outPath); err == nil {
-			return nil, fmt.Errorf("file da ton tai: %s (them --overwrite de ghi de)", outPath)
-		} else if !os.IsNotExist(err) {
-			return nil, fmt.Errorf("kiem tra duong dan dau ra that bai: %w", err)
-		}
+		base = filepath.Join(deps.Store.Dir(), sanitizeFileName(name))
 	}
 
 	titleIdx := buildTitleIndex(outline)
@@ -120,27 +122,44 @@ func Run(ctx context.Context, deps Deps, opts Options) (*Result, error) {
 		locations = buildLocations(volumes)
 	}
 
-	var data []byte
-	switch opts.Format {
-	case FormatTXT:
-		data = []byte(renderTXT(progress.NovelName, chapters, titleIdx, locations, bodies))
-	case FormatEPUB:
-		buf, err := renderEPUB(progress.NovelName, chapters, titleIdx, locations, bodies)
-		if err != nil {
-			return nil, fmt.Errorf("hien thi EPUB that bai: %w", err)
-		}
-		data = buf
-	}
+	outputs := make([]Output, 0, len(formats))
+	for _, format := range formats {
+		outPath := base + "." + string(format)
 
-	if err := atomicWrite(outPath, data); err != nil {
-		return nil, fmt.Errorf("ghi that bai: %w", err)
+		if !opts.Overwrite {
+			if _, err := os.Stat(outPath); err == nil {
+				return nil, fmt.Errorf("file da ton tai: %s (them --overwrite de ghi de)", outPath)
+			} else if !os.IsNotExist(err) {
+				return nil, fmt.Errorf("kiem tra duong dan dau ra that bai: %w", err)
+			}
+		}
+
+		var data []byte
+		switch format {
+		case FormatTXT:
+			data = []byte(renderTXT(progress.NovelName, chapters, titleIdx, locations, bodies))
+		case FormatMD:
+			data = []byte(renderMD(progress.NovelName, chapters, titleIdx, locations, bodies))
+		case FormatEPUB:
+			buf, err := renderEPUB(progress.NovelName, chapters, titleIdx, locations, bodies)
+			if err != nil {
+				return nil, fmt.Errorf("hien thi EPUB that bai: %w", err)
+			}
+			data = buf
+		}
+
+		if err := atomicWrite(outPath, data); err != nil {
+			return nil, fmt.Errorf("ghi that bai: %w", err)
+		}
+		outputs = append(outputs, Output{Format: format, Path: outPath, Bytes: len(data)})
 	}
 
 	return &Result{
-		Path:     outPath,
+		Outputs:  outputs,
 		Chapters: len(chapters),
-		Bytes:    len(data),
 		Skipped:  skipped,
+		Path:     outputs[0].Path,
+		Bytes:    outputs[0].Bytes,
 	}, nil
 }
 
@@ -154,9 +173,39 @@ func inferFormat(path string) (Format, error) {
 		return FormatTXT, nil
 	case ".epub":
 		return FormatEPUB, nil
+	case ".md":
+		return FormatMD, nil
 	default:
-		return "", fmt.Errorf("khong the suy ra dinh dang tu phan mo rong %q (ho tro .txt / .epub)", filepath.Ext(path))
+		return "", fmt.Errorf("khong the suy ra dinh dang tu phan mo rong %q (ho tro .md / .txt / .epub)", filepath.Ext(path))
 	}
+}
+
+// supportedFormat cho biet dinh dang co duoc ho tro xuat khong.
+func supportedFormat(f Format) bool {
+	return f == FormatTXT || f == FormatEPUB || f == FormatMD
+}
+
+// recognizedExt tra ve dinh dang neu duong dan co hau to nhan biet duoc (.md/.txt/.epub).
+func recognizedExt(path string) (Format, bool) {
+	switch strings.ToLower(filepath.Ext(path)) {
+	case ".txt":
+		return FormatTXT, true
+	case ".epub":
+		return FormatEPUB, true
+	case ".md":
+		return FormatMD, true
+	default:
+		return "", false
+	}
+}
+
+// stripRecognizedExt bo hau to nhan biet duoc (.md/.txt/.epub) de lay duong dan base;
+// cac hau to khac (vd ten file co dau cham) duoc giu nguyen de tranh cat nham.
+func stripRecognizedExt(path string) string {
+	if _, ok := recognizedExt(path); ok {
+		return strings.TrimSuffix(path, filepath.Ext(path))
+	}
+	return path
 }
 
 // atomicWrite co cau truc giong WriteFile cua store/io.go: tmp + sync + rename.

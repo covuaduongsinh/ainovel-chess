@@ -83,4 +83,6 @@ Tài sản nhúng (prompt, style, reference) ở [assets/](assets/), nạp qua `
 - [docs/user-rules-runtime.md](docs/user-rules-runtime.md) — quy tắc người dùng runtime
 - [docs/huong-dan-su-dung.md](docs/huong-dan-su-dung.md) — hướng dẫn cho người mới (giao diện Web)
 - [docs/claude-code.md](docs/claude-code.md) — dùng model Claude qua Claude Code
+- [docs/export.md](docs/export.md) — xuất bản thảo đa định dạng (MD / TXT / EPUB)
+- [docs/video.md](docs/video.md) — chuyển thể sách thành sản phẩm làm video (kịch bản / phân cảnh / thiết kế / prompt)
 - [CHANGELOG.md](CHANGELOG.md) — nhật ký thay đổi

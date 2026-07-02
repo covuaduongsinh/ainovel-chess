@@ -448,9 +448,9 @@ function openProgressModal(heading) {
 
 // ── Command modals ──
 function openExport() {
-  openModal(`<h2>Xuất file</h2><div class="sub">Hợp nhất các chương đã hoàn thành thành TXT hoặc EPUB.</div>
-    <label>Đường dẫn (để trống = mặc định trong thư mục tác phẩm; hậu tố .txt / .epub quyết định định dạng)</label>
-    <input type="text" id="exPath" placeholder="vd: D:\\truyen\\tac-pham.epub" />
+  openModal(`<h2>Xuất file</h2><div class="sub">Hợp nhất các chương đã hoàn thành. Mặc định xuất 3 file: .md, .txt và .epub.</div>
+    <label>Đường dẫn base (điền sẵn = trong thư mục tác phẩm; gõ hậu tố .md/.txt/.epub để chỉ xuất một định dạng)</label>
+    <input type="text" id="exPath" placeholder="vd: D:\\truyen\\tac-pham" />
     <div class="field-row">
       <div><label>Từ chương</label><input type="number" id="exFrom" min="0" placeholder="đầu" /></div>
       <div><label>Đến chương</label><input type="number" id="exTo" min="0" placeholder="cuối" /></div>
@@ -458,6 +458,10 @@ function openExport() {
     <label class="opt" style="margin-top:12px"><input type="checkbox" id="exOver" /><span class="opt-label">Ghi đè nếu file đã tồn tại</span></label>
     <div class="modal-actions"><button class="btn" onclick="closeModal()">Hủy</button>
     <button class="btn primary" id="exGo">Xuất</button></div>`);
+  // Điền sẵn đường dẫn base của dự án hiện tại (file trùng tên thư mục chứa).
+  getJSON('/api/meta').then((m) => {
+    if (m.exportBase && !$('exPath').value) $('exPath').value = m.exportBase;
+  }).catch(() => {});
   $('exGo').onclick = () => {
     const body = {
       path: $('exPath').value.trim(),
@@ -468,7 +472,9 @@ function openExport() {
     $('exGo').disabled = true;
     api('/api/export', body).then((r) => {
       closeModal();
-      toast(`✓ Đã xuất ${r.chapters} chương → ${r.path}`, 'ok');
+      const files = r.files || [];
+      const exts = files.map((f) => '.' + f.format).join(', ');
+      toast(`✓ Đã xuất ${r.chapters} chương → ${files.length} file (${exts})`, 'ok');
     }).catch((e) => { $('exGo').disabled = false; toast(e.message, 'err'); });
   };
 }
@@ -501,6 +507,47 @@ function openSimulate() {
     const imp = $('simImport').value.trim();
     const call = imp ? api('/api/importsim', { text: imp }) : api('/api/simulate');
     call.then(() => openProgressModal(imp ? 'Đang nhập hồ sơ phỏng tác' : 'Đang tạo hồ sơ phỏng tác'))
+      .catch((e) => toast(e.message, 'err'));
+  };
+}
+
+function openVideo() {
+  const products = [
+    ['concept', 'Concept / art direction'],
+    ['character', 'Thiết kế nhân vật'],
+    ['prop', 'Đạo cụ'],
+    ['consistency', 'Bảng nhất quán'],
+    ['screenplay', 'Kịch bản'],
+    ['storyboard', 'Phân cảnh'],
+    ['animation', 'Chỉ đạo animation'],
+    ['imageprompt', 'Bảng prompt ảnh'],
+    ['videoprompt', 'Bảng prompt video'],
+  ];
+  const boxes = products.map(([id, label]) =>
+    `<label class="opt"><input type="checkbox" class="vidProd" value="${id}" /><span class="opt-label">${label}</span></label>`
+  ).join('');
+  openModal(`<h2>Chuyển thành sản phẩm video</h2><div class="sub">Từ các chương đã hoàn thành, sinh kịch bản/phân cảnh/thiết kế cho làm video. Không chọn mục nào = chạy tất cả theo thứ tự.</div>
+    <label>Sản phẩm</label>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:2px 12px;margin:6px 0">${boxes}</div>
+    <div class="field-row">
+      <div><label>Từ chương</label><input type="number" id="vidFrom" min="0" placeholder="đầu" /></div>
+      <div><label>Đến chương</label><input type="number" id="vidTo" min="0" placeholder="cuối" /></div>
+    </div>
+    <label style="margin-top:10px">Gợi ý phong cách hình ảnh (tùy chọn)</label>
+    <input type="text" id="vidStyle" placeholder="vd: anime điện ảnh, tông lạnh, ánh sáng tương phản" />
+    <label class="opt" style="margin-top:12px"><input type="checkbox" id="vidOver" /><span class="opt-label">Ghi đè file đã tồn tại</span></label>
+    <div class="modal-actions"><button class="btn" onclick="closeModal()">Hủy</button>
+    <button class="btn primary" id="vidGo">Chạy</button></div>`);
+  $('vidGo').onclick = () => {
+    const chosen = Array.from(document.querySelectorAll('.vidProd:checked')).map((c) => c.value);
+    const body = {
+      products: chosen,
+      from: parseInt($('vidFrom').value || '0', 10) || 0,
+      to: parseInt($('vidTo').value || '0', 10) || 0,
+      style: $('vidStyle').value.trim(),
+      overwrite: $('vidOver').checked,
+    };
+    api('/api/adapt', body).then(() => openProgressModal('Đang chuyển thành sản phẩm video'))
       .catch((e) => toast(e.message, 'err'));
   };
 }
@@ -669,6 +716,7 @@ function bindUI() {
       const cmd = b.dataset.cmd;
       if (cmd === 'abort') return api('/api/abort').catch((e) => toast(e.message, 'err'));
       if (cmd === 'export') return openExport();
+      if (cmd === 'video') return openVideo();
       if (cmd === 'import') return openImport();
       if (cmd === 'simulate') return openSimulate();
       if (cmd === 'grounding') return openGrounding();

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"io/fs"
 	"net/http"
+	"path/filepath"
 
 	"github.com/voocel/ainovel-cli/assets"
 	"github.com/voocel/ainovel-cli/internal/bootstrap"
@@ -78,6 +79,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/import", s.handleImport)
 	s.mux.HandleFunc("POST /api/simulate", s.handleSimulate)
 	s.mux.HandleFunc("POST /api/importsim", s.handleImportSim)
+	s.mux.HandleFunc("POST /api/adapt", s.handleAdapt)
 	s.mux.HandleFunc("POST /api/job/cancel", s.handleJobCancel)
 
 	// Cộng tác sáng tác
@@ -119,10 +121,18 @@ func decodeBody(r *http.Request, dst any) error {
 type metaResponse struct {
 	Version string `json:"version"`
 	Dir     string `json:"dir"`
+	// ExportBase là đường dẫn base gợi ý cho hộp thoại xuất: {thư-mục-dự-án}/{tên-thư-mục}
+	// (không hậu tố; file trùng tên thư mục chứa). Frontend điền sẵn vào ô đường dẫn.
+	ExportBase string `json:"exportBase"`
 }
 
 func (s *Server) handleMeta(w http.ResponseWriter, _ *http.Request) {
-	writeOK(w, metaResponse{Version: s.version, Dir: s.eng.Dir()})
+	dir := s.eng.Dir()
+	writeOK(w, metaResponse{
+		Version:    s.version,
+		Dir:        dir,
+		ExportBase: filepath.Join(dir, filepath.Base(dir)),
+	})
 }
 
 func (s *Server) handleSnapshot(w http.ResponseWriter, _ *http.Request) {

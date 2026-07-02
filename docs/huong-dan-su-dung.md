@@ -304,7 +304,7 @@ Có 3 tab, bấm để chuyển. Tab **Đại cương** được chọn sẵn.
 | **⇲ Nhập truyện** | Nạp một file truyện có sẵn (.txt/.md) rồi viết tiếp. | Có → [7.2](#72-cửa-sổ-nhập-truyện-có-sẵn) |
 | **⟲ Phỏng tác** | Học văn phong từ các bài mẫu bạn cung cấp. | Có → [7.3](#73-cửa-sổ-phỏng-tác-mô-phỏng-văn-phong) |
 | **⚕ Chẩn đoán** | Phân tích "sức khỏe" của cuốn truyện, chỉ ra vấn đề. | Có → [7.4](#74-cửa-sổ-chẩn-đoán) |
-| **⬇ Xuất file** | Xuất các chương thành file TXT hoặc EPUB. | Có → [7.1](#71-cửa-sổ-xuất-file) |
+| **⬇ Xuất file** | Xuất các chương thành file (mặc định cả 3: Markdown, TXT, EPUB). | Có → [7.1](#71-cửa-sổ-xuất-file) |
 | **⏸ Tạm dừng** | Dừng tiến trình đang chạy. *(chỉ hiện khi AI đang viết)* | Không |
 
 **b) Ô nhập yêu cầu chính** *(textarea lớn)*
@@ -347,12 +347,12 @@ Mở bằng nút **⬇ Xuất file**. Dùng để gộp các chương đã viế
 
 | Ô / Nút | Ý nghĩa |
 |---|---|
-| **Đường dẫn** | Nơi lưu file. Để trống = lưu mặc định trong thư mục tác phẩm. **Đuôi file quyết định định dạng:** `.txt` (văn bản thường) hoặc `.epub` (sách điện tử). Vd: `D:\truyen\tac-pham.epub`. |
+| **Đường dẫn** | Nơi lưu file (đường dẫn **base**, không cần đuôi). Để trống = lưu mặc định trong thư mục tác phẩm và ô sẽ được **điền sẵn** gợi ý. **Để trống hoặc không có đuôi = xuất cả 3 file** `.md` + `.txt` + `.epub`. Gõ đuôi nhận biết (`.md` Markdown / `.txt` văn bản thường / `.epub` sách điện tử) = chỉ xuất đúng định dạng đó. Vd: `D:\truyen\tac-pham` (3 file) hoặc `D:\truyen\tac-pham.epub` (chỉ EPUB). |
 | **Từ chương** | Chương bắt đầu xuất. Để trống = từ đầu. |
 | **Đến chương** | Chương kết thúc xuất. Để trống = đến cuối. |
 | **☐ Ghi đè nếu file đã tồn tại** | Tích vào nếu muốn ghi đè file trùng tên. |
 | Nút **Hủy** | Đóng, không làm gì. |
-| Nút **Xuất** | Thực hiện. Xong sẽ báo: "✓ Đã xuất N chương → đường dẫn". |
+| Nút **Xuất** | Thực hiện. Xong sẽ báo: "✓ Đã xuất N chương → K file (.md, .txt, .epub)". |
 
 ### 7.2 Cửa sổ "Nhập truyện có sẵn"
 
@@ -462,11 +462,13 @@ Bạn **không cần dừng** AI. Bất cứ lúc nào đang viết:
    chậm, đẩy nhanh hơn"*.
 2. Bấm **Can thiệp**. AI sẽ tự đánh giá và điều chỉnh (có thể viết lại vài chương bị ảnh hưởng).
 
-### 8.4 Xuất thành file TXT/EPUB
+### 8.4 Xuất thành file (Markdown / TXT / EPUB)
 
 1. Bấm **⬇ Xuất file**.
-2. (Tùy chọn) điền **Đường dẫn** lưu, đặt đuôi `.txt` hoặc `.epub`. Có thể chọn **Từ chương / Đến chương**.
-3. Bấm **Xuất**. Xem thông báo "✓ Đã xuất N chương → …".
+2. (Tùy chọn) điền **Đường dẫn** lưu. **Để trống hoặc không gõ đuôi = xuất cả 3 file** `.md`, `.txt`
+   và `.epub`; nếu chỉ muốn một định dạng, gõ đuôi `.md` / `.txt` / `.epub`. Có thể chọn **Từ chương /
+   Đến chương**.
+3. Bấm **Xuất**. Xem thông báo "✓ Đã xuất N chương → K file …".
 
 ### 8.5 Nhập một truyện có sẵn để viết tiếp
 

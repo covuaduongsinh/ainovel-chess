@@ -63,6 +63,8 @@ type Model struct {
 	version        string
 	importer       *importState
 	importSeq      int
+	videoer        *videoState
+	videoSeq       int
 	simulator      *simulationState
 	simSeq         int
 	compItems      []commandPaletteItem
@@ -614,6 +616,9 @@ func (m Model) View() string {
 	}
 	if m.importer != nil {
 		return renderImportModal(m.width, m.height, m.importer)
+	}
+	if m.videoer != nil {
+		return renderVideoModal(m.width, m.height, m.videoer)
 	}
 	if m.simulator != nil {
 		return renderSimulationModal(m.width, m.height, m.simulator)

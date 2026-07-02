@@ -219,6 +219,28 @@ func commandRegistryInstance() commandRegistry {
 				return m, cmd
 			},
 		},
+		{
+			Name:        "video",
+			Aliases:     []string{"adapt"},
+			Group:       "writing",
+			Usage:       "/video [concept|character|prop|consistency|screenplay|storyboard|animation|imageprompt|videoprompt|all] [from=N] [to=M] [style=...] [--overwrite]",
+			Description: "Chuyển sách thành sản phẩm làm video (kịch bản/phân cảnh/nhân vật/concept)",
+			NeedsIdle:   true,
+			Run: func(m Model, args []string) (tea.Model, tea.Cmd) {
+				m.videoSeq++
+				state, listenCmd, err := startVideo(m.runtime, m.videoSeq, args, m.width, m.height)
+				if err != nil {
+					m.applyEvent(host.Event{
+						Time: time.Now(), Category: "ERROR", Summary: "Khởi động chuyển thể video thất bại: " + err.Error(), Level: "error",
+					})
+					m.refreshEventViewport()
+					return m, nil
+				}
+				m.videoer = state
+				m.textarea.Blur()
+				return m, listenCmd
+			},
+		},
 	})
 }
 

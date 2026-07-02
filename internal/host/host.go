@@ -19,6 +19,7 @@ import (
 	"github.com/voocel/ainovel-cli/internal/bootstrap"
 	"github.com/voocel/ainovel-cli/internal/domain"
 	"github.com/voocel/ainovel-cli/internal/dossier"
+	"github.com/voocel/ainovel-cli/internal/host/adapt"
 	"github.com/voocel/ainovel-cli/internal/host/exp"
 	"github.com/voocel/ainovel-cli/internal/host/flow"
 	"github.com/voocel/ainovel-cli/internal/host/imp"
@@ -1221,6 +1222,29 @@ func (h *Host) Simulate(ctx context.Context) (<-chan sim.Event, error) {
 		},
 	}
 	return sim.Run(ctx, deps, sim.Options{SourceDir: filepath.Join(wd, "simulate")})
+}
+
+// Adapt chuyen mot du an sach da hoan thanh thanh bo san pham lam video (kich ban,
+// phan canh, thiet ke nhan vat/dao cu, concept, animation, cac bang prompt, consistency).
+// Giong Import/Simulate: tac vu LLM-nang chay dai, xung dot voi Coordinator nen guardExclusive;
+// kenh su kien tra ve duoc adapt.Run dong, caller chiu trach nhiem tieu thu (day thi huy).
+func (h *Host) Adapt(ctx context.Context, opts adapt.Options) (<-chan adapt.Event, error) {
+	if err := h.guardExclusive("chuyen the video"); err != nil {
+		return nil, err
+	}
+	deps := adapt.Deps{
+		Store: h.store,
+		LLM:   h.models.ForRole("architect"),
+		Prompts: adapt.Prompts{
+			Concept:     h.bundle.Prompts.AdaptConcept,
+			Character:   h.bundle.Prompts.AdaptCharacter,
+			Prop:        h.bundle.Prompts.AdaptProp,
+			Consistency: h.bundle.Prompts.AdaptConsistency,
+			Screenplay:  h.bundle.Prompts.AdaptScreenplay,
+			Storyboard:  h.bundle.Prompts.AdaptStoryboard,
+		},
+	}
+	return adapt.Run(ctx, deps, opts)
 }
 
 // ImportSimulationProfile nhap ho so phuong phap viet da tao truoc do.

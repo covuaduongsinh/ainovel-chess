@@ -29,6 +29,8 @@ func startExport(rt *host.Host, args []string) (tea.Cmd, error) {
 	if err != nil {
 		return nil, err
 	}
+	// Mirror Web: không hậu tố -> xuất 3 định dạng (.md/.txt/.epub); có hậu tố -> chỉ 1.
+	opts.Formats = exp.FormatsForPath(opts.OutPath)
 	return func() tea.Msg {
 		// 30 giây đủ để ghi một cuốn tiểu thuyết trung-dài lên local; timeout chỉ là dự phòng chống treo.
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -40,7 +42,8 @@ func startExport(rt *host.Host, args []string) (tea.Cmd, error) {
 
 // parseExportArgs phân tích `/export [path] [from=N] [to=M] [--overwrite]`.
 //
-// Tham số vị trí: tối đa một, dùng làm đường dẫn đầu ra; mặc định do exp.Run quyết định ({novelDir}/{NovelName}.txt).
+// Tham số vị trí: tối đa một, dùng làm đường dẫn base; không có thì mặc định do exp.Run quyết định
+// ({novelDir}/{NovelName}). Không hậu tố -> xuất 3 định dạng (.md/.txt/.epub); có hậu tố -> chỉ định dạng đó.
 func parseExportArgs(args []string) (exp.Options, error) {
 	var opts exp.Options
 	for _, a := range args {
@@ -81,7 +84,15 @@ func parseExportArgs(args []string) (exp.Options, error) {
 // formatExportSuccess render Result thành Summary của sự kiện.
 func formatExportSuccess(res *exp.Result) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "✓ Đã xuất %d chương / %s vào %s", res.Chapters, humanBytes(res.Bytes), res.Path)
+	if len(res.Outputs) == 1 {
+		o := res.Outputs[0]
+		fmt.Fprintf(&b, "✓ Đã xuất %d chương / %s vào %s", res.Chapters, humanBytes(o.Bytes), o.Path)
+	} else {
+		fmt.Fprintf(&b, "✓ Đã xuất %d chương thành %d file:", res.Chapters, len(res.Outputs))
+		for _, o := range res.Outputs {
+			fmt.Fprintf(&b, "\n  • %s (%s)", o.Path, humanBytes(o.Bytes))
+		}
+	}
 	if n := len(res.Skipped); n > 0 {
 		fmt.Fprintf(&b, " (bỏ qua %d chương chưa hoàn thành: %s)", n, briefIntList(res.Skipped, 5))
 	}

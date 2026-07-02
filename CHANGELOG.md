@@ -9,6 +9,33 @@ Nhật ký này tập trung vào các thay đổi của **bản Việt hóa** so
 ## [Chưa phát hành]
 
 ### Đã thêm
+- **Chuyển thể sách → sản phẩm làm video** — khả năng ngang mới `internal/host/adapt`
+  (đối xứng `imp`/`sim`/`exp`), lệnh **`/video`** (TUI) và **🎬 Làm video** (Web):
+  - Từ các chương đã hoàn thành, sinh 9 loại sản phẩm phục vụ dựng video. **6 loại dùng
+    LLM**: `concept` (art direction), `character` (thiết kế nhân vật), `prop` (đạo cụ),
+    `consistency` (bảng nhất quán khóa token trực quan), `screenplay` (kịch bản),
+    `storyboard` (phân cảnh). **3 loại render thuần** (không tốn LLM, tổng hợp từ
+    storyboard): `animation`, `imageprompt`, `videoprompt`.
+  - Chạy `all` theo thứ tự `concept → character → prop → consistency → screenplay →
+    storyboard → animation → imageprompt → videoprompt`; các bước hình ảnh chạy trước tạo
+    "style bible", storyboard tiêm token chuẩn để nhân vật/đạo cụ nhất quán xuyên suốt.
+  - Prompt sinh ảnh/video **trung lập, giàu chi tiết**, **song ngữ** (prompt EN + mô tả VI).
+  - Chỉ đọc store (chương/dàn ý/nhân vật/thế giới), ghi nguyên tử vào `{novelDir}/video/`;
+    `guardExclusive` để không chạy chồng Coordinator; fail-soft theo từng chương; resume
+    incremental (bỏ qua file đã có nếu không `--overwrite`). Model dùng vai `architect`.
+  - TUI: `/video [product...|all] [from=N] [to=M] [style=...] [--overwrite]`; Web: `POST
+    /api/adapt` qua jobRegistry + SSE, mirror nhau qua `adapt.Options`.
+  - Tài liệu: [docs/video.md](docs/video.md).
+- **Xuất bản thảo đa định dạng** — mở rộng khả năng `/export`:
+  - Thêm định dạng **Markdown (`.md`)** (`exp.FormatMD`, `renderMD`) bên cạnh TXT và EPUB —
+    tiêu đề ATX `#`/`##`, dễ đọc và convert tiếp.
+  - **Mặc định xuất cùng lúc 3 file** `.md` + `.txt` + `.epub` (`exp.DefaultFormats()`), thay
+    cho mặc định chỉ TXT trước đây.
+  - Đường dẫn được hiểu là **base**: không đuôi → 3 định dạng; có đuôi nhận biết
+    (`.md`/`.txt`/`.epub`) → đúng 1 định dạng. Web và TUI dùng chung `exp.FormatsForPath()` để
+    hành vi mirror nhau. TUI: `/export [base] [from=N] [to=M] [--overwrite]`; Web: ô đường dẫn
+    điền sẵn `exportBase` từ `GET /api/meta`.
+  - Tài liệu: [docs/export.md](docs/export.md).
 - **Tích hợp Claude Code** — dùng chính bộ model Claude (Opus 4.8/4.7, Sonnet 4.6,
   Haiku 4.5) để viết truyện:
   - Provider `claude-code` (type `anthropic`) với danh mục 4 model dựng sẵn.
@@ -21,6 +48,11 @@ Nhật ký này tập trung vào các thay đổi của **bản Việt hóa** so
   - Tài liệu: [docs/claude-code.md](docs/claude-code.md).
 - **Tài liệu dự án**: `CLAUDE.md` (định hướng cho AI agent/contributor),
   `docs/claude-code.md`, và `CHANGELOG.md` (tệp này).
+
+### Đã thay đổi (breaking)
+- **`POST /api/export`** đổi shape phản hồi: bỏ `path`/`bytes`, thay bằng mảng
+  `files: [{ format, path, bytes }]` (kèm `chapters`, `skipped`) để đại diện cho nhiều file
+  đầu ra. Client cũ đọc `r.path` cần chuyển sang đọc `r.files`.
 
 ### Đã sửa
 - **`draft_chapter`** — tham số `mode` chuyển từ **bắt buộc** sang **tùy chọn** (bỏ
