@@ -22,6 +22,8 @@ type Server struct {
 	ask      *askUserBridge
 	cocreate *coCreateBridge
 	jobs     *jobRegistry // tác vụ nền có thể hủy như import/simulate
+
+	sm *sessionManager // quản lý vòng đời phiên dự án (để đổi/đóng dự án)
 }
 
 func newServer(eng *host.Host, cfg bootstrap.Config, bundle assets.Bundle, version string) *Server {
@@ -50,6 +52,9 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/stream", s.handleStream)
 	s.mux.HandleFunc("GET /api/snapshot", s.handleSnapshot)
 	s.mux.HandleFunc("GET /api/meta", s.handleMeta)
+
+	// Đổi dự án: rời workbench hiện tại về màn chọn dự án
+	s.mux.HandleFunc("POST /api/projects/leave", s.handleLeave)
 
 	// Vòng đời sáng tác
 	s.mux.HandleFunc("POST /api/start", s.handleStart)
@@ -122,4 +127,21 @@ func (s *Server) handleMeta(w http.ResponseWriter, _ *http.Request) {
 
 func (s *Server) handleSnapshot(w http.ResponseWriter, _ *http.Request) {
 	writeOK(w, s.eng.Snapshot())
+}
+
+// handleLeave rời dự án hiện tại về màn chọn dự án. Nếu engine đang chạy thì chặn (409) và yêu cầu
+// người dùng tạm dừng trước — không tự Abort để tránh cắt ngang lượt viết đang diễn ra.
+func (s *Server) handleLeave(w http.ResponseWriter, _ *http.Request) {
+	if s.sm == nil {
+		writeErr(w, http.StatusInternalServerError, errMsg("không có trình quản lý phiên"))
+		return
+	}
+	if s.eng.Snapshot().IsRunning {
+		writeErr(w, http.StatusConflict, errMsg("AI đang chạy — hãy Tạm dừng trước khi đổi dự án"))
+		return
+	}
+	// Swap sang picker (đóng chính Server này) trước khi trả lời, để trình duyệt reload chắc chắn
+	// gặp màn chọn dự án chứ không trúng lúc đang teardown.
+	s.sm.showPicker()
+	writeOK(w, map[string]any{"ok": true})
 }

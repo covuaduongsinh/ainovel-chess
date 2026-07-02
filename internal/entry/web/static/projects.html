@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ainovel — Chọn dự án</title>
+  <link rel="stylesheet" href="/styles.css" />
+  <style>
+    body { align-items: flex-start; justify-content: center; }
+    .picker { width: min(760px, 94vw); margin: 40px auto; }
+    .picker h1 { color: var(--accent); font-size: 22px; margin: 0 0 6px; }
+    .picker p.lead { color: var(--muted); margin: 0 0 22px; font-size: 14px; }
+    .picker .root { color: var(--dim); font-size: 12px; margin-bottom: 18px; word-break: break-all; }
+
+    .card-panel { background: var(--bg-2); border: 1px solid var(--border); border-radius: 16px;
+      padding: 22px; box-shadow: 0 20px 60px rgba(0,0,0,.4); margin-bottom: 22px; }
+    .card-panel h2 { font-size: 15px; margin: 0 0 14px; color: var(--text); }
+
+    .proj-list { display: flex; flex-direction: column; gap: 10px; }
+    .proj { display: flex; align-items: center; justify-content: space-between; gap: 14px;
+      background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
+    .proj:hover { border-color: var(--accent); }
+    .proj .info { min-width: 0; }
+    .proj .name { font-size: 15px; font-weight: 700; color: var(--text); }
+    .proj .sub { font-size: 12px; color: var(--muted); margin-top: 4px; }
+    .proj .dim { color: var(--dim); }
+    .proj .phase { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 999px;
+      background: var(--bg-2); border: 1px solid var(--border); color: var(--muted); margin-right: 8px; }
+    .proj button { flex: none; background: var(--accent); color: #1c1a14; font-weight: 700; border: none;
+      border-radius: 8px; padding: 9px 18px; font-size: 14px; cursor: pointer; }
+    .empty { color: var(--dim); font-size: 14px; text-align: center; padding: 18px; }
+
+    .create-row { display: flex; gap: 10px; }
+    .create-row input { flex: 1; background: var(--bg); color: var(--text); border: 1px solid var(--border);
+      border-radius: 8px; padding: 11px 12px; font-size: 14px; }
+    .create-row input:focus { outline: none; border-color: var(--accent); }
+    .create-row button { background: var(--accent); color: #1c1a14; font-weight: 700; border: none;
+      border-radius: 8px; padding: 11px 20px; font-size: 14px; cursor: pointer; }
+    .create-row button:disabled { opacity: .5; cursor: not-allowed; }
+    .hint { font-size: 12px; color: var(--dim); margin-top: 8px; }
+    .err { color: var(--err); font-size: 13px; margin-top: 12px; }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <div class="picker">
+    <h1>✦ ainovel — Dự án sách</h1>
+    <p class="lead">Chọn một dự án để mở, hoặc tạo dự án mới. Mỗi dự án là một cuốn sách riêng.</p>
+    <div class="root" id="root"></div>
+
+    <div class="card-panel">
+      <h2>Dự án hiện có</h2>
+      <div class="proj-list" id="list"><div class="empty">Đang tải…</div></div>
+    </div>
+
+    <div class="card-panel">
+      <h2>Tạo dự án mới</h2>
+      <form id="createForm" class="create-row">
+        <input type="text" id="name" placeholder="Tên sách, vd: Kiếm khách phương Nam" autocomplete="off" />
+        <button type="submit" id="createBtn">Tạo &amp; mở</button>
+      </form>
+      <div class="hint">Tên sẽ được chuyển thành tên thư mục an toàn trong <code id="rootHint"></code>.</div>
+      <div class="err hidden" id="err"></div>
+    </div>
+  </div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+
+    function fmtDate(s) {
+      if (!s) return '';
+      const d = new Date(s);
+      if (isNaN(d.getTime())) return '';
+      return d.toLocaleString('vi-VN', { hour12: false });
+    }
+    function escapeHTML(s) {
+      return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+      }[c]));
+    }
+
+    function showErr(msg) {
+      $('err').textContent = msg;
+      $('err').classList.remove('hidden');
+    }
+
+    function openProject(dir) {
+      fetch('/api/projects/open', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ dir }),
+      }).then(async (r) => {
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(d.error || 'Không mở được dự án');
+        location.reload();
+      }).catch((e) => showErr(e.message));
+    }
+
+    function renderList(data) {
+      $('root').textContent = 'Thư mục: ' + (data.root || '');
+      $('rootHint').textContent = data.root || 'output';
+      const list = data.projects || [];
+      if (!list.length) {
+        $('list').innerHTML = '<div class="empty">Chưa có dự án nào. Hãy tạo dự án mới bên dưới.</div>';
+        return;
+      }
+      $('list').innerHTML = list.map((p) => {
+        const started = p.hasProgress ? '' : '<span class="phase">Chưa bắt đầu</span>';
+        const phase = p.hasProgress && p.phase ? `<span class="phase">${escapeHTML(p.phase)}</span>` : '';
+        const prog = p.hasProgress
+          ? `${p.chapters}/${p.totalChaps || '?'} chương · ${(p.words || 0).toLocaleString('vi-VN')} chữ`
+          : '';
+        const when = fmtDate(p.updatedAt);
+        const sub = [prog, when ? 'Sửa cuối: ' + when : ''].filter(Boolean).join(' · ');
+        return `<div class="proj">
+          <div class="info">
+            <div class="name">${escapeHTML(p.name)}</div>
+            <div class="sub">${phase}${started}<span class="dim">${escapeHTML(p.slug)}</span></div>
+            <div class="sub dim">${escapeHTML(sub)}</div>
+          </div>
+          <button data-dir="${escapeHTML(p.dir)}">Mở</button>
+        </div>`;
+      }).join('');
+      document.querySelectorAll('.proj button').forEach((b) => {
+        b.onclick = () => openProject(b.dataset.dir);
+      });
+    }
+
+    function load() {
+      fetch('/api/projects').then((r) => r.json()).then(renderList).catch((e) => {
+        $('list').innerHTML = '<div class="empty">Lỗi tải danh sách: ' + escapeHTML(e.message) + '</div>';
+      });
+    }
+
+    $('createForm').addEventListener('submit', (e) => {
+      e.preventDefault();
+      $('err').classList.add('hidden');
+      const name = $('name').value.trim();
+      if (!name) { showErr('Vui lòng nhập tên dự án'); return; }
+      $('createBtn').disabled = true;
+      $('createBtn').textContent = 'Đang tạo…';
+      fetch('/api/projects', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }),
+      }).then(async (r) => {
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(d.error || 'Không tạo được dự án');
+        location.reload();
+      }).catch((err) => {
+        showErr(err.message);
+        $('createBtn').disabled = false;
+        $('createBtn').textContent = 'Tạo & mở';
+      });
+    });
+
+    load();
+  </script>
+</body>
+</html>

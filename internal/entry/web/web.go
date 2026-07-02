@@ -10,14 +10,13 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"sync/atomic"
 	"syscall"
 	"time"
 
 	"github.com/voocel/ainovel-cli/assets"
 	"github.com/voocel/ainovel-cli/internal/bootstrap"
-	"github.com/voocel/ainovel-cli/internal/host"
-	"github.com/voocel/ainovel-cli/internal/logger"
 	"github.com/voocel/ainovel-cli/internal/rules"
 )
 
@@ -96,23 +95,25 @@ func RunWeb(configPath, version string, opts Options) error {
 	if err != nil {
 		return fmt.Errorf("config: %w", err)
 	}
-	if opts.OutputDir != "" {
-		cfg.OutputDir = opts.OutputDir
-	}
+	cfg.FillDefaults()
 	bundle := assets.Load(cfg.Style)
-	eng, err := host.New(cfg, bundle)
-	if err != nil {
-		return err
+
+	// root là thư mục cha chứa các dự án (mặc định "output", cha của output/novel).
+	root := filepath.Dir(cfg.OutputDir)
+
+	sm := newSessionManager(swap, cfg, bundle, version, configPath, root)
+	defer sm.closeCurrent()
+
+	if opts.OutputDir != "" {
+		// Tương thích script: --output mở thẳng dự án được chỉ định, bỏ qua màn chọn dự án.
+		if err := sm.open(opts.OutputDir); err != nil {
+			return err
+		}
+		banner(url, "Thư mục tác phẩm: "+opts.OutputDir)
+	} else {
+		sm.showPicker()
+		banner(url, "Hãy chọn hoặc tạo một dự án sách trên trình duyệt.")
 	}
-	cleanup := logger.SetupFile(eng.Dir(), "web.log", false)
-	defer cleanup()
-	defer eng.Close()
-
-	srv := newServer(eng, cfg, bundle, version)
-	go srv.hub.run()
-	swap.set(srv.mux)
-
-	banner(url, "Thư mục tác phẩm: "+eng.Dir())
 	if opts.Open && !browserOpened {
 		openBrowser(url)
 	}

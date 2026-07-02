@@ -20,7 +20,9 @@ type hub struct {
 	dirty    bool      // có thay đổi kể từ lần đẩy snapshot cuối không
 	lastSnap time.Time // thời gian đẩy snapshot lần cuối (giới hạn tần suất)
 
-	stop chan struct{}
+	stop     chan struct{}
+	stopOnce sync.Once     // đảm bảo close(stop) chỉ chạy một lần (switch nhiều dự án)
+	finished chan struct{} // đóng khi run() đã thoát, cho phép chờ tất định
 }
 
 // sseClient là một kết nối trình duyệt đơn. Khi ch đầy sẽ bỏ qua (client chậm không chặn phát sóng).
@@ -30,10 +32,11 @@ type sseClient struct {
 
 func newHub(eng *host.Host) *hub {
 	return &hub{
-		eng:     eng,
-		clients: make(map[*sseClient]struct{}),
-		maxLog:  600,
-		stop:    make(chan struct{}),
+		eng:      eng,
+		clients:  make(map[*sseClient]struct{}),
+		maxLog:   600,
+		stop:     make(chan struct{}),
+		finished: make(chan struct{}),
 	}
 }
 
@@ -93,6 +96,7 @@ func (h *hub) pushSnapshot() {
 
 // run là vòng lặp chính của hub: tiêu thụ kênh engine và phát sóng; snapshot được đẩy theo ticker có giới hạn tần suất.
 func (h *hub) run() {
+	defer close(h.finished)
 	events := h.eng.Events()
 	stream := h.eng.Stream()
 	done := h.eng.Done()
@@ -153,5 +157,21 @@ func (h *hub) emit(msg sseMessage, buffer bool) {
 }
 
 func (h *hub) close() {
-	close(h.stop)
+	h.stopOnce.Do(func() { close(h.stop) })
+}
+
+// wait chặn tới khi vòng lặp run() thực sự thoát (dùng khi đổi dự án để tránh rò goroutine
+// và đảm bảo không còn hub nào đọc kênh engine trước khi Close host).
+func (h *hub) wait() {
+	<-h.finished
+}
+
+// dropAllClients đóng mọi kết nối SSE hiện có, buộc trình duyệt reconnect (hoặc reload sang picker).
+func (h *hub) dropAllClients() {
+	h.mu.Lock()
+	for c := range h.clients {
+		delete(h.clients, c)
+		close(c.ch)
+	}
+	h.mu.Unlock()
 }

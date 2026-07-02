@@ -645,10 +645,18 @@ function onPrimary() {
   }
 }
 
+// leaveProject rời dự án hiện tại về màn chọn dự án. Máy chủ chặn (409) nếu AI đang chạy.
+function leaveProject() {
+  api('/api/projects/leave')
+    .then(() => { location.reload(); })
+    .catch((e) => toast(e.message, 'err'));
+}
+
 function bindUI() {
   $('btnPrimary').onclick = onPrimary;
   $('btnAbort').onclick = () => api('/api/abort').catch((e) => toast(e.message, 'err'));
   $('btnModels').onclick = openModels;
+  $('btnLeaveProject').onclick = leaveProject;
   const input = $('mainInput');
   input.addEventListener('input', () => {
     input.style.height = 'auto'; input.style.height = Math.min(140, input.scrollHeight) + 'px';
