@@ -150,6 +150,47 @@ func TestAppendVolumeValidation(t *testing.T) {
 	}
 }
 
+func TestAppendVolumeFillsEmptyShell(t *testing.T) {
+	// Dàn ý ban đầu tạo sẵn các vỏ tập rỗng (chỉ tiêu đề) làm lộ trình.
+	// append_volume trùng Index với một vỏ rỗng phải điền vào chỗ đó, không báo lỗi.
+	s := setupLayered(t, []domain.VolumeOutline{
+		{
+			Index: 1, Title: "Tập một", Theme: "Khởi đầu",
+			Arcs: []domain.ArcOutline{{
+				Index: 1, Title: "Cung đầu", Goal: "Mục tiêu",
+				Chapters: []domain.OutlineEntry{{Title: "Chương", CoreEvent: "Sự kiện", Hook: "Móc"}},
+			}},
+		},
+		{Index: 2, Title: "Quán Cà Phê", Theme: ""}, // vỏ tập rỗng
+		{Index: 3, Title: "Sương Mù London", Theme: ""}, // vỏ tập rỗng
+	})
+
+	// Điền vào vỏ tập rỗng Index=2 (dù Index không lớn hơn max hiện có là 3) phải thành công.
+	if err := s.AppendVolume(domain.VolumeOutline{
+		Index: 2, Title: "Quán Cà Phê Thành Vienna", Theme: "Vào đời",
+		Arcs: []domain.ArcOutline{{
+			Index: 1, Title: "Cung một", Goal: "Mục tiêu",
+			Chapters: []domain.OutlineEntry{{Title: "Chương mới", CoreEvent: "Tiến triển", Hook: "Móc"}},
+		}},
+	}); err != nil {
+		t.Fatalf("AppendVolume điền vỏ tập rỗng: %v", err)
+	}
+
+	volumes, err := s.Outline.LoadLayeredOutline()
+	if err != nil {
+		t.Fatalf("LoadLayeredOutline: %v", err)
+	}
+	if len(volumes) != 3 {
+		t.Fatalf("mong đợi vẫn 3 tập (điền tại chỗ, không thêm mới), có %d", len(volumes))
+	}
+	if !volumes[1].IsExpanded() || volumes[1].Theme != "Vào đời" {
+		t.Fatalf("tập 2 chưa được điền đúng: expanded=%v theme=%q", volumes[1].IsExpanded(), volumes[1].Theme)
+	}
+	if volumes[2].IsExpanded() {
+		t.Fatal("tập 3 (vỏ rỗng khác) không được đụng tới")
+	}
+}
+
 // Lưu ý: ngữ nghĩa từ chối append dựa trên tập Final trước đây đã được đưa xuống lớp save_foundation (từ chối Phase=Complete),
 // xem save_foundation_test.go::TestSaveFoundationAppendVolumeRejectsAfterComplete.
 // Lớp store chỉ giữ lại các kiểm tra cấu trúc (Index tăng dần / cung đầu có chương, v.v.).

@@ -283,10 +283,27 @@ func (s *OutlineStore) appendVolumeUnlocked(vol domain.VolumeOutline) ([]domain.
 	if err := s.io.ReadJSONUnlocked("layered_outline.json", &volumes); err != nil {
 		return nil, fmt.Errorf("load layered_outline: %w", err)
 	}
-	if err := validateAppendVolume(volumes, vol); err != nil {
+	if err := validateVolumeContent(vol); err != nil {
 		return nil, err
 	}
-	volumes = append(volumes, vol)
+	// Nếu đã tồn tại một vỏ tập rỗng (chưa có cung) trùng Index, điền nội dung vào
+	// đúng chỗ đó thay vì báo lỗi. Dàn ý ban đầu thường tạo sẵn các vỏ tập rỗng
+	// (chỉ có tiêu đề) làm lộ trình; nếu không có nhánh này, kiến trúc sư sẽ kẹt:
+	// expand_arc báo "arc not found" còn append_volume bị chặn vì Index không tăng dần.
+	filled := false
+	for i := range volumes {
+		if volumes[i].Index == vol.Index && !volumes[i].IsExpanded() {
+			volumes[i] = vol
+			filled = true
+			break
+		}
+	}
+	if !filled {
+		if err := validateAppendVolumeIndex(volumes, vol); err != nil {
+			return nil, err
+		}
+		volumes = append(volumes, vol)
+	}
 	if err := s.io.WriteJSONUnlocked("layered_outline.json", volumes); err != nil {
 		return nil, err
 	}
@@ -303,18 +320,26 @@ func (s *OutlineStore) appendVolumeUnlocked(vol domain.VolumeOutline) ([]domain.
 	return volumes, nil
 }
 
-func validateAppendVolume(existing []domain.VolumeOutline, vol domain.VolumeOutline) error {
-	if len(existing) > 0 {
-		maxIdx := existing[len(existing)-1].Index
-		if vol.Index <= maxIdx {
-			return fmt.Errorf("Index tập %d phải lớn hơn giá trị lớn nhất hiện có %d", vol.Index, maxIdx)
-		}
-	}
+// validateVolumeContent kiểm tra tập mới phải có cung và cung đầu đã mở rộng (có chương chi tiết).
+// Áp dụng cho cả nhánh điền vỏ tập rỗng lẫn nhánh thêm tập mới vào cuối.
+func validateVolumeContent(vol domain.VolumeOutline) error {
 	if len(vol.Arcs) == 0 {
 		return fmt.Errorf("tập mới phải chứa ít nhất một cung")
 	}
 	if !vol.Arcs[0].IsExpanded() {
 		return fmt.Errorf("cung đầu tiên của tập mới phải chứa các chương chi tiết")
+	}
+	return nil
+}
+
+// validateAppendVolumeIndex kiểm tra Index tăng dần khi thêm một tập hoàn toàn mới vào cuối.
+// Chỉ dùng khi không điền được vào vỏ tập rỗng có sẵn.
+func validateAppendVolumeIndex(existing []domain.VolumeOutline, vol domain.VolumeOutline) error {
+	if len(existing) > 0 {
+		maxIdx := existing[len(existing)-1].Index
+		if vol.Index <= maxIdx {
+			return fmt.Errorf("Index tập %d phải lớn hơn giá trị lớn nhất hiện có %d", vol.Index, maxIdx)
+		}
 	}
 	return nil
 }
