@@ -61,7 +61,7 @@ echo [3/3] Dang khoi dong Web UI tai http://localhost:8765
 echo       Trinh duyet se tu dong mo. Dong cua so nay de tat phan mem.
 echo       ^(Cua so Meridian van chay rieng; dong no neu muon tat han cau noi model.^)
 echo.
-ainovel-cli.exe --web --port 8765
+"%~dp0ainovel-cli.exe" --web --port 8765
 
 echo.
 echo Phan mem da dung.
