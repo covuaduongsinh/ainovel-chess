@@ -163,6 +163,111 @@ func TestRun_All_WritesExpectedFiles(t *testing.T) {
 	}
 }
 
+func TestRun_ByChapter_WritesBundleAndKeepsFlatLayout(t *testing.T) {
+	s, dir := newTestStore(t, []int{1, 2})
+	// Options{} rỗng → mặc định GroupByChapter.
+	ch, err := Run(context.Background(), Deps{Store: s, LLM: &fakeLLM{}, Prompts: testPrompts()}, Options{})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if lastStage(drain(ch)) != StageDone {
+		t.Fatalf("muốn stage done")
+	}
+	// Đóng gói lồng theo tập/chương (sách không phân tầng → tap-01).
+	bundle := []string{
+		"video/tap-01/chuong-001/kich-ban.md",
+		"video/tap-01/chuong-001/phan-canh.json",
+		"video/tap-01/chuong-001/phan-canh.md",
+		"video/tap-01/chuong-001/animation.md",
+		"video/tap-01/chuong-001/prompt-anh.md",
+		"video/tap-01/chuong-001/prompt-video.md",
+		"video/tap-01/chuong-002/kich-ban.md",
+		"video/tap-01/_tap-01.md",
+	}
+	for _, rel := range bundle {
+		if _, err := os.Stat(filepath.Join(dir, rel)); err != nil {
+			t.Errorf("thiếu file đóng gói %s: %v", rel, err)
+		}
+	}
+	// Vẫn giữ bố cục theo loại cũ.
+	flat := []string{"video/screenplay/01.md", "video/storyboard/01.json", "video/animation/01.md", "video/prompts/image-prompts.md"}
+	for _, rel := range flat {
+		if _, err := os.Stat(filepath.Join(dir, rel)); err != nil {
+			t.Errorf("thiếu file theo loại %s: %v", rel, err)
+		}
+	}
+}
+
+func TestRun_ByChapter_CompletesChapterBeforeNext(t *testing.T) {
+	s, _ := newTestStore(t, []int{1, 2})
+	ch, err := Run(context.Background(), Deps{Store: s, LLM: &fakeLLM{}, Prompts: testPrompts()},
+		Options{Products: []Product{ProductScreenplay, ProductStoryboard}})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	events := drain(ch)
+	lastCh1, firstCh2 := -1, -1
+	for i, ev := range events {
+		if ev.Stage != StageScreenplay && ev.Stage != StageStoryboard {
+			continue
+		}
+		if strings.Contains(ev.Message, "Chương 1") {
+			lastCh1 = i
+		}
+		if strings.Contains(ev.Message, "Chương 2") && firstCh2 < 0 {
+			firstCh2 = i
+		}
+	}
+	if lastCh1 < 0 || firstCh2 < 0 {
+		t.Fatalf("không thấy sự kiện của cả hai chương: lastCh1=%d firstCh2=%d", lastCh1, firstCh2)
+	}
+	if lastCh1 > firstCh2 {
+		t.Errorf("chương 1 chưa làm trọn đã sang chương 2 (lastCh1=%d > firstCh2=%d)", lastCh1, firstCh2)
+	}
+}
+
+func TestRun_ByProduct_NoBundle(t *testing.T) {
+	s, dir := newTestStore(t, []int{1, 2})
+	ch, err := Run(context.Background(), Deps{Store: s, LLM: &fakeLLM{}, Prompts: testPrompts()},
+		Options{Grouping: GroupByProduct})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	drain(ch)
+	if _, err := os.Stat(filepath.Join(dir, "video/tap-01")); err == nil {
+		t.Errorf("chế độ gói-theo-loại không nên tạo thư mục đóng gói lồng")
+	}
+	// Bố cục theo loại vẫn có.
+	if _, err := os.Stat(filepath.Join(dir, "video/screenplay/01.md")); err != nil {
+		t.Errorf("thiếu screenplay theo loại: %v", err)
+	}
+}
+
+func TestVolumeGroupsForRange_Layered(t *testing.T) {
+	b := &storyBible{
+		Layered:    true,
+		MaxChapter: 3,
+		Completed:  map[int]bool{1: true, 2: true, 3: true},
+		Volumes: []domain.VolumeOutline{
+			{Index: 1, Title: "Tập một", Arcs: []domain.ArcOutline{{Index: 1, Chapters: []domain.OutlineEntry{{}, {}}}}},
+			{Index: 2, Title: "Tập hai", Arcs: []domain.ArcOutline{{Index: 1, Chapters: []domain.OutlineEntry{{}}}}},
+		},
+	}
+	groups, skipped := b.volumeGroupsForRange(0, 0)
+	if len(skipped) != 0 {
+		t.Fatalf("skipped = %v, muốn rỗng", skipped)
+	}
+	if len(groups) != 2 {
+		t.Fatalf("groups = %d, muốn 2", len(groups))
+	}
+	if groups[0].Index != 1 || len(groups[0].Chapters) != 2 || groups[0].Chapters[0] != 1 || groups[0].Chapters[1] != 2 {
+		t.Errorf("nhóm tập 1 sai: %+v", groups[0])
+	}
+	if groups[1].Index != 2 || len(groups[1].Chapters) != 1 || groups[1].Chapters[0] != 3 {
+		t.Errorf("nhóm tập 2 sai: %+v", groups[1])
+	}
+}
+
 func TestRun_SingleProduct_Screenplay_Range(t *testing.T) {
 	s, dir := newTestStore(t, []int{1, 2})
 	ch, err := Run(context.Background(), Deps{Store: s, LLM: &fakeLLM{}, Prompts: testPrompts()},

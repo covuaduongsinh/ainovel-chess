@@ -112,6 +112,62 @@ func (b *storyBible) completedChaptersInRange(from, to int) (chapters, skipped [
 	return chapters, skipped
 }
 
+// chapterLoc định vị một chương trong cấu trúc phân tầng.
+type chapterLoc struct {
+	VolumeIndex int
+	VolumeTitle string
+	ArcIndex    int
+}
+
+// chapterLocations dựng map chương toàn cục → (tập, cung) từ dàn ý phân tầng,
+// đánh số tuần tự giống domain.FlattenOutline. Sách không phân tầng → map rỗng.
+func (b *storyBible) chapterLocations() map[int]chapterLoc {
+	m := make(map[int]chapterLoc)
+	if !b.Layered || len(b.Volumes) == 0 {
+		return m
+	}
+	ch := 1
+	for _, v := range b.Volumes {
+		for _, a := range v.Arcs {
+			for range a.Chapters {
+				m[ch] = chapterLoc{VolumeIndex: v.Index, VolumeTitle: v.Title, ArcIndex: a.Index}
+				ch++
+			}
+		}
+	}
+	return m
+}
+
+// volumeGroup gom các chương (số toàn cục) thuộc cùng một tập.
+type volumeGroup struct {
+	Index    int
+	Title    string
+	Chapters []int
+}
+
+// volumeGroupsForRange nhóm các chương ĐÃ HOÀN THÀNH trong [from,to] theo tập, giữ thứ tự
+// tăng dần (nhờ đó tập trước được xử lý trước). Chương không tra được tập → gom vào tập 1.
+// Trả kèm danh sách chương bị bỏ qua (chưa hoàn thành) để báo tiến trình.
+func (b *storyBible) volumeGroupsForRange(from, to int) ([]volumeGroup, []int) {
+	chapters, skipped := b.completedChaptersInRange(from, to)
+	locs := b.chapterLocations()
+	pos := map[int]int{}
+	var groups []volumeGroup
+	for _, ch := range chapters {
+		vi, vt := 1, ""
+		if loc, ok := locs[ch]; ok {
+			vi, vt = loc.VolumeIndex, loc.VolumeTitle
+		}
+		if p, seen := pos[vi]; seen {
+			groups[p].Chapters = append(groups[p].Chapters, ch)
+			continue
+		}
+		pos[vi] = len(groups)
+		groups = append(groups, volumeGroup{Index: vi, Title: vt, Chapters: []int{ch}})
+	}
+	return groups, skipped
+}
+
 // styleContext gói phần "style bible" dùng chung cho prompt (premise + thế giới + gợi ý phong cách).
 func (b *storyBible) styleContext() map[string]any {
 	return map[string]any{

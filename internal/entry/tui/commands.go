@@ -223,7 +223,7 @@ func commandRegistryInstance() commandRegistry {
 			Name:        "video",
 			Aliases:     []string{"adapt"},
 			Group:       "writing",
-			Usage:       "/video [concept|character|prop|consistency|screenplay|storyboard|animation|imageprompt|videoprompt|all] [from=N] [to=M] [style=...] [--overwrite]",
+			Usage:       "/video [concept|character|prop|consistency|screenplay|storyboard|animation|imageprompt|videoprompt|all] [group=chapter|product] [from=N] [to=M] [style=...] [--overwrite]",
 			Description: "Chuyển sách thành sản phẩm làm video (kịch bản/phân cảnh/nhân vật/concept)",
 			NeedsIdle:   true,
 			Run: func(m Model, args []string) (tea.Model, tea.Cmd) {

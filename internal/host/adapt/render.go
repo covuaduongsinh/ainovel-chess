@@ -129,30 +129,63 @@ func runAnimation(ctx context.Context, rc *runCtx) error {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		var b strings.Builder
-		fmt.Fprintf(&b, "# Chỉ đạo animation — Chương %d — %s\n", s.Chapter, titleOr(s.Title))
-		for _, sc := range s.Scenes {
-			fmt.Fprintf(&b, "\n## Cảnh %s — %s\n\n", scOr(sc.SceneID), titleOr(sc.Heading))
-			for _, sh := range sc.Shots {
-				fmt.Fprintf(&b, "- **Shot %s**", scOr(sh.ShotID))
-				if sh.DurationSec > 0 {
-					fmt.Fprintf(&b, " (%ds)", sh.DurationSec)
-				}
-				b.WriteString(": ")
-				b.WriteString(joinNonEmpty(" · ", sh.Movement, sh.CameraAngle))
-				if strings.TrimSpace(sh.VideoPrompt) != "" {
-					fmt.Fprintf(&b, "\n  - Motion: %s", sh.VideoPrompt)
-				}
-				b.WriteString("\n")
-			}
-		}
-		if _, err := rc.write(ProductAnimation, fmt.Sprintf("animation/%02d.md", s.Chapter), []byte(b.String())); err != nil {
+		if _, err := rc.write(ProductAnimation, fmt.Sprintf("animation/%02d.md", s.Chapter), []byte(renderAnimationMarkdown(s))); err != nil {
 			return err
 		}
 		done++
 	}
 	rc.emit(Event{Stage: StageAnimation, Current: done, Total: len(boards), Message: fmt.Sprintf("Đã tạo chỉ đạo animation cho %d chương", done)})
 	return nil
+}
+
+// renderAnimationMarkdown dựng bảng chỉ đạo animation của một chương từ storyboard.
+func renderAnimationMarkdown(s StoryboardResult) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "# Chỉ đạo animation — Chương %d — %s\n", s.Chapter, titleOr(s.Title))
+	for _, sc := range s.Scenes {
+		fmt.Fprintf(&b, "\n## Cảnh %s — %s\n\n", scOr(sc.SceneID), titleOr(sc.Heading))
+		for _, sh := range sc.Shots {
+			fmt.Fprintf(&b, "- **Shot %s**", scOr(sh.ShotID))
+			if sh.DurationSec > 0 {
+				fmt.Fprintf(&b, " (%ds)", sh.DurationSec)
+			}
+			b.WriteString(": ")
+			b.WriteString(joinNonEmpty(" · ", sh.Movement, sh.CameraAngle))
+			if strings.TrimSpace(sh.VideoPrompt) != "" {
+				fmt.Fprintf(&b, "\n  - Motion: %s", sh.VideoPrompt)
+			}
+			b.WriteString("\n")
+		}
+	}
+	return b.String()
+}
+
+// chapterImagePromptMarkdown dựng bảng prompt ảnh của RIÊNG một chương (đưa vào đóng gói lồng).
+func chapterImagePromptMarkdown(s StoryboardResult) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "# Prompt ảnh — Chương %d — %s\n", s.Chapter, titleOr(s.Title))
+	for _, sc := range s.Scenes {
+		for _, sh := range sc.Shots {
+			writePromptRow(&b, fmt.Sprintf("C%s·S%s", scOr(sc.SceneID), scOr(sh.ShotID)), sh.ImagePrompt, sh.NegativePrompt)
+		}
+	}
+	return b.String()
+}
+
+// chapterVideoPromptMarkdown dựng bảng prompt video của RIÊNG một chương (đưa vào đóng gói lồng).
+func chapterVideoPromptMarkdown(s StoryboardResult) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "# Prompt video — Chương %d — %s\n", s.Chapter, titleOr(s.Title))
+	for _, sc := range s.Scenes {
+		for _, sh := range sc.Shots {
+			label := fmt.Sprintf("C%s·S%s", scOr(sc.SceneID), scOr(sh.ShotID))
+			if sh.DurationSec > 0 {
+				label += fmt.Sprintf(" (%ds)", sh.DurationSec)
+			}
+			writePromptRow(&b, label, sh.VideoPrompt, sh.NegativePrompt)
+		}
+	}
+	return b.String()
 }
 
 // runImagePrompt tổng hợp bảng prompt ảnh phẳng (không gọi LLM).

@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-// runStoryboard chẻ mỗi chương thành cảnh → shots (mỗi chương 1 lời gọi LLM).
+// runStoryboard chẻ mỗi chương thành cảnh → shots (chế độ gói-theo-loại).
 // Ưu tiên đọc kịch bản đã sinh (screenplay/{NN}.md) làm đầu vào; nếu chưa có thì
 // dùng văn xuôi + OutlineEntry.Scenes. Tiêm visualBible để giữ nhất quán hình ảnh.
 // Fail-soft per-chapter.
@@ -31,46 +31,58 @@ func runStoryboard(ctx context.Context, rc *runCtx) error {
 		}
 		entry := rc.bible.outlineFor(ch)
 		rc.emit(Event{Stage: StageStoryboard, Current: i + 1, Total: total, Message: fmt.Sprintf("Phân cảnh chương %d — %s", ch, entry.Title)})
-
-		source, kind := rc.storyboardSource(ch)
-		if strings.TrimSpace(source) == "" {
-			rc.emit(Event{Stage: StageStoryboard, Current: i + 1, Total: total, Message: fmt.Sprintf("Bỏ qua chương %d (không có nội dung)", ch)})
-			continue
-		}
-		payload := map[string]any{
-			"chapter":       ch,
-			"title":         entry.Title,
-			"outline":       entry,
-			"source_kind":   kind,
-			"source":        compact(source, maxChapterRunes),
-			"visual_bible":  visual,
-			"style_hint":    rc.bible.StyleHint,
-		}
-		var result StoryboardResult
-		if err := generateJSON(ctx, rc.deps.LLM, rc.deps.Prompts.Storyboard,
-			jsonPayload("Chẻ chương sau thành cảnh và shot, kèm prompt sinh ảnh/video song ngữ. Trả JSON theo schema trong <output>.", payload),
-			&result); err != nil {
-			rc.emit(Event{Stage: StageStoryboard, Current: i + 1, Total: total, Message: fmt.Sprintf("Bỏ qua chương %d (lỗi sinh)", ch), Err: err})
-			continue
-		}
-		if len(result.Scenes) == 0 {
-			rc.emit(Event{Stage: StageStoryboard, Current: i + 1, Total: total, Message: fmt.Sprintf("Bỏ qua chương %d (phân cảnh rỗng)", ch)})
-			continue
-		}
-		result.Chapter = ch
-		if strings.TrimSpace(result.Title) == "" {
-			result.Title = entry.Title
-		}
-		if _, err := rc.writeJSON(ProductStoryboard, fmt.Sprintf("storyboard/%02d.json", ch), result); err != nil {
+		res, err := storyboardChapter(ctx, rc, ch, visual)
+		if err != nil {
 			return err
 		}
-		if _, err := rc.write(ProductStoryboard, fmt.Sprintf("storyboard/%02d.md", ch), []byte(renderStoryboardMarkdown(result))); err != nil {
-			return err
+		if res != nil {
+			done++
 		}
-		done++
 	}
 	rc.emit(Event{Stage: StageStoryboard, Current: total, Total: total, Message: fmt.Sprintf("Đã phân cảnh %d/%d chương", done, total)})
 	return nil
+}
+
+// storyboardChapter sinh + ghi phân cảnh cho MỘT chương (1 lời gọi LLM), ghi storyboard/{NN}.{json,md}.
+// Trả (*result, nil) khi thành công; (nil, nil) khi bỏ qua mềm; (nil, err) khi lỗi ghi tệp.
+func storyboardChapter(ctx context.Context, rc *runCtx, ch int, visual map[string]any) (*StoryboardResult, error) {
+	entry := rc.bible.outlineFor(ch)
+	source, kind := rc.storyboardSource(ch)
+	if strings.TrimSpace(source) == "" {
+		rc.emit(Event{Stage: StageStoryboard, Message: fmt.Sprintf("Bỏ qua chương %d (không có nội dung)", ch)})
+		return nil, nil
+	}
+	payload := map[string]any{
+		"chapter":      ch,
+		"title":        entry.Title,
+		"outline":      entry,
+		"source_kind":  kind,
+		"source":       compact(source, maxChapterRunes),
+		"visual_bible": visual,
+		"style_hint":   rc.bible.StyleHint,
+	}
+	var result StoryboardResult
+	if err := generateJSON(ctx, rc.deps.LLM, rc.deps.Prompts.Storyboard,
+		jsonPayload("Chẻ chương sau thành cảnh và shot, kèm prompt sinh ảnh/video song ngữ. Trả JSON theo schema trong <output>.", payload),
+		&result); err != nil {
+		rc.emit(Event{Stage: StageStoryboard, Message: fmt.Sprintf("Bỏ qua chương %d (lỗi sinh)", ch), Err: err})
+		return nil, nil
+	}
+	if len(result.Scenes) == 0 {
+		rc.emit(Event{Stage: StageStoryboard, Message: fmt.Sprintf("Bỏ qua chương %d (phân cảnh rỗng)", ch)})
+		return nil, nil
+	}
+	result.Chapter = ch
+	if strings.TrimSpace(result.Title) == "" {
+		result.Title = entry.Title
+	}
+	if _, err := rc.writeJSON(ProductStoryboard, fmt.Sprintf("storyboard/%02d.json", ch), result); err != nil {
+		return nil, err
+	}
+	if _, err := rc.write(ProductStoryboard, fmt.Sprintf("storyboard/%02d.md", ch), []byte(renderStoryboardMarkdown(result))); err != nil {
+		return nil, err
+	}
+	return &result, nil
 }
 
 // storyboardSource chọn nguồn tốt nhất cho phân cảnh: kịch bản đã sinh > văn xuôi gốc.

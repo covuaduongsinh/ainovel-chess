@@ -79,13 +79,43 @@ func isKnownProduct(p Product) bool {
 	return false
 }
 
+// Grouping quyết định thứ tự xử lý + đầu ra đóng gói.
+type Grouping string
+
+const (
+	// GroupByChapter (mặc định): chạy cấp-sách 1 lần rồi duyệt tập→chương, mỗi chương làm
+	// trọn các loại cấp-chương và ghi đóng gói lồng video/tap-{VV}/chuong-{NN}/ — tập trước
+	// hoàn chỉnh trước, dễ dựng video từng tập.
+	GroupByChapter Grouping = "chapter"
+	// GroupByProduct (tương thích cũ): mỗi loại sản phẩm quét toàn bộ chương; không đóng gói lồng.
+	GroupByProduct Grouping = "product"
+)
+
 // Options là tham số điều khiển, dùng chung cho cả Web và TUI (mirror).
 type Options struct {
 	Products  []Product // rỗng = DefaultOrder()
+	Grouping  Grouping  // rỗng = GroupByChapter
 	From, To  int       // phạm vi chương (0/0 = toàn bộ đã hoàn thành); chỉ dùng cho screenplay/storyboard/animation
 	OutDir    string    // rỗng = {novelDir}/video/
 	Overwrite bool      // ghi đè file đã tồn tại; false = bỏ qua (resume incremental)
 	StyleHint string    // gợi ý phong cách hình ảnh người dùng nhập
+}
+
+// isBookLevel phân loại product cấp-sách (chạy 1 lần) vs cấp-chương.
+func isBookLevel(p Product) bool {
+	switch p {
+	case ProductConcept, ProductCharacter, ProductProp, ProductConsistency:
+		return true
+	}
+	return false
+}
+
+// normalizeGrouping trả về Grouping hiệu lực (mặc định GroupByChapter).
+func normalizeGrouping(g Grouping) Grouping {
+	if g == GroupByProduct {
+		return GroupByProduct
+	}
+	return GroupByChapter
 }
 
 // Stage là giai đoạn tiến trình, chiếu ra UI.

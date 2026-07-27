@@ -10,6 +10,7 @@ import (
 // adaptRequest là body cho POST /api/adapt (mirror TUI /video).
 type adaptRequest struct {
 	Products  []string `json:"products"` // rỗng = tất cả (DefaultOrder)
+	Grouping  string   `json:"grouping"` // "chapter" (mặc định) | "product"
 	From      int      `json:"from"`
 	To        int      `json:"to"`
 	OutDir    string   `json:"outDir"`
@@ -33,6 +34,7 @@ func (s *Server) handleAdapt(w http.ResponseWriter, r *http.Request) {
 	}
 	opts := adapt.Options{
 		Products:  products,
+		Grouping:  adapt.Grouping(strings.TrimSpace(req.Grouping)),
 		From:      req.From,
 		To:        req.To,
 		OutDir:    strings.TrimSpace(req.OutDir),

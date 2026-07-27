@@ -32,13 +32,48 @@ Chín loại (`adapt.Product`), chia hai nhóm:
 > Ba loại render thuần yêu cầu `storyboard` đã chạy trước. Nếu chưa có, bước phát một sự
 > kiện nhắc "hãy chạy storyboard trước" và **không** tự sinh (tránh phát sinh chi phí ngầm).
 
-## Thứ tự khi chạy `all`
+## Chế độ đóng gói (`Grouping`)
 
-`concept → character → prop → consistency → screenplay → storyboard → animation → imageprompt → videoprompt`
+Hai cách tổ chức thứ tự xử lý + đầu ra (chọn qua ô "Cách đóng gói" trên Web, hoặc
+`group=chapter|product` trên TUI):
 
-Các bước hình ảnh chạy trước để tạo "style bible"; `storyboard` tiêm token chuẩn từ
-`consistency-bible` (hoặc concept/character/prop nếu chưa tổng hợp consistency) vào từng
-prompt, giữ nhân vật/đạo cụ **nhất quán xuyên suốt** (chương 5 và chương 80 mô tả giống nhau).
+- **`chapter` (mặc định)** — *gói theo chương*: chạy phần cấp-sách (concept/character/prop/
+  consistency) **một lần** làm "style bible", rồi duyệt **tập → chương** theo thứ tự; mỗi
+  chương làm trọn kịch bản → phân cảnh → animation → prompt **trước khi** sang chương kế, và
+  ghi ngay một **thư mục đóng gói lồng** cho chương đó. Nhờ vậy **tập trước hoàn chỉnh
+  trước** — có thể dựng video từng tập trong khi các tập sau còn đang sinh.
+- **`product`** — *gói theo loại* (hành vi cũ): mỗi loại sản phẩm quét toàn bộ chương (xong
+  hết kịch bản 1…N rồi mới phân cảnh 1…N…). Không tạo đóng gói lồng.
+
+Cả hai chế độ **đều giữ nguyên** bố cục thư mục theo loại ở trên (`video/screenplay/`,
+`video/storyboard/`, …). Chế độ `chapter` bổ sung thêm đóng gói lồng.
+
+### Đóng gói lồng (chỉ ở chế độ `chapter`)
+Mỗi chương có một thư mục gom đủ liệu để dựng video, nhóm theo tập:
+
+```
+video/
+  tap-{VV}/
+    _tap-{VV}.md          # mục lục tập: liên kết tới từng chương
+    chuong-{NNN}/
+      kich-ban.md         # kịch bản
+      phan-canh.json/.md  # phân cảnh
+      animation.md        # chỉ đạo animation
+      prompt-anh.md       # prompt ảnh của riêng chương
+      prompt-video.md     # prompt video của riêng chương
+```
+`VV` = số tập (sách không phân tầng → `01`); `NNN` = số chương toàn cục. Đóng gói là **render
+thuần** (không gọi LLM) từ kết quả cấp-chương; nếu bỏ chọn screenplay/storyboard, gói tự nạp
+lại từ các file theo loại đã có trên đĩa.
+
+## Thứ tự sản phẩm cấp-chương
+
+`screenplay → storyboard → animation → imageprompt → videoprompt`
+
+Phần cấp-sách (`concept → character → prop → consistency`) luôn chạy trước để tạo "style
+bible"; `storyboard` tiêm token chuẩn từ `consistency-bible` (hoặc concept/character/prop nếu
+chưa tổng hợp consistency) vào từng prompt, giữ nhân vật/đạo cụ **nhất quán xuyên suốt**
+(chương 5 và chương 80 mô tả giống nhau).
 
 ## Quy ước prompt
 
@@ -50,9 +85,10 @@ prompt, giữ nhân vật/đạo cụ **nhất quán xuyên suốt** (chương 5
 
 ## Tham số & hành vi
 
-`adapt.Options`: `Products` (rỗng = tất cả), `From`/`To` (phạm vi chương, 0/0 = toàn bộ đã
-hoàn thành; chỉ áp cho screenplay/storyboard/animation/imageprompt/videoprompt), `StyleHint`
-(gợi ý phong cách), `OutDir` (mặc định `{novelDir}/video/`), `Overwrite`.
+`adapt.Options`: `Products` (rỗng = tất cả), `Grouping` (rỗng = `chapter`; hoặc `product`),
+`From`/`To` (phạm vi chương, 0/0 = toàn bộ đã hoàn thành; chỉ áp cho
+screenplay/storyboard/animation/imageprompt/videoprompt), `StyleHint` (gợi ý phong cách),
+`OutDir` (mặc định `{novelDir}/video/`), `Overwrite`.
 
 - **Ghi nguyên tử** (temp + fsync + rename) — output có thể nằm ngoài `store.Dir()`.
 - **guardExclusive**: job dài, không chạy chồng Coordinator; Web hủy qua `POST /api/job/cancel`,
@@ -69,9 +105,10 @@ hoàn thành; chỉ áp cho screenplay/storyboard/animation/imageprompt/videopro
 /video                                  # chạy tất cả, toàn bộ chương
 /video concept                          # chỉ art direction
 /video character prop consistency       # cụm thiết kế hình ảnh
-/video screenplay storyboard to=3       # kịch bản + phân cảnh 3 chương đầu
+/video screenplay storyboard to=3       # kịch bản + phân cảnh 3 chương đầu (gói theo chương)
 /video imageprompt                      # bảng prompt ảnh (cần storyboard trước)
 /video all from=1 to=10 style=anime --overwrite
+/video group=product                    # chạy theo kiểu cũ (gói theo loại, không đóng gói lồng)
 ```
 
 **Web:** nút **🎬 Làm video** → chọn sản phẩm (không chọn = tất cả) + phạm vi + gợi ý phong

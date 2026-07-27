@@ -3,6 +3,7 @@ package adapt
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -51,7 +52,16 @@ func Run(ctx context.Context, deps Deps, opts Options) (<-chan Event, error) {
 		var outputs []Output
 		rc := &runCtx{deps: deps, bible: bible, opts: opts, outDir: outDir, emit: emit, outputs: &outputs}
 
+		sel := make(map[Product]bool, len(products))
 		for _, p := range products {
+			sel[p] = true
+		}
+
+		// 1) Sản phẩm cấp-sách (style bible) — chạy 1 lần theo thứ tự chuẩn, cả hai chế độ.
+		for _, p := range []Product{ProductConcept, ProductCharacter, ProductProp, ProductConsistency} {
+			if !sel[p] {
+				continue
+			}
 			if err := ctx.Err(); err != nil {
 				emit(Event{Stage: StageError, Product: p, Message: "Người dùng đã hủy chuyển thể", Err: err})
 				return
@@ -66,19 +76,50 @@ func Run(ctx context.Context, deps Deps, opts Options) (<-chan Event, error) {
 				perr = runProp(ctx, rc)
 			case ProductConsistency:
 				perr = runConsistency(ctx, rc)
-			case ProductScreenplay:
-				perr = runScreenplay(ctx, rc)
-			case ProductStoryboard:
-				perr = runStoryboard(ctx, rc)
-			case ProductAnimation:
-				perr = runAnimation(ctx, rc)
-			case ProductImagePrompt:
-				perr = runImagePrompt(ctx, rc)
-			case ProductVideoPrompt:
-				perr = runVideoPrompt(ctx, rc)
 			}
 			if perr != nil {
 				emit(Event{Stage: StageError, Product: p, Message: "Bước " + string(p) + " thất bại", Err: perr})
+				return
+			}
+		}
+
+		// 2) Sản phẩm cấp-chương.
+		if normalizeGrouping(opts.Grouping) == GroupByProduct {
+			// Chế độ cũ: mỗi loại quét toàn bộ chương.
+			for _, p := range []Product{ProductScreenplay, ProductStoryboard, ProductAnimation, ProductImagePrompt, ProductVideoPrompt} {
+				if !sel[p] {
+					continue
+				}
+				if err := ctx.Err(); err != nil {
+					emit(Event{Stage: StageError, Product: p, Message: "Người dùng đã hủy chuyển thể", Err: err})
+					return
+				}
+				var perr error
+				switch p {
+				case ProductScreenplay:
+					perr = runScreenplay(ctx, rc)
+				case ProductStoryboard:
+					perr = runStoryboard(ctx, rc)
+				case ProductAnimation:
+					perr = runAnimation(ctx, rc)
+				case ProductImagePrompt:
+					perr = runImagePrompt(ctx, rc)
+				case ProductVideoPrompt:
+					perr = runVideoPrompt(ctx, rc)
+				}
+				if perr != nil {
+					emit(Event{Stage: StageError, Product: p, Message: "Bước " + string(p) + " thất bại", Err: perr})
+					return
+				}
+			}
+		} else {
+			// Mặc định: pipeline theo tập→chương, mỗi chương làm trọn + đóng gói lồng.
+			if err := runChapterPipeline(ctx, rc, sel); err != nil {
+				if errors.Is(err, context.Canceled) {
+					emit(Event{Stage: StageError, Message: "Người dùng đã hủy chuyển thể", Err: err})
+				} else {
+					emit(Event{Stage: StageError, Message: "Pipeline theo chương thất bại", Err: err})
+				}
 				return
 			}
 		}

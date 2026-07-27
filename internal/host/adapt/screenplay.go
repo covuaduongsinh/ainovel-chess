@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-// runScreenplay chuyển văn xuôi từng chương → kịch bản (mỗi chương 1 lời gọi LLM).
+// runScreenplay chuyển văn xuôi từng chương → kịch bản (chế độ gói-theo-loại).
 // Fail-soft per-chapter: một chương lỗi thì bỏ qua, tiếp tục các chương còn lại.
 func runScreenplay(ctx context.Context, rc *runCtx) error {
 	chapters, skipped := rc.bible.completedChaptersInRange(rc.opts.From, rc.opts.To)
@@ -26,42 +26,60 @@ func runScreenplay(ctx context.Context, rc *runCtx) error {
 		}
 		entry := rc.bible.outlineFor(ch)
 		rc.emit(Event{Stage: StageScreenplay, Current: i + 1, Total: total, Message: fmt.Sprintf("Viết kịch bản chương %d — %s", ch, entry.Title)})
-
-		text, err := rc.deps.Store.Drafts.LoadChapterText(ch)
+		res, err := screenplayChapter(ctx, rc, ch)
 		if err != nil {
-			rc.emit(Event{Stage: StageScreenplay, Current: i + 1, Total: total, Message: fmt.Sprintf("Bỏ qua chương %d (đọc lỗi)", ch), Err: err})
-			continue
-		}
-		if strings.TrimSpace(text) == "" {
-			rc.emit(Event{Stage: StageScreenplay, Current: i + 1, Total: total, Message: fmt.Sprintf("Bỏ qua chương %d (nội dung rỗng)", ch)})
-			continue
-		}
-
-		payload := map[string]any{
-			"chapter":    ch,
-			"title":      entry.Title,
-			"outline":    entry,
-			"prose":      compact(text, maxChapterRunes),
-			"characters": rc.bible.charactersPayload(),
-			"style_hint": rc.bible.StyleHint,
-		}
-		var result ScreenplayResult
-		if err := generateJSON(ctx, rc.deps.LLM, rc.deps.Prompts.Screenplay,
-			jsonPayload("Chuyển văn xuôi chương sau thành kịch bản chuẩn (scene heading, action, lời thoại). Trả JSON {chapter,title,markdown} trong <output>.", payload),
-			&result); err != nil {
-			rc.emit(Event{Stage: StageScreenplay, Current: i + 1, Total: total, Message: fmt.Sprintf("Bỏ qua chương %d (lỗi sinh)", ch), Err: err})
-			continue
-		}
-		if strings.TrimSpace(result.Markdown) == "" {
-			rc.emit(Event{Stage: StageScreenplay, Current: i + 1, Total: total, Message: fmt.Sprintf("Bỏ qua chương %d (kịch bản rỗng)", ch)})
-			continue
-		}
-		md := renderScreenplayMarkdown(ch, entry.Title, result)
-		if _, err := rc.write(ProductScreenplay, fmt.Sprintf("screenplay/%02d.md", ch), []byte(md)); err != nil {
 			return err
 		}
-		done++
+		if res != nil {
+			done++
+		}
 	}
 	rc.emit(Event{Stage: StageScreenplay, Current: total, Total: total, Message: fmt.Sprintf("Đã viết kịch bản %d/%d chương", done, total)})
 	return nil
+}
+
+// screenplayChapter sinh + ghi kịch bản cho MỘT chương (1 lời gọi LLM), ghi screenplay/{NN}.md.
+// Trả về (*result, nil) khi thành công; (nil, nil) khi bỏ qua mềm (rỗng/lỗi sinh, đã emit);
+// (nil, err) chỉ khi lỗi ghi tệp (nên dừng).
+func screenplayChapter(ctx context.Context, rc *runCtx, ch int) (*ScreenplayResult, error) {
+	entry := rc.bible.outlineFor(ch)
+	text, err := rc.deps.Store.Drafts.LoadChapterText(ch)
+	if err != nil {
+		rc.emit(Event{Stage: StageScreenplay, Message: fmt.Sprintf("Bỏ qua chương %d (đọc lỗi)", ch), Err: err})
+		return nil, nil
+	}
+	if strings.TrimSpace(text) == "" {
+		rc.emit(Event{Stage: StageScreenplay, Message: fmt.Sprintf("Bỏ qua chương %d (nội dung rỗng)", ch)})
+		return nil, nil
+	}
+	payload := map[string]any{
+		"chapter":    ch,
+		"title":      entry.Title,
+		"outline":    entry,
+		"prose":      compact(text, maxChapterRunes),
+		"characters": rc.bible.charactersPayload(),
+		"style_hint": rc.bible.StyleHint,
+	}
+	var result ScreenplayResult
+	if err := generateJSON(ctx, rc.deps.LLM, rc.deps.Prompts.Screenplay,
+		jsonPayload("Chuyển văn xuôi chương sau thành kịch bản chuẩn (scene heading, action, lời thoại). Trả JSON {chapter,title,markdown} trong <output>.", payload),
+		&result); err != nil {
+		rc.emit(Event{Stage: StageScreenplay, Message: fmt.Sprintf("Bỏ qua chương %d (lỗi sinh)", ch), Err: err})
+		return nil, nil
+	}
+	if strings.TrimSpace(result.Markdown) == "" {
+		rc.emit(Event{Stage: StageScreenplay, Message: fmt.Sprintf("Bỏ qua chương %d (kịch bản rỗng)", ch)})
+		return nil, nil
+	}
+	if result.Chapter == 0 {
+		result.Chapter = ch
+	}
+	if strings.TrimSpace(result.Title) == "" {
+		result.Title = entry.Title
+	}
+	md := renderScreenplayMarkdown(ch, entry.Title, result)
+	if _, err := rc.write(ProductScreenplay, fmt.Sprintf("screenplay/%02d.md", ch), []byte(md)); err != nil {
+		return nil, err
+	}
+	return &result, nil
 }

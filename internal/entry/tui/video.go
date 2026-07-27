@@ -250,8 +250,15 @@ func parseVideoArgs(args []string) (adapt.Options, string, error) {
 				opts.To = n
 			case "style":
 				opts.StyleHint = v
+			case "group":
+				switch strings.ToLower(v) {
+				case "chapter", "product":
+					opts.Grouping = adapt.Grouping(strings.ToLower(v))
+				default:
+					return adapt.Options{}, "", fmt.Errorf("group chỉ nhận chapter|product: %q", v)
+				}
 			default:
-				return adapt.Options{}, "", fmt.Errorf("tham số không rõ %q (hỗ trợ: from, to, style)", k)
+				return adapt.Options{}, "", fmt.Errorf("tham số không rõ %q (hỗ trợ: from, to, style, group)", k)
 			}
 		case a == "all":
 			// tất cả — để products rỗng

@@ -529,6 +529,11 @@ function openVideo() {
   openModal(`<h2>Chuyển thành sản phẩm video</h2><div class="sub">Từ các chương đã hoàn thành, sinh kịch bản/phân cảnh/thiết kế cho làm video. Không chọn mục nào = chạy tất cả theo thứ tự.</div>
     <label>Sản phẩm</label>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:2px 12px;margin:6px 0">${boxes}</div>
+    <label style="margin-top:8px">Cách đóng gói</label>
+    <select id="vidGroup" style="width:100%">
+      <option value="chapter">Theo chương — làm trọn từng chương, gói lồng theo tập (mặc định)</option>
+      <option value="product">Theo loại sản phẩm — quét từng loại qua toàn bộ chương</option>
+    </select>
     <div class="field-row">
       <div><label>Từ chương</label><input type="number" id="vidFrom" min="0" placeholder="đầu" /></div>
       <div><label>Đến chương</label><input type="number" id="vidTo" min="0" placeholder="cuối" /></div>
@@ -542,6 +547,7 @@ function openVideo() {
     const chosen = Array.from(document.querySelectorAll('.vidProd:checked')).map((c) => c.value);
     const body = {
       products: chosen,
+      grouping: $('vidGroup').value,
       from: parseInt($('vidFrom').value || '0', 10) || 0,
       to: parseInt($('vidTo').value || '0', 10) || 0,
       style: $('vidStyle').value.trim(),

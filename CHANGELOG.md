@@ -9,6 +9,19 @@ Nhật ký này tập trung vào các thay đổi của **bản Việt hóa** so
 ## [Chưa phát hành]
 
 ### Đã thêm
+- **`/video` gói theo chương + đóng gói lồng theo tập** — cải tổ thứ tự xử lý của
+  `internal/host/adapt`:
+  - Thêm `Options.Grouping`: **`chapter` (mặc định mới)** chạy phần cấp-sách
+    (concept/character/prop/consistency) một lần, rồi duyệt **tập → chương**, mỗi chương làm
+    trọn kịch bản → phân cảnh → animation → prompt **trước khi** sang chương kế → **tập
+    trước hoàn chỉnh trước**, dựng video từng tập được ngay (trước đây quét theo loại trên
+    toàn bộ chương nên phải chờ gần hết pipeline). Giữ `product` làm chế độ tương thích cũ.
+  - **Đóng gói lồng** (chỉ chế độ `chapter`): mỗi chương một thư mục
+    `video/tap-{VV}/chuong-{NNN}/{kich-ban.md, phan-canh.json/.md, animation.md,
+    prompt-anh.md, prompt-video.md}` + mục lục tập `_tap-{VV}.md`. Render thuần, không gọi
+    thêm LLM. **Bố cục theo loại cũ** (`video/screenplay/`…) vẫn giữ nguyên.
+  - TUI: `/video ... group=chapter|product`; Web: ô "Cách đóng gói" trong modal Làm video.
+  - Tài liệu cập nhật: [docs/video.md](docs/video.md).
 - **Chuyển thể sách → sản phẩm làm video** — khả năng ngang mới `internal/host/adapt`
   (đối xứng `imp`/`sim`/`exp`), lệnh **`/video`** (TUI) và **🎬 Làm video** (Web):
   - Từ các chương đã hoàn thành, sinh 9 loại sản phẩm phục vụ dựng video. **6 loại dùng
