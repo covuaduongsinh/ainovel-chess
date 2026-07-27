@@ -9,6 +9,29 @@ Nhật ký này tập trung vào các thay đổi của **bản Việt hóa** so
 ## [Chưa phát hành]
 
 ### Đã thêm
+- **Thiết kế lại màn chọn dự án (Web)** — [internal/entry/web/static/projects.html](internal/entry/web/static/projects.html)
+  tách thành `projects.html` + `projects.css` + `projects.js` (mirror cấu trúc
+  `index.html`/`styles.css`/`app.js` của workbench), phục vụ qua 2 route tĩnh mới trong
+  [picker.go](internal/entry/web/picker.go):
+  - **Sửa lỗi không cuộn được**: trang kế thừa `body { overflow: hidden }` của `styles.css`
+    nhưng lại đặt `justify-content: center`, nên danh sách dài bị cắt cụt ở cả hai đầu và ô
+    "Tạo dự án mới" nằm dưới đáy phải zoom out mới thấy (chỉ xảy ra khi cửa sổ > 1100px).
+    Bố cục mới: **header cố định** (tạo dự án + lọc + sắp xếp + tab) `flex: none`, danh sách
+    là **lưới tự cuộn** `flex: 1; min-height: 0; overflow-y: auto`, 2–3 cột theo bề rộng.
+  - **Thẻ dự án** thay cho dòng danh sách: badge trạng thái **tiếng Việt** có màu (Khởi tạo /
+    Ý tưởng / Dàn ý / Đang viết / Hoàn thành / Chưa bắt đầu), thanh tiến độ chương, số chữ,
+    thời điểm sửa cuối; bấm cả thẻ để mở.
+  - **Ô lọc** theo tên/slug (gõ **không dấu** vẫn khớp tên có dấu) và **sắp xếp** (Sửa gần
+    nhất / Tên A→Z / Nhiều chữ nhất / Tiến độ cao nhất) — thuần phía trình duyệt.
+  - **Đổi tên · Lưu trữ · Xóa** qua menu ⋯ trên thẻ, kèm 4 route API mới
+    (`/api/projects/rename|archive|unarchive|delete`) và các hàm store tương ứng
+    (`store.Rename` / `Archive` / `Unarchive` / `Delete` / `ListArchived`).
+    Đổi tên cập nhật **cả** `novel_name` trong `meta/progress.json` **lẫn** tên thư mục.
+    Lưu trữ = chuyển thư mục vào `output/_archive/` (đảo ngược được, `List` bỏ qua thư mục
+    này). Xóa là vĩnh viễn nên có hai lớp hàng rào: hộp thoại buộc **gõ đúng tên dự án**, và
+    máy chủ kiểm tra lại chuỗi xác nhận + chỉ chấp nhận thư mục thật sự là dự án sách
+    (chặn xóa nhầm chính `_archive` hay thư mục lạ), cộng với `resolveUnderRoot` sẵn có.
+    Các route này chỉ tồn tại trên picker mux — tức chỉ khi **không** có dự án nào đang mở.
 - **`/video` gói theo chương + đóng gói lồng theo tập** — cải tổ thứ tự xử lý của
   `internal/host/adapt`:
   - Thêm `Options.Grouping`: **`chapter` (mặc định mới)** chạy phần cấp-sách

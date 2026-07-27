@@ -1,6 +1,7 @@
 package store
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -10,6 +11,11 @@ import (
 
 	"github.com/voocel/ainovel-cli/internal/domain"
 )
+
+// ArchiveDirName là tên thư mục con của root dùng để cất các dự án tạm thời không dùng tới.
+// Lưu trữ = di chuyển thư mục dự án vào <root>/_archive/, bỏ lưu trữ = di chuyển ngược lại.
+// Cùng ổ đĩa nên os.Rename là thao tác tức thời và nguyên tử.
+const ArchiveDirName = "_archive"
 
 // ProjectSummary là bản tóm tắt tĩnh của một dự án sách (một thư mục), đọc trực tiếp từ đĩa
 // mà không cần khởi tạo host. Dùng cho màn chọn dự án của Web (và có thể tái dùng cho TUI).
@@ -43,6 +49,9 @@ func List(root string) ([]ProjectSummary, error) {
 		if !e.IsDir() {
 			continue
 		}
+		if e.Name() == ArchiveDirName {
+			continue // kho lưu trữ, không phải dự án
+		}
 		dir := filepath.Join(root, e.Name())
 		if !looksLikeProject(dir) {
 			continue
@@ -54,6 +63,12 @@ func List(root string) ([]ProjectSummary, error) {
 		return out[i].UpdatedAt.After(out[j].UpdatedAt)
 	})
 	return out, nil
+}
+
+// ListArchived trả về tóm tắt các dự án đang nằm trong kho lưu trữ <root>/_archive.
+// Kho chưa tồn tại → danh sách rỗng, không lỗi (List đã xử lý os.IsNotExist).
+func ListArchived(root string) ([]ProjectSummary, error) {
+	return List(filepath.Join(root, ArchiveDirName))
 }
 
 // looksLikeProject nhận diện thư mục dự án qua sự tồn tại của meta/ hoặc premise.md.
@@ -160,4 +175,95 @@ func UniqueDir(root, slug string) string {
 			return candidate
 		}
 	}
+}
+
+// requireProject xác nhận dir đúng là một thư mục dự án sách. Đây là hàng rào chặn các thao tác
+// phá hủy (đổi tên / lưu trữ / xóa) chạm nhầm vào thư mục lạ hoặc chính kho _archive.
+func requireProject(dir string) error {
+	if !looksLikeProject(dir) {
+		return fmt.Errorf("%q không phải thư mục dự án sách", filepath.Base(dir))
+	}
+	return nil
+}
+
+// Rename đổi tên dự án theo cả hai vế cho khớp nhau: tên sách hiển thị trong meta/progress.json
+// và tên thư mục trên đĩa. Dự án chưa bắt đầu (chưa có progress.json) chỉ đổi thư mục — cố tình
+// không tạo progress.json giả, vì như vậy dự án sẽ bị coi nhầm là đã bắt đầu viết.
+// Trả về đường dẫn thư mục sau khi đổi (có thể trùng đường dẫn cũ nếu slug không đổi).
+func Rename(dir, newName string) (string, error) {
+	dir = filepath.Clean(dir)
+	if err := requireProject(dir); err != nil {
+		return "", err
+	}
+	name := strings.TrimSpace(newName)
+	if name == "" {
+		return "", fmt.Errorf("tên dự án không được để trống")
+	}
+
+	s := NewStore(dir)
+	if p, err := s.Progress.Load(); err != nil {
+		return "", err
+	} else if p != nil {
+		if err := s.Progress.SetNovelName(name); err != nil {
+			return "", err
+		}
+	}
+
+	slug := Slugify(name)
+	if slug == filepath.Base(dir) {
+		return dir, nil
+	}
+	target := UniqueDir(filepath.Dir(dir), slug)
+	if err := os.Rename(dir, target); err != nil {
+		return "", err
+	}
+	return target, nil
+}
+
+// Archive cất dự án vào kho <root>/_archive để nó không còn hiện ở danh sách chính.
+// Trả về đường dẫn mới trong kho.
+func Archive(root, dir string) (string, error) {
+	dir = filepath.Clean(dir)
+	if err := requireProject(dir); err != nil {
+		return "", err
+	}
+	archiveRoot := filepath.Join(filepath.Clean(root), ArchiveDirName)
+	if filepath.Dir(dir) == archiveRoot {
+		return "", fmt.Errorf("dự án đã nằm trong kho lưu trữ")
+	}
+	if err := os.MkdirAll(archiveRoot, 0o755); err != nil {
+		return "", err
+	}
+	target := UniqueDir(archiveRoot, filepath.Base(dir))
+	if err := os.Rename(dir, target); err != nil {
+		return "", err
+	}
+	return target, nil
+}
+
+// Unarchive đưa dự án từ kho <root>/_archive trở lại danh sách chính.
+func Unarchive(root, dir string) (string, error) {
+	dir = filepath.Clean(dir)
+	if err := requireProject(dir); err != nil {
+		return "", err
+	}
+	rootClean := filepath.Clean(root)
+	if filepath.Dir(dir) != filepath.Join(rootClean, ArchiveDirName) {
+		return "", fmt.Errorf("dự án không nằm trong kho lưu trữ")
+	}
+	target := UniqueDir(rootClean, filepath.Base(dir))
+	if err := os.Rename(dir, target); err != nil {
+		return "", err
+	}
+	return target, nil
+}
+
+// Delete xóa vĩnh viễn toàn bộ thư mục dự án. Không thể hoàn tác — phía gọi phải tự xác nhận
+// với người dùng trước. requireProject đảm bảo chỉ thư mục dự án thật mới bị xóa.
+func Delete(dir string) error {
+	dir = filepath.Clean(dir)
+	if err := requireProject(dir); err != nil {
+		return err
+	}
+	return os.RemoveAll(dir)
 }

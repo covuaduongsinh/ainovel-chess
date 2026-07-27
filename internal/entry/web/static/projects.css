@@ -1,0 +1,178 @@
+/* Màn chọn dự án (picker).
+   Dùng chung token màu, .btn, .overlay/.modal, .toast của styles.css; ở đây chỉ định nghĩa
+   riêng bố cục và thẻ dự án, tất cả tiền tố pk- để không đụng lớp của workbench.
+
+   Bố cục: body (flex column, height 100%, overflow hidden — kế thừa từ styles.css)
+     ├─ .pk-head  flex:none            → header cố định, không bao giờ cuộn mất
+     └─ .pk-body  flex:1; min-height:0 → chỉ vùng này cuộn
+   min-height:0 là bắt buộc: mặc định min-height của flex item là auto nên nó sẽ phình theo
+   nội dung và đẩy tràn ra ngoài body thay vì tự cuộn bên trong. */
+
+.pk-wrap { width: min(1180px, 100%); margin: 0 auto; padding: 0 20px; }
+
+/* ── Header cố định ── */
+.pk-head {
+  flex: none;
+  background: var(--bg-2);
+  border-bottom: 1px solid var(--border);
+  padding: 16px 0 12px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, .3);
+  z-index: 10;
+}
+.pk-brand { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.pk-brand h1 { margin: 0; font-size: 20px; color: var(--accent); font-weight: 700; }
+.pk-brand .pk-root { font-size: 12px; color: var(--dim); word-break: break-all; }
+.pk-lead { margin: 4px 0 0; font-size: 13px; color: var(--muted); }
+
+/* Ô tạo dự án — luôn nằm trên đầu, không bao giờ bị danh sách đẩy khuất */
+.pk-create { display: flex; gap: 10px; margin-top: 14px; }
+.pk-create input {
+  flex: 1; min-width: 0;
+  background: var(--bg); color: var(--text);
+  border: 1px solid var(--border); border-radius: 9px;
+  padding: 11px 13px; font-size: 14px; font-family: var(--sans);
+}
+.pk-create input:focus { outline: none; border-color: var(--accent); }
+.pk-create button { flex: none; padding: 11px 20px; font-size: 14px; }
+.pk-create-hint { font-size: 12px; color: var(--dim); margin-top: 7px; }
+.pk-create-hint code { color: var(--muted); font-family: var(--mono); }
+
+/* Thanh công cụ: lọc · sắp xếp · tab · số đếm */
+.pk-tools { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
+.pk-search { position: relative; flex: 1; min-width: 180px; max-width: 340px; }
+.pk-search input {
+  width: 100%;
+  background: var(--bg); color: var(--text);
+  border: 1px solid var(--border); border-radius: 9px;
+  padding: 8px 30px 8px 32px; font-size: 13px; font-family: var(--sans);
+}
+.pk-search input:focus { outline: none; border-color: var(--accent); }
+.pk-search .pk-search-icon {
+  position: absolute; left: 11px; top: 50%; transform: translateY(-50%);
+  font-size: 12px; color: var(--dim); pointer-events: none;
+}
+.pk-search .pk-search-clear {
+  position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
+  background: none; border: none; color: var(--dim); cursor: pointer;
+  font-size: 15px; line-height: 1; padding: 3px 5px; border-radius: 5px;
+}
+.pk-search .pk-search-clear:hover { color: var(--text); background: var(--border); }
+
+.pk-tools select {
+  background: var(--bg); color: var(--text);
+  border: 1px solid var(--border); border-radius: 9px;
+  padding: 8px 10px; font-size: 13px; font-family: var(--sans); cursor: pointer;
+}
+.pk-tools select:focus { outline: none; border-color: var(--accent); }
+
+.pk-tabs { display: flex; gap: 3px; background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 3px; }
+.pk-tabs button {
+  background: none; border: none; color: var(--muted);
+  font-size: 13px; font-family: var(--sans); cursor: pointer;
+  padding: 6px 14px; border-radius: 7px; white-space: nowrap;
+}
+.pk-tabs button:hover { color: var(--text); }
+.pk-tabs button.on { background: var(--bg-3); color: var(--text); font-weight: 600; }
+
+.pk-count { margin-left: auto; font-size: 12px; color: var(--dim); white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+/* ── Vùng cuộn ── */
+.pk-body { flex: 1; min-height: 0; overflow-y: auto; padding: 18px 0 28px; }
+.pk-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; }
+
+.pk-empty { color: var(--dim); font-size: 14px; text-align: center; padding: 48px 18px; }
+.pk-empty .btn { margin-top: 14px; }
+
+/* ── Thẻ dự án ── */
+.pk-card {
+  position: relative;
+  display: flex; flex-direction: column; gap: 9px;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+  padding: 14px 16px; cursor: pointer;
+  transition: border-color .15s, background .15s;
+}
+.pk-card:hover { border-color: var(--accent); background: var(--bg-2); }
+.pk-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.pk-card-top { display: flex; align-items: flex-start; gap: 8px; }
+.pk-card-name {
+  flex: 1; min-width: 0;
+  font-size: 15px; font-weight: 700; color: var(--text); line-height: 1.35;
+  overflow: hidden; text-overflow: ellipsis; display: -webkit-box;
+  -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+}
+.pk-more {
+  flex: none; background: none; border: 1px solid transparent; color: var(--dim);
+  font-size: 16px; line-height: 1; cursor: pointer; border-radius: 7px; padding: 3px 7px;
+}
+.pk-more:hover, .pk-more.on { background: var(--bg-3); border-color: var(--border); color: var(--text); }
+
+.pk-card-meta { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.pk-slug {
+  font-size: 11px; color: var(--dim); font-family: var(--mono);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.pk-stats { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+.pk-badge {
+  flex: none; display: inline-block;
+  font-size: 11px; font-weight: 700; letter-spacing: .3px;
+  padding: 2px 9px; border-radius: 999px;
+  background: var(--bg-3); border: 1px solid var(--border); color: var(--muted);
+}
+.pk-badge.ph-init, .pk-badge.ph-none { color: var(--dim); }
+.pk-badge.ph-premise { color: var(--muted); }
+.pk-badge.ph-outline { color: var(--accent-2); border-color: #33453f; }
+.pk-badge.ph-writing { color: var(--accent); background: #2b2618; border-color: #4a3f22; }
+.pk-badge.ph-complete { color: var(--accent-2); background: #233330; border-color: #33453f; }
+
+.pk-progress { display: flex; align-items: center; gap: 9px; }
+.pk-bar { flex: 1; height: 6px; background: var(--bg-3); border-radius: 4px; overflow: hidden; }
+.pk-bar i { display: block; height: 100%; background: var(--accent); border-radius: 4px; }
+.pk-card.is-complete .pk-bar i { background: var(--accent-2); }
+.pk-pct { font-size: 11px; color: var(--dim); font-variant-numeric: tabular-nums; min-width: 32px; text-align: right; }
+
+.pk-card-foot {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  margin-top: auto; padding-top: 4px;
+}
+.pk-when { font-size: 11px; color: var(--dim); }
+.pk-card-foot .btn { padding: 6px 16px; font-size: 13px; }
+
+/* Menu ⋯ của thẻ */
+.pk-menu {
+  position: absolute; top: 42px; right: 12px; z-index: 20; min-width: 168px;
+  background: var(--bg-3); border: 1px solid var(--border); border-radius: 10px; padding: 4px;
+  box-shadow: 0 14px 34px rgba(0, 0, 0, .55);
+}
+.pk-menu button {
+  display: block; width: 100%; text-align: left;
+  background: none; border: none; color: var(--text);
+  font-size: 13px; font-family: var(--sans); cursor: pointer;
+  padding: 8px 11px; border-radius: 7px;
+}
+.pk-menu button:hover { background: var(--border); }
+.pk-menu.up { top: auto; bottom: 42px; }
+.pk-menu button.danger { color: var(--err); }
+.pk-menu .pk-menu-sep { height: 1px; background: var(--border); margin: 4px 6px; }
+
+/* ── Hộp thoại (dùng .overlay/.modal của styles.css) ── */
+.pk-danger {
+  background: #2a1c19; border: 1px solid #5a3530; border-radius: 9px;
+  padding: 11px 13px; font-size: 13px; color: var(--err); line-height: 1.5; margin-bottom: 4px;
+}
+.pk-preview { font-size: 12px; color: var(--dim); margin-top: 7px; min-height: 16px; }
+.pk-preview b { color: var(--muted); font-family: var(--mono); font-weight: 400; }
+
+/* ── Màn hẹp: bỏ khung cố định, cho cả trang cuộn tự nhiên ── */
+@media (max-width: 760px) {
+  html, body { height: auto; }
+  body { overflow: auto; display: block; }
+  .pk-head { position: static; box-shadow: none; }
+  .pk-body { overflow: visible; }
+  .pk-wrap { padding: 0 14px; }
+  .pk-grid { grid-template-columns: 1fr; }
+  .pk-create { flex-direction: column; }
+  .pk-count { margin-left: 0; width: 100%; }
+  .pk-search { max-width: none; }
+}
