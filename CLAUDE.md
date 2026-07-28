@@ -85,4 +85,5 @@ Tài sản nhúng (prompt, style, reference) ở [assets/](assets/), nạp qua `
 - [docs/claude-code.md](docs/claude-code.md) — dùng model Claude qua Claude Code
 - [docs/export.md](docs/export.md) — xuất bản thảo đa định dạng (MD / TXT / EPUB)
 - [docs/video.md](docs/video.md) — chuyển thể sách thành sản phẩm làm video (kịch bản / phân cảnh / thiết kế / prompt)
+- [docs/audiobook.md](docs/audiobook.md) — tạo sách nói (mỗi chương một MP3) từ chương đã hoàn thành qua Vbee TTS
 - [CHANGELOG.md](CHANGELOG.md) — nhật ký thay đổi

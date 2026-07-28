@@ -209,6 +209,41 @@ func mergeConfig(base, overlay Config) Config {
 		base.Notify = overlay.Notify
 	}
 
+	// Vbee: ghép TỪNG TRƯỜNG (khác Budget/Notify thay cả khối). Lý do: đây là kho thông
+	// tin xác thực chứ không phải khai báo chính sách — cấu hình cấp dự án thường chỉ
+	// muốn đổi voice_code mà vẫn kế thừa app_id/access_token toàn cục, giống cách
+	// Providers được ghép ở trên.
+	if overlay.Vbee.AppID != "" {
+		base.Vbee.AppID = overlay.Vbee.AppID
+	}
+	if overlay.Vbee.AccessToken != "" {
+		base.Vbee.AccessToken = overlay.Vbee.AccessToken
+	}
+	if overlay.Vbee.VoiceCode != "" {
+		base.Vbee.VoiceCode = overlay.Vbee.VoiceCode
+	}
+	if overlay.Vbee.BaseURL != "" {
+		base.Vbee.BaseURL = overlay.Vbee.BaseURL
+	}
+	if overlay.Vbee.VoicesURL != "" {
+		base.Vbee.VoicesURL = overlay.Vbee.VoicesURL
+	}
+	if overlay.Vbee.WebhookURL != "" {
+		base.Vbee.WebhookURL = overlay.Vbee.WebhookURL
+	}
+	if overlay.Vbee.Speed != 0 {
+		base.Vbee.Speed = overlay.Vbee.Speed
+	}
+	if overlay.Vbee.Bitrate != 0 {
+		base.Vbee.Bitrate = overlay.Vbee.Bitrate
+	}
+	if overlay.Vbee.SampleRate != 0 {
+		base.Vbee.SampleRate = overlay.Vbee.SampleRate
+	}
+	if overlay.Vbee.OutputFormat != "" {
+		base.Vbee.OutputFormat = overlay.Vbee.OutputFormat
+	}
+
 	return base
 }
 

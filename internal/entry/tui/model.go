@@ -65,6 +65,8 @@ type Model struct {
 	importSeq      int
 	videoer        *videoState
 	videoSeq       int
+	audiobooker    *audiobookState
+	audiobookSeq   int
 	simulator      *simulationState
 	simSeq         int
 	compItems      []commandPaletteItem
@@ -619,6 +621,9 @@ func (m Model) View() string {
 	}
 	if m.videoer != nil {
 		return renderVideoModal(m.width, m.height, m.videoer)
+	}
+	if m.audiobooker != nil {
+		return renderAudiobookModal(m.width, m.height, m.audiobooker)
 	}
 	if m.simulator != nil {
 		return renderSimulationModal(m.width, m.height, m.simulator)

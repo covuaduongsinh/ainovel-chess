@@ -222,12 +222,17 @@ func printStepDone(label, value string) {
 		lipgloss.NewStyle().Foreground(lipgloss.Color("245")).Render(value))
 }
 
-func maskKey(key string) string {
-	if len(key) <= 8 {
+// MaskSecret che một chuỗi bí mật để hiển thị: giữ 4 ký tự đầu và 4 ký tự cuối.
+// Dùng chung cho mọi mặt giao diện (wizard terminal, API cấu hình Vbee trên Web) —
+// che không nhất quán giữa các mặt gây hiểu nhầm về mức độ lộ khóa.
+func MaskSecret(s string) string {
+	if len(s) <= 8 {
 		return "****"
 	}
-	return key[:4] + "****" + key[len(key)-4:]
+	return s[:4] + "****" + s[len(s)-4:]
 }
+
+func maskKey(key string) string { return MaskSecret(key) }
 
 // ---------- Thành phần TUI ----------
 

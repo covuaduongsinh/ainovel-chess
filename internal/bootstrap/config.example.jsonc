@@ -138,4 +138,26 @@
   //   // ntfy (iOS/Android): "command": "curl -s -G --data-urlencode \"title=$NOTIFY_TITLE\" --data-urlencode \"message=$NOTIFY_BODY\" ntfy.sh/<topic>/publish"
   //   "events": ["run_end", "repeat", "budget"]
   // }
+
+  // Tùy chọn. Dịch vụ TTS Vbee — dùng cho tính năng "Sách nói" (mỗi chương một tệp MP3).
+  // Lấy app_id / access_token trong Vbee Studio → mục API (https://studio.vbee.vn/apps).
+  // Cũng có thể nhập ngay trong hộp thoại "🎧 Sách nói" trên Web (token hiển thị dạng che abcd****wxyz).
+  // ⚠ Vbee tính phí theo SỐ KÝ TỰ gửi đi: một cuốn 32 chương ≈ 600.000 ký tự.
+  //   Hãy chạy thử "/sachnoi to=1" trước khi tạo cả sách.
+  // ⚠ webhook_url: tài liệu Vbee ghi là bắt buộc với mode async, nhưng ứng dụng chạy localhost
+  //   nên không có URL công khai — ta gửi URL giữ chỗ rồi chủ động poll GET /v1/tts/requests/{id}.
+  //   Nếu tài khoản từ chối URL giữ chỗ, thay bằng một URL nhận-và-bỏ (vd https://webhook.site/<uuid>).
+  // Lưu ý: voices_url nằm ở host KHÁC với base_url — đó là thiết kế của Vbee, không phải nhầm lẫn.
+  // "vbee": {
+  //   "app_id": "xxx",
+  //   "access_token": "xxx",
+  //   "voice_code": "hn_female_ngochuyen_full_48k-fhg",
+  //   "base_url": "https://api.vbee.vn",
+  //   "voices_url": "https://vbee.vn",
+  //   "webhook_url": "https://example.com/vbee-callback",
+  //   "speed": 1.0,
+  //   "bitrate": 128,
+  //   "sample_rate": 24000,
+  //   "output_format": "mp3"
+  // }
 }

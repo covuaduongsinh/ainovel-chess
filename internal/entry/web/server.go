@@ -80,7 +80,14 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/simulate", s.handleSimulate)
 	s.mux.HandleFunc("POST /api/importsim", s.handleImportSim)
 	s.mux.HandleFunc("POST /api/adapt", s.handleAdapt)
+	s.mux.HandleFunc("POST /api/audiobook", s.handleAudiobook)
 	s.mux.HandleFunc("POST /api/job/cancel", s.handleJobCancel)
+
+	// Sách nói (Vbee TTS)
+	s.mux.HandleFunc("GET /api/vbee/config", s.handleVbeeConfig)
+	s.mux.HandleFunc("POST /api/vbee/config", s.handleVbeeConfigSave)
+	s.mux.HandleFunc("GET /api/vbee/voices", s.handleVbeeVoices)
+	s.mux.HandleFunc("POST /api/vbee/preview", s.handleVbeePreview)
 
 	// Cộng tác sáng tác
 	s.mux.HandleFunc("POST /api/cocreate/open", s.handleCoCreateOpen)

@@ -9,6 +9,47 @@ Nhật ký này tập trung vào các thay đổi của **bản Việt hóa** so
 ## [Chưa phát hành]
 
 ### Đã thêm
+- **Sách nói qua Vbee TTS** — khả năng ngang mới [internal/host/tts](internal/host/tts/)
+  đọc các chương đã hoàn thành thành tệp MP3, **mỗi chương một tệp**, kèm `playlist.m3u`
+  (cả sách + từng tập) và `index.md`, ghi vào `{novelDir}/audio/`. Tài liệu:
+  [docs/audiobook.md](docs/audiobook.md).
+  - **Điểm vào mirror nhau**: lệnh `/sachnoi` (alias `/audiobook`, `/tts`) trên TUI và nút
+    **🎧 Sách nói** trên Web, cả hai gọi `host.Host.Audiobook(ctx, tts.Options)`.
+  - **Client Vbee** ở [internal/vbee](internal/vbee/) — gói HTTP thuần, không phụ thuộc gì
+    trong repo, test bằng `httptest.Server`.
+  - **⚠ Vbee tính phí theo SỐ KÝ TỰ**, không theo phút audio: một cuốn 32 chương ≈ 600.000
+    ký tự. Hộp thoại Web hiện ước tính ký tự và hỏi xác nhận khi vượt 5 chương; nút "Kiểm
+    tra kết nối" dùng chế độ `sync` ~30 ký tự để thử thông tin đăng nhập gần như miễn phí.
+    Hãy chạy `/sachnoi to=1` trước khi tạo cả sách.
+  - **Chờ bằng poll, không dùng webhook**: tài liệu Vbee ghi `webhookUrl` là bắt buộc với
+    chế độ `async`, nhưng ứng dụng chạy localhost nên không có URL công khai — ta gửi URL
+    giữ chỗ (cấu hình được qua `vbee.webhook_url`) rồi chủ động hỏi
+    `GET /v1/tts/requests/{id}`. `audioLink` chỉ sống 3 phút nên tải ngay khi thấy
+    `COMPLETED`, và mỗi lần tải hỏng thì xin đường dẫn mới thay vì thử lại link đã chết.
+    Việc tải dùng `http.Client` riêng (hạn 10 phút) vì một chương ≈ 24 MB.
+  - **Làm sạch Markdown trước khi đọc**: gỡ `#`/`**`/`*`/`` ` ``/`>`/liên kết/ảnh/emoji,
+    **giữ dấu `—`** vì đó là ký hiệu mở lời thoại. Mọi tệp mở đầu bằng lời dẫn
+    `Chương N. Tên chương.` — phần lớn tệp chương trong repo vào thẳng văn xuôi nên nghe sẽ
+    không biết đang ở chương mấy. Cố ý **không** chuẩn hóa số/số La Mã (Vbee đã tự bung số,
+    bung thêm sẽ đọc đôi).
+  - **Chạy tuần tự** chứ không song song: API tính tiền theo ký tự nên mỗi lỗi đồng thời là
+    tiền thật. **Fail-soft** như `adapt`: chương lỗi thì bỏ qua và đi tiếp, nhưng
+    `UNAUTHORIZED` — hoặc `BAD_REQUEST` khi chưa chương nào thành công — thì dừng ngay để
+    lỗi cấu hình lộ ra ở chương đầu. Tất cả chương đều hỏng thì kết thúc bằng `error` chứ
+    không phải "Hoàn thành" giả. **Resume incremental**: chạy lại không `--overwrite` chỉ
+    làm phần còn thiếu.
+  - **Chọn giọng**: ô "Mã giọng đọc" luôn dán tay được và là thứ quyết định; danh sách chỉ
+    là công cụ tra cứu điền vào ô đó. `voiceOwnership` là tham số **bắt buộc** phía Vbee
+    (thiếu là `400`, không phải trả mọi nhóm) nên phải gọi riêng từng nhóm `VBEE` /
+    `COMMUNITY` / `PERSONAL` — một tài khoản thật có ~462 + 1187 + 2 giọng. Kèm bộ chọn
+    nhóm, ô lọc theo tên/mã/ngôn ngữ, và nhãn có cả mã vì nhiều giọng trùng tên hiển thị.
+  - **Cấu hình**: mục `vbee` mới trong `~/.ainovel/config.json` (app_id, access_token,
+    voice_code, webhook_url, speed, bitrate, sample_rate, output_format), nhập được ngay
+    trong hộp thoại Web — token hiển thị dạng che `abcd****wxyz`, gửi lại nguyên chuỗi che
+    thì giữ bí mật cũ, gõ `-` để xóa. Lưu ý **lưu sẽ ghi lại toàn bộ `config.json` và làm
+    mất các dòng chú thích `//`** — hành vi có sẵn của `/model`, không phải mới.
+  - TUI **không** có form nhập thông tin xác thực (cố ý: bí mật không nên nằm trong
+    scrollback terminal) — chưa cấu hình thì `/sachnoi` báo lỗi kèm hướng dẫn.
 - **Thiết kế lại màn chọn dự án (Web)** — [internal/entry/web/static/projects.html](internal/entry/web/static/projects.html)
   tách thành `projects.html` + `projects.css` + `projects.js` (mirror cấu trúc
   `index.html`/`styles.css`/`app.js` của workbench), phục vụ qua 2 route tĩnh mới trong

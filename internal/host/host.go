@@ -24,12 +24,14 @@ import (
 	"github.com/voocel/ainovel-cli/internal/host/flow"
 	"github.com/voocel/ainovel-cli/internal/host/imp"
 	"github.com/voocel/ainovel-cli/internal/host/sim"
+	"github.com/voocel/ainovel-cli/internal/host/tts"
 	modelreg "github.com/voocel/ainovel-cli/internal/models"
 	"github.com/voocel/ainovel-cli/internal/notify"
 	"github.com/voocel/ainovel-cli/internal/rules"
 	storepkg "github.com/voocel/ainovel-cli/internal/store"
 	"github.com/voocel/ainovel-cli/internal/tools"
 	"github.com/voocel/ainovel-cli/internal/userrules"
+	"github.com/voocel/ainovel-cli/internal/vbee"
 )
 
 // Host là vỏ mỏng thời gian chạy.
@@ -1245,6 +1247,136 @@ func (h *Host) Adapt(ctx context.Context, opts adapt.Options) (<-chan adapt.Even
 		},
 	}
 	return adapt.Run(ctx, deps, opts)
+}
+
+// Audiobook tao sach noi (moi chuong mot tep MP3) tu cac chuong da hoan thanh, qua API TTS Vbee.
+//
+// Giong Adapt: tac vu chay dai, chi DOC store roi ghi file ra {novelDir}/audio/.
+// Khac Adapt: KHONG goi LLM — chi phi nam o tin dung Vbee (tinh theo so ky tu), khong di
+// qua UsageTracker/Budget cua sach.
+//
+// Van dung guardExclusive du khong ghi state store (khac Export o :1277): day la tac vu
+// TON TIEN chay nhieu phut, khong nen chong len luot viet cua Coordinator.
+func (h *Host) Audiobook(ctx context.Context, opts tts.Options) (<-chan tts.Event, error) {
+	if err := h.guardExclusive("tao sach noi"); err != nil {
+		return nil, err
+	}
+	h.mu.Lock()
+	vc := h.cfg.Vbee
+	h.mu.Unlock()
+
+	if !vc.Configured() {
+		return nil, fmt.Errorf("chua cau hinh Vbee (app_id / access_token) — mo hop thoai Sach noi tren Web de nhap, hoac sua muc \"vbee\" trong ~/.ainovel/config.json")
+	}
+	opts = applyVbeeDefaults(opts, vc)
+	if strings.TrimSpace(opts.VoiceCode) == "" {
+		return nil, fmt.Errorf("chua chon giong doc — chon trong hop thoai Sach noi hoac dat vbee.voice_code trong cau hinh")
+	}
+	return tts.Run(ctx, tts.Deps{Store: h.store, Vbee: h.newVbeeClient(vc)}, opts)
+}
+
+// applyVbeeDefaults lay tham so tu cau hinh cho nhung truong nguoi dung khong chi dinh.
+func applyVbeeDefaults(opts tts.Options, vc bootstrap.VbeeConfig) tts.Options {
+	if strings.TrimSpace(opts.VoiceCode) == "" {
+		opts.VoiceCode = vc.VoiceCode
+	}
+	if opts.Speed == 0 {
+		opts.Speed = vc.Speed
+	}
+	if opts.Bitrate == 0 {
+		opts.Bitrate = vc.Bitrate
+	}
+	if opts.SampleRate == 0 {
+		opts.SampleRate = vc.SampleRate
+	}
+	if opts.OutputFormat == "" {
+		opts.OutputFormat = vc.OutputFormat
+	}
+	if opts.WebhookURL == "" {
+		opts.WebhookURL = vc.WebhookURL
+	}
+	return opts
+}
+
+// newVbeeClient dung client tu cau hinh hien tai.
+func (h *Host) newVbeeClient(vc bootstrap.VbeeConfig) *vbee.Client {
+	return vbee.NewClient(vbee.Options{
+		AppID:       vc.AppID,
+		AccessToken: vc.AccessToken,
+		BaseURL:     vc.BaseURL,
+		VoicesURL:   vc.VoicesURL,
+	})
+}
+
+// VbeeVoices liet ke giong doc kha dung. Chi doc + tuc thoi → KHONG guard (giong Export).
+//
+// Luu y: endpoint nay nam o HOST KHAC voi endpoint TTS, nen co the 401 rieng trong khi
+// TTS van chay. Nguoi goi phai coi loi o day la khong nghiem trong.
+func (h *Host) VbeeVoices(ctx context.Context, q vbee.VoiceQuery) ([]vbee.Voice, error) {
+	h.mu.Lock()
+	vc := h.cfg.Vbee
+	h.mu.Unlock()
+	if !vc.Configured() {
+		return nil, fmt.Errorf("chua cau hinh Vbee (app_id / access_token)")
+	}
+	return h.newVbeeClient(vc).ListAllVoices(ctx, q)
+}
+
+// VbeePreview tong hop dong bo mot cau ngan de kiem tra thong tin xac thuc va nghe thu giong.
+// Che do sync KHONG can webhookUrl va chi ton vai chuc ky tu tin dung — dung lam smoke test
+// truoc khi chay ca cuon sach.
+func (h *Host) VbeePreview(ctx context.Context, voiceCode, text string) ([]byte, error) {
+	h.mu.Lock()
+	vc := h.cfg.Vbee
+	h.mu.Unlock()
+	if !vc.Configured() {
+		return nil, fmt.Errorf("chua cau hinh Vbee (app_id / access_token)")
+	}
+	if strings.TrimSpace(voiceCode) == "" {
+		voiceCode = vc.VoiceCode
+	}
+	if strings.TrimSpace(voiceCode) == "" {
+		return nil, fmt.Errorf("chua chon giong doc")
+	}
+	if strings.TrimSpace(text) == "" {
+		text = "Xin chao, day la giong doc thu cua Vbee."
+	}
+	return h.newVbeeClient(vc).SpeakSync(ctx, vbee.SpeechRequest{
+		Text:         text,
+		VoiceCode:    voiceCode,
+		OutputFormat: "mp3",
+		Speed:        vc.Speed,
+	})
+}
+
+// VbeeConfig tra ve cau hinh Vbee hien tai. Viec che thong tin bi mat la trach nhiem
+// cua tang giao dien (dung bootstrap.MaskSecret).
+func (h *Host) VbeeConfig() bootstrap.VbeeConfig {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.cfg.Vbee
+}
+
+// SetVbeeConfig cap nhat thong tin xac thuc Vbee cho phien hien tai VA ghi lai
+// ~/.ainovel/config.json — mirror SwitchModel (:905): doi luc chay thi luu luon.
+//
+// Luu y: SaveConfig ghi lai ca tep nen cac dong chu thich "//" trong config.json se mat.
+// Day la hanh vi co san cua SwitchModel/SetRoleThinking, khong phai moi.
+func (h *Host) SetVbeeConfig(v bootstrap.VbeeConfig) error {
+	if err := v.Validate(); err != nil {
+		return err
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.cfg.Vbee = v
+	h.cfg.FillDefaults()
+	if path := bootstrap.DefaultConfigPath(); path != "" {
+		if err := bootstrap.SaveConfig(path, h.cfg); err != nil {
+			slog.Warn("Luu cau hinh Vbee that bai", "module", "host", "err", err)
+			return err
+		}
+	}
+	return nil
 }
 
 // ImportSimulationProfile nhap ho so phuong phap viet da tao truoc do.
