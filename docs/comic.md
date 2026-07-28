@@ -113,11 +113,24 @@ Không dùng thư viện ngoài nào; cả ba bộ đóng gói đều viết tay
 
 ## Hai giai đoạn
 
-**Giai đoạn 1 (hiện tại) — không tốn một xu tiền ảnh.** Chạy trọn đường ống, khung dùng ô
+**Giai đoạn 1 — không tốn một xu tiền ảnh.** Chạy trọn đường ống, khung dùng ô
 giữ chỗ có gạch chéo. Kết quả là **trang truyện tranh thật, chỉ thiếu tranh** — đủ để chấm
 bố cục, nhịp trang, vị trí bong bóng, typography tiếng Việt, và thử cả bốn định dạng xuất bản.
 
-**Giai đoạn 2 — nối API sinh ảnh.** Khớp nối là interface `ImageSource` đã định nghĩa sẵn.
+**Giai đoạn 2 (đã có) — sinh ảnh thật qua Gemini.** Bật bằng cách điền khoá API:
+
+```jsonc
+"comic": { "api_key": "", "model": "gemini-2.5-flash-image", "image_size": "2K" }
+```
+
+`api_key` để trống thì hệ thống **tự mượn** `providers["gemini"].api_key` — không phải khai lại.
+Hoặc nhập thẳng trong khối *🎨 Sinh ảnh khung* của hộp thoại Truyện tranh trên Web.
+
+> **Bấm "Kiểm tra kết nối (1 ảnh)" trước khi chạy cả sách.** Nó sinh đúng một ảnh nhỏ để
+> xác thực khoá và phương ngữ dây. Google đang có **hai** bề mặt API sinh ảnh và đã gắn nhãn
+> đường cũ là "Legacy"; chạy cả cuốn rồi mới phát hiện sai phương ngữ thì mất cả trăm đô.
+> Nếu đường mặc định lỗi, đổi `dialect` sang `interactions` rồi kiểm tra lại.
+
 Bộ dựng đọc ảnh **theo đường dẫn tệp**, nên:
 
 - Giai đoạn 2 chỉ việc đặt tệp vào `art/chuong-{NNN}/t{PP}-k{KK}.png`.
@@ -125,6 +138,19 @@ Bộ dựng đọc ảnh **theo đường dẫn tệp**, nên:
   `prompts/chuong-{NNN}.md` để biết prompt và đường dẫn. Chạy lại `/truyentranh page publish`
   là có trang hoàn chỉnh, không cần sửa dòng code nào.
 - Vẽ lại một khung hỏng = xoá đúng một tệp PNG rồi chạy lại.
+
+### Hai bẫy prompt đã gặp thật khi chạy trên tranh thật
+
+Cả hai chỉ lộ ra khi **nhìn ảnh sinh ra**, test không bắt được:
+
+1. **Đừng nhắc tên thứ mình không muốn vẽ.** Bản đầu ghi *"leave empty negative space … for a
+   speech balloon"* — mô hình nghe thấy danh từ thì nó **vẽ hẳn một bong bóng rỗng** vào tranh,
+   và câu khẳng định đó còn thắng cả token cấm trong negative prompt. Nay chỉ mô tả vùng ảnh
+   mong muốn ("giữ góc trên-trái thoáng, nền trơn") mà không nói vùng đó để làm gì.
+2. **Chữ "panel" khiến mô hình tự vẽ khung viền.** Token phong cách có `comic panel` làm mỗi
+   ảnh sinh ra là một khung tranh có sẵn viền và lề trắng — rồi bộ dàn trang vẽ viền lần nữa
+   thành khung lồng khung. Nay preset dùng `comic book illustration`, và negative cấm thẳng
+   `panel border, picture frame, white margin, multiple panels`.
 
 ## Chi phí sinh ảnh *(giai đoạn 2)*
 

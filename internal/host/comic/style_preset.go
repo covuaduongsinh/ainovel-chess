@@ -17,6 +17,11 @@ type StylePreset struct {
 // Mô hình sinh ảnh viết tiếng Việt có dấu gần như luôn sai (xem docs/comic.md), nên để nó
 // vẽ chữ là hỏng cả trang. Nhóm sau là các lỗi giải phẫu hay gặp nhất.
 const commonNegative = "text, letters, words, writing, caption, speech bubble, speech balloon, " +
+	"empty speech balloon, thought bubble, callout box, " +
+	// Mô hình rất hay TỰ VẼ khung viền và lề trắng quanh tranh khi prompt có chữ "panel" —
+	// rồi bộ dàn trang lại vẽ viền lần nữa, thành khung lồng khung. Cấm thẳng ở đây.
+	"panel border, comic panel frame, picture frame, border, framed illustration, " +
+	"white margin, page layout, multiple panels, grid of panels, " +
 	"watermark, signature, logo, " +
 	"bad anatomy, bad hands, extra fingers, missing fingers, deformed face, extra limbs, " +
 	"blurry, low quality, jpeg artifacts"
@@ -28,35 +33,35 @@ var StylePresets = map[string]StylePreset{
 		Label: "Thiếu nhi — màu nước ấm",
 		Tokens: "warm children's storybook illustration, soft watercolor and pastel textures, " +
 			"gentle rounded shapes, cozy hand-drawn charm, warm golden light, muted nostalgic tones, " +
-			"clean readable compositions, full color comic panel",
+			"clean readable compositions, full color comic book illustration",
 		Negative: "harsh contrast, horror, gore, photorealistic, dark grim tones",
 	},
 	"manga": {
 		Key:   "manga",
 		Label: "Manga — đen trắng, screentone",
 		Tokens: "black and white manga illustration, clean confident ink linework, screentone shading, " +
-			"expressive character acting, dynamic speed lines, high contrast, comic panel",
+			"expressive character acting, dynamic speed lines, high contrast, manga illustration",
 		Negative: "color, colored, watercolor, painterly, photorealistic",
 	},
 	"au-my": {
 		Key:   "au-my",
 		Label: "Âu-Mỹ — nét đậm, màu rực",
 		Tokens: "western comic book illustration, bold confident inking, heavy black shadows, " +
-			"vibrant saturated flat colors, cel shading, dynamic heroic composition, comic panel",
+			"vibrant saturated flat colors, cel shading, dynamic heroic composition, comic book illustration",
 		Negative: "manga, anime, watercolor, pastel, muted colors, photorealistic",
 	},
 	"ta-thuc": {
 		Key:   "ta-thuc",
 		Label: "Tả thực — tranh sơn dầu",
 		Tokens: "realistic painted illustration, detailed rendering, natural proportions, " +
-			"cinematic lighting, rich oil-painting texture, graphic novel panel",
+			"cinematic lighting, rich oil-painting texture, graphic novel illustration",
 		Negative: "cartoon, anime, manga, chibi, flat colors, sketch",
 	},
 	"ky-hoa": {
 		Key:   "ky-hoa",
 		Label: "Ký hoạ — chì, đen trắng",
 		Tokens: "pencil sketch illustration, graphite hatching and cross-hatching, " +
-			"loose expressive linework, monochrome, textured paper feel, comic panel",
+			"loose expressive linework, monochrome, textured paper feel, pencil illustration",
 		Negative: "color, colored, digital painting, flat vector, photorealistic",
 	},
 }

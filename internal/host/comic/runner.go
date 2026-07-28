@@ -93,6 +93,13 @@ func Run(ctx context.Context, deps Deps, opts Options) (<-chan Event, error) {
 			}
 		}
 
+		if sel[ProductRefSheet] {
+			if err := runRefSheet(ctx, rc); err != nil {
+				emit(Event{Stage: StageError, Product: ProductRefSheet, Message: "Bước vẽ model sheet thất bại", Err: err})
+				return
+			}
+		}
+
 		// 2) Cấp chương, duyệt theo tập → chương để tập trước hoàn chỉnh trước.
 		if err := runChapterPipeline(ctx, rc, sel); err != nil {
 			if errors.Is(err, context.Canceled) {

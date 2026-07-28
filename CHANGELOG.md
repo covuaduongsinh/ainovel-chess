@@ -34,7 +34,18 @@ Nhật ký này tập trung vào các thay đổi của **bản Việt hóa** so
     nhưng mực chữ thường −30, căn theo ascent đẩy chữ xuống ~36px).
   - **Font nhúng** ba bộ SIL OFL 1.1 đã kiểm chứng phủ đủ 165 glyph tiếng Việt: Patrick Hand,
     Bangers, Be Vietnam Pro. ⚠ Comic Neue tuy OFL nhưng **thiếu hẳn khối U+1EA0–1EF9**.
-  - **Chia hai giai đoạn.** Giai đoạn 1 (bản này) chạy trọn đường ống với **ảnh giữ chỗ**,
+  - **Giai đoạn 2 — sinh ảnh thật qua Gemini.** Client HTTP thuần ở
+    [internal/imggen](internal/imggen/) (stdlib, test bằng `httptest`), tách **phương ngữ dây**
+    khỏi **chính sách** vì Google đang có hai bề mặt API sinh ảnh song song và đã gắn nhãn
+    đường cũ là "Legacy" mà chưa công bố ngày khai tử — đổi được bằng cấu hình `comic.dialect`.
+    Có nút **"Kiểm tra kết nối (1 ảnh)"** bắt buộc dùng trước khi chạy cả sách. Khoá để trống
+    thì tự mượn `providers["gemini"].api_key`. 429 liên tiếp 5 lần thì tự nâng thành lỗi chí
+    tử (429 vừa nghĩa "quá nhanh" vừa nghĩa "cạn hạn mức", tầng transport không phân biệt được).
+  - **Hai bẫy prompt chỉ lộ ra khi nhìn tranh thật**: (a) câu *"chừa chỗ … cho bong bóng
+    thoại"* khiến mô hình **vẽ hẳn một bong bóng rỗng** — nhắc tên thứ mình không muốn vẽ là
+    hỏng, kể cả khi đã cấm trong negative; (b) token `comic panel` khiến mô hình **tự vẽ khung
+    viền** bên trong ảnh, thành khung lồng khung sau khi dàn trang. Đã sửa cả hai.
+  - **Chia hai giai đoạn.** Giai đoạn 1 chạy trọn đường ống với **ảnh giữ chỗ**,
     **không tốn một xu tiền sinh ảnh** — đủ để nghiệm thu bố cục và typography trước. Giai
     đoạn 2 nối API sinh ảnh qua interface `ImageSource` đã định sẵn. Vì bộ dựng đọc ảnh
     **theo đường dẫn tệp**, bạn có thể tự vẽ hoặc tự chạy bộ sinh ảnh rồi thả tệp vào

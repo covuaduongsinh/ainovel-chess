@@ -604,6 +604,58 @@ function refreshComicCost() {
     `số khung thật chỉ biết sau khi chạy bước kịch bản (xem <code>prompts/</code>).</span>`;
 }
 
+// loadComicCred nạp cấu hình sinh ảnh và cho biết đã bật chưa.
+function loadComicCred() {
+  fetch('/api/comic/config').then((r) => r.json()).then((d) => {
+    if (!d || !d.config) return;
+    const c = d.config;
+    const st = $('cmcCredState');
+    if (st) {
+      st.innerHTML = c.enabled
+        ? '<b style="color:#7ac77a">đã bật</b> — khung sẽ có tranh thật'
+        : '<b>chưa bật</b> — khung dùng ảnh giữ chỗ';
+    }
+    if ($('cmcKey')) $('cmcKey').placeholder = c.apiKey || 'dán khoá Gemini vào đây';
+    const sel = $('cmcModel');
+    if (sel && d.models) {
+      sel.innerHTML = d.models.map((m) => `<option value="${m[0]}">${m[1]}</option>`).join('');
+      if (c.model) sel.value = c.model;
+    }
+    if ($('cmcDialect') && c.dialect) $('cmcDialect').value = c.dialect;
+  }).catch(() => {});
+}
+
+function saveComicCred() {
+  const body = {
+    apiKey: $('cmcKey').value.trim(),
+    model: $('cmcModel') ? $('cmcModel').value : '',
+    dialect: $('cmcDialect') ? $('cmcDialect').value : '',
+  };
+  return api('/api/comic/config', body).then(() => {
+    $('cmcKey').value = '';
+    loadComicCred();
+    toast('Đã lưu cấu hình sinh ảnh');
+  }).catch((e) => toast(e.message, 'err'));
+}
+
+// testComicImage sinh ĐÚNG MỘT ảnh nhỏ. Đây là bước bắt buộc trước khi chạy cả sách:
+// sai khoá hoặc sai phương ngữ mà phát hiện muộn thì đã tốn cả trăm đô tiền ảnh.
+function testComicImage() {
+  const out = $('cmcTestOut');
+  out.textContent = 'Đang sinh một ảnh thử… (có thể mất tới một phút)';
+  fetch('/api/comic/test-image', { method: 'POST' }).then((r) => {
+    if (!r.ok) return r.json().then((d) => { throw new Error(d.error || 'thất bại'); });
+    return r.blob();
+  }).then((blob) => {
+    const url = URL.createObjectURL(blob);
+    out.innerHTML = `<b style="color:#7ac77a">Kết nối tốt.</b> Ảnh thử:<br>` +
+      `<img src="${url}" style="max-width:220px;border-radius:8px;margin-top:6px" />`;
+  }).catch((e) => {
+    out.innerHTML = `<b style="color:#e08585">Thất bại:</b> ${e.message}<br>` +
+      `<span style="opacity:.8">Nếu báo lỗi 404 hoặc model không tồn tại, thử đổi Phương ngữ API sang <code>interactions</code>.</span>`;
+  });
+}
+
 function openComic() {
   const products = [
     ['style', 'Định hướng mỹ thuật'],
@@ -652,9 +704,34 @@ function openComic() {
       <div><label>Trần số ảnh mỗi lần chạy</label><input type="number" id="cmcMaxImg" min="0" placeholder="0 = không giới hạn" /></div>
     </div>
     <div class="sub" id="cmcCost" style="margin-top:8px"></div>
+    <details id="cmcCredBox" style="margin-top:12px">
+      <summary style="cursor:pointer">🎨 Sinh ảnh khung (Gemini) — <span id="cmcCredState">đang tải…</span></summary>
+      <div style="margin-top:8px">
+        <label>Khoá API Gemini</label>
+        <input type="text" id="cmcKey" placeholder="để trống = giữ khoá hiện tại · nhập - để xoá" />
+        <div class="field-row">
+          <div><label>Model sinh ảnh</label><select id="cmcModel" style="width:100%"></select></div>
+          <div><label>Phương ngữ API</label><select id="cmcDialect" style="width:100%">
+            <option value="generatecontent">generateContent (mặc định)</option>
+            <option value="interactions">interactions (bản mới)</option>
+          </select></div>
+        </div>
+        <div class="sub" style="margin-top:6px">
+          Google đang có <b>hai</b> bề mặt API sinh ảnh. Nếu phương ngữ mặc định lỗi, đổi sang
+          <code>interactions</code> rồi bấm Kiểm tra lại.
+        </div>
+        <div class="modal-actions" style="margin-top:8px">
+          <button class="btn" id="cmcSaveCred">Lưu khoá</button>
+          <button class="btn" id="cmcTest">Kiểm tra kết nối (1 ảnh)</button>
+        </div>
+        <div id="cmcTestOut" class="sub"></div>
+      </div>
+    </details>
     <label class="opt" style="margin-top:12px"><input type="checkbox" id="cmcOver" /><span class="opt-label">Ghi đè file đã tồn tại</span></label>
     <div class="modal-actions"><button class="btn" onclick="closeModal()">Hủy</button>
     <button class="btn primary" id="cmcGo">Chạy</button></div>`);
+
+  loadComicCred();
 
   fetch('/api/comic/presets').then((r) => r.json()).then((d) => {
     const sel = $('cmcPreset');
@@ -667,6 +744,9 @@ function openComic() {
     if (el) el.addEventListener('input', refreshComicCost);
   });
   refreshComicCost();
+
+  $('cmcSaveCred').onclick = saveComicCred;
+  $('cmcTest').onclick = testComicImage;
 
   $('cmcGo').onclick = () => {
     const chosen = Array.from(document.querySelectorAll('.cmcProd:checked')).map((c) => c.value);

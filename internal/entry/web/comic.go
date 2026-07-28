@@ -1,9 +1,12 @@
 package web
 
 import (
+	"context"
 	"net/http"
 	"strings"
+	"time"
 
+	"github.com/voocel/ainovel-cli/internal/bootstrap"
 	"github.com/voocel/ainovel-cli/internal/host/comic"
 )
 
@@ -78,6 +81,77 @@ func (s *Server) handleComic(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 	writeOK(w, map[string]any{"id": id})
+}
+
+// comicConfigDTO là cấu hình sinh ảnh gửi ra/vào trình duyệt. Khoá luôn được CHE khi gửi ra.
+type comicConfigDTO struct {
+	APIKey     string `json:"apiKey"`
+	BaseURL    string `json:"baseUrl"`
+	Model      string `json:"model"`
+	Dialect    string `json:"dialect"`
+	ImageSize  string `json:"imageSize"`
+	KeyInQuery bool   `json:"keyInQuery"`
+	Enabled    bool   `json:"enabled"`
+}
+
+func (s *Server) handleComicConfig(w http.ResponseWriter, _ *http.Request) {
+	cc := s.eng.ComicConfig()
+	writeOK(w, map[string]any{
+		"config": comicConfigDTO{
+			APIKey:     bootstrap.MaskSecret(cc.APIKey),
+			BaseURL:    cc.BaseURL,
+			Model:      cc.Model,
+			Dialect:    cc.Dialect,
+			ImageSize:  cc.ImageSize,
+			KeyInQuery: cc.KeyInQuery,
+			Enabled:    cc.ImageEnabled(),
+		},
+		"models": s.eng.ComicImageModels(),
+	})
+}
+
+func (s *Server) handleComicConfigSave(w http.ResponseWriter, r *http.Request) {
+	var req comicConfigDTO
+	if err := decodeBody(r, &req); err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	cur := s.eng.ComicConfig()
+	cc := bootstrap.ComicConfig{
+		// mergeSecret: rỗng hoặc chứa "****" = giữ khoá cũ; "-" = xoá.
+		APIKey:     mergeSecret(cur.APIKey, req.APIKey),
+		BaseURL:    strings.TrimSpace(req.BaseURL),
+		Model:      strings.TrimSpace(req.Model),
+		Dialect:    strings.TrimSpace(req.Dialect),
+		ImageSize:  strings.TrimSpace(req.ImageSize),
+		KeyInQuery: req.KeyInQuery,
+	}
+	if err := s.eng.SetComicConfig(cc); err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	writeOK(w, map[string]any{"enabled": cc.ImageEnabled()})
+}
+
+// handleComicTestImage sinh ĐÚNG MỘT ảnh nhỏ để kiểm chứng khoá và phương ngữ dây.
+//
+// Bắt buộc phải chạy trước khi sinh cả sách: Google đang có hai bề mặt API cho việc sinh
+// ảnh, chạy cả cuốn rồi mới phát hiện sai phương ngữ thì mất cả trăm đô.
+func (s *Server) handleComicTestImage(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Minute)
+	defer cancel()
+
+	data, mime, err := s.eng.ComicTestImage(ctx)
+	if err != nil {
+		writeErr(w, http.StatusBadGateway, err)
+		return
+	}
+	if mime == "" {
+		mime = "image/png"
+	}
+	w.Header().Set("Content-Type", mime)
+	w.Header().Set("Cache-Control", "no-store")
+	_, _ = w.Write(data)
 }
 
 // handleComicPresets trả danh sách preset phong cách để Web và TUI hiển thị giống nhau.

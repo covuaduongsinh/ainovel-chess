@@ -3,6 +3,7 @@ package comic
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"image"
 	_ "image/jpeg" // đăng ký bộ giải mã JPEG cho image.Decode
@@ -113,25 +114,35 @@ func (rc *runCtx) buildPanelPrompt(p Panel) string {
 }
 
 // reserveClause sinh mệnh đề yêu cầu chừa khoảng trống trong khung.
+//
+// ⚠ TUYỆT ĐỐI không được nhắc tới "speech balloon"/"bubble" ở đây. Bản đầu viết
+// "leave empty negative space ... for a speech balloon" và mô hình đã VẼ HẲN một bong bóng
+// rỗng vào tranh — nó nghe thấy danh từ thì nó vẽ danh từ đó, bất kể mệnh đề bao quanh, và
+// câu khẳng định này còn thắng cả token cấm trong negative prompt.
+//
+// Cách nói đúng là mô tả VÙNG ẢNH mong muốn: chỗ đó phải là nền trơn, thoáng, không có
+// chủ thể — chứ không nói chỗ đó để làm gì.
 func reserveClause(reserve string, balloons []Balloon) string {
 	key := strings.TrimSpace(reserve)
 	if key == "" && len(balloons) > 0 {
 		key = balloons[0].Anchor
 	}
 	m := map[string]string{
-		"tren-trai":  "leave empty negative space in the upper left",
-		"tren-giua":  "leave empty negative space along the top",
-		"tren-phai":  "leave empty negative space in the upper right",
-		"giua-trai":  "leave empty negative space on the left",
-		"giua-phai":  "leave empty negative space on the right",
-		"duoi-trai":  "leave empty negative space in the lower left",
-		"duoi-giua":  "leave empty negative space along the bottom",
-		"duoi-phai":  "leave empty negative space in the lower right",
+		"tren-trai": "the upper left area",
+		"tren-giua": "the area along the top edge",
+		"tren-phai": "the upper right area",
+		"giua-trai": "the left side area",
+		"giua-phai": "the right side area",
+		"duoi-trai": "the lower left area",
+		"duoi-giua": "the area along the bottom edge",
+		"duoi-phai": "the lower right area",
 	}
-	if s, ok := m[key]; ok {
-		return s + " for a speech balloon"
+	where, ok := m[key]
+	if !ok {
+		where = "one corner"
 	}
-	return "leave some empty negative space for a speech balloon"
+	return "keep " + where + " visually calm and uncluttered: plain background there, " +
+		"no important subject or detail in that area"
 }
 
 func filterEmpty(in []string) []string {
@@ -426,6 +437,11 @@ func (rc *runCtx) generatePanelArt(ctx context.Context, ch int) error {
 		}
 		img, err := rc.deps.Img.Panel(ctx, req)
 		if err != nil {
+			// Nguồn hỏng hẳn (sai khoá, cạn hạn mức) thì dừng, đừng thử tiếp hàng trăm khung.
+			if errors.Is(err, ErrFatalImageSource) {
+				rc.emit(Event{Stage: StagePanelArt, Message: "Dừng sinh ảnh", Err: err})
+				return nil
+			}
 			// Bỏ qua mềm từng khung: một khung bị chặn không được làm hỏng cả lần chạy.
 			rc.emit(Event{Stage: StagePanelArt,
 				Message: fmt.Sprintf("Bỏ qua khung T%d·K%d chương %d: %v", row.Page, row.Panel, ch, err)})

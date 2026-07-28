@@ -27,6 +27,7 @@ import (
 	"github.com/voocel/ainovel-cli/internal/host/imp"
 	"github.com/voocel/ainovel-cli/internal/host/sim"
 	"github.com/voocel/ainovel-cli/internal/host/tts"
+	"github.com/voocel/ainovel-cli/internal/imggen"
 	modelreg "github.com/voocel/ainovel-cli/internal/models"
 	"github.com/voocel/ainovel-cli/internal/notify"
 	"github.com/voocel/ainovel-cli/internal/rules"
@@ -1277,7 +1278,79 @@ func (h *Host) Comic(ctx context.Context, opts comic.Options) (<-chan comic.Even
 			Script:    h.bundle.Prompts.ComicScript,
 		},
 	}
+	// Giai doan 2: co khoa anh thi cam nguon sinh anh vao. Khong co thi Img=nil va cac
+	// khung dung anh giu cho — dung buoc lai, khong phai loi.
+	h.mu.Lock()
+	cc := h.cfg.Comic
+	h.mu.Unlock()
+	if cc.ImageEnabled() {
+		deps.Img = comic.NewGeminiSource(h.newImageClient(cc))
+	}
 	return comic.Run(ctx, deps, opts)
+}
+
+// newImageClient dung client sinh anh tu cau hinh hien tai.
+func (h *Host) newImageClient(cc bootstrap.ComicConfig) *imggen.Client {
+	return imggen.NewClient(imggen.Options{
+		APIKey:     cc.APIKey,
+		BaseURL:    cc.BaseURL,
+		Model:      cc.Model,
+		Dialect:    cc.Dialect,
+		KeyInQuery: cc.KeyInQuery,
+	})
+}
+
+// ComicConfig tra ve cau hinh sinh anh hien tai.
+func (h *Host) ComicConfig() bootstrap.ComicConfig {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.cfg.Comic
+}
+
+// SetComicConfig ghi cau hinh sinh anh vao config toan cuc (mirror SetVbeeConfig).
+func (h *Host) SetComicConfig(cc bootstrap.ComicConfig) error {
+	if err := cc.Validate(); err != nil {
+		return err
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.cfg.Comic = cc
+	h.cfg.FillDefaults()
+	if path := bootstrap.DefaultConfigPath(); path != "" {
+		if err := bootstrap.SaveConfig(path, h.cfg); err != nil {
+			slog.Warn("Luu cau hinh sinh anh truyen tranh that bai", "module", "host", "err", err)
+			return err
+		}
+	}
+	return nil
+}
+
+// ComicImageModels liet ke cac model sinh anh de UI goi y.
+func (h *Host) ComicImageModels() [][2]string { return imggen.KnownModels }
+
+// ComicTestImage sinh DUNG MOT anh nho de kiem chung khoa API va phuong ngu day.
+//
+// Bat buoc phai co truoc khi chay ca sach: Google dang co HAI be mat API cho viec sinh anh
+// va tai lieu da gan nhan duong cu la "Legacy". Mot anh thu ton vai xu, con chay ca cuon
+// roi moi phat hien sai phuong ngu thi mat ca tram do la.
+func (h *Host) ComicTestImage(ctx context.Context) ([]byte, string, error) {
+	h.mu.Lock()
+	cc := h.cfg.Comic
+	h.mu.Unlock()
+	if !cc.ImageEnabled() {
+		return nil, "", fmt.Errorf("chua cau hinh khoa API sinh anh")
+	}
+	c := h.newImageClient(cc)
+	res, err := c.Generate(ctx, imggen.Request{
+		Prompt:      "A single simple wooden chess pawn on a plain cream background, warm watercolor children's book illustration",
+		Negative:    "text, letters, watermark, signature",
+		AspectRatio: "1:1",
+		ImageSize:   "1K",
+	})
+	if err != nil {
+		return nil, "", err
+	}
+	return res.Image, res.MimeType, nil
 }
 
 // Audiobook tao sach noi (moi chuong mot tep MP3) tu cac chuong da hoan thanh, qua API TTS Vbee.
