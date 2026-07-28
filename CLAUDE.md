@@ -52,6 +52,7 @@ go test ./internal/bootstrap/   # test một package
 | `host/` | Engine điều phối: chạy Coordinator, khôi phục, chiếu sự kiện, `reminder/` sinh `<system-reminder>` mỗi lượt |
 | `agents/` | Dựng agent + đóng gói/nén ngữ cảnh cho tiểu thuyết dài |
 | `tools/` | Công cụ nguyên tử cho Architect/Writer/Editor (IO + ghi checkpoint), chỉ trả JSON sự kiện |
+| `comicdraw/` | Gói lá thuần đồ hoạ: dựng trang truyện tranh ra PNG + SVG (bong bóng, lồng chữ tiếng Việt) |
 | `store/` | Lưu bền vững: progress, checkpoints, drafts, outline, summaries, characters, world, signals |
 | `domain/` | Model dữ liệu: Phase, Flow, Progress, Checkpoint, sự kiện, quy tắc chuyển trạng thái |
 | `bootstrap/` | Nạp config + setup wizard + tích hợp provider (gồm `claude.go` cho Claude Code) |
@@ -86,4 +87,5 @@ Tài sản nhúng (prompt, style, reference) ở [assets/](assets/), nạp qua `
 - [docs/export.md](docs/export.md) — xuất bản thảo đa định dạng (MD / TXT / EPUB)
 - [docs/video.md](docs/video.md) — chuyển thể sách thành sản phẩm làm video (kịch bản / phân cảnh / thiết kế / prompt)
 - [docs/audiobook.md](docs/audiobook.md) — tạo sách nói (mỗi chương một MP3) từ chương đã hoàn thành qua Vbee TTS
+- [docs/comic.md](docs/comic.md) — làm truyện tranh: dựng trang hoàn chỉnh có bong bóng thoại, xuất PDF/CBZ/EPUB
 - [CHANGELOG.md](CHANGELOG.md) — nhật ký thay đổi

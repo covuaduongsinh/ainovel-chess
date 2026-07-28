@@ -1,0 +1,154 @@
+# Làm truyện tranh: sách → trang truyện tranh xuất bản được
+
+Khác với [/video](video.md) chỉ sinh **nhiên liệu** (kịch bản, prompt) cho người khác dựng
+video, `/truyentranh` dựng ra **sản phẩm cuối**: trang truyện tranh đã ghép tranh, đã vẽ bong
+bóng và lồng chữ tiếng Việt, đã đóng gói in được.
+
+## Chạy
+
+```bash
+# TUI
+/truyentranh                       # chạy tất cả các bước
+/truyentranh to=1                  # ⚠ chạy thử MỘT chương trước
+/truyentranh preset=manga size=b5
+/truyentranh page publish --overwrite   # dựng lại trang + đóng gói
+
+# Web: nút "▤ Truyện tranh"
+```
+
+Tham số: `preset=` · `style=` · `from=` `to=` · `size=a4|b5` · `format=pdf,cbz,epub` ·
+`maximages=N` · `imagesize=1K|2K` · `out=PATH` · `--overwrite`.
+
+## Sản phẩm
+
+| # | Bước | LLM? | Đầu ra |
+|---|---|---|---|
+| 1 | `style` | 1 lần | `style/art-direction.{json,md}` — token phong cách khoá cho cả sách |
+| 2 | `character` | 1 lần | `nhan-vat/` — model sheet, `canonical_prompt` khoá diện mạo |
+| 3 | `refsheet` | ảnh | `nhan-vat/*.png` — **ảnh** model sheet *(giai đoạn 2)* |
+| 4 | `script` | mỗi chương | `kich-ban/{NN}.{json,md}` — chương → **trang → khung** + lời thoại |
+| 5 | `layout` | **không** | `bo-cuc/{NN}.json` — toạ độ khung, vùng bong bóng |
+| 6 | `panelprompt` | **không** | `prompts/chuong-{NNN}.{json,md}` — bảng prompt khung |
+| 7 | `panelart` | ảnh | `art/chuong-{NNN}/` — tranh từng khung *(giai đoạn 2)* |
+| 8 | `page` | **không** | `trang/chuong-{NNN}/{PP}.png` + `.svg` |
+| 9 | `publish` | **không** | `xuat-ban/{TênSách}.{pdf,cbz,epub}` |
+
+Chỉ ba bước gọi LLM. Toàn bộ phần còn lại thuần Go, không tốn token.
+
+## Nguyên tắc: LLM ra ngữ nghĩa, Go ra hình học
+
+LLM **không** sinh toạ độ. Nó chỉ quyết định mỗi trang mấy khung, mỗi khung `size`
+(`nho`/`vua`/`lon`/`tran-trang`), chỗ `row_break`, và cú hích cuối trang. Go tra bảng trọng
+số rồi tính rect **xác định**.
+
+Lý do: LLM sinh toạ độ thì khung chồng nhau, hở lỗ, không lát kín trang — lỗi chỉ lộ ra khi
+nhìn trang đã in và rất khó kiểm tự động. Tính bằng code thì **lát kín là bất biến có test**
+(`TestLayoutTilesPage`).
+
+Trọng số ăn khớp ngân sách hàng 3,0 cho ra đúng các tổ hợp quen thuộc:
+
+```
+nho+nho+nho = 3,0 ✓    vua+vua = 3,0 ✓    lon+nho = 3,0 ✓    vua+nho = 2,5 ✓
+lon+vua = 3,5 ✗ tách hàng               lon+lon = 4,0 ✗ tách hàng
+```
+
+## Chữ trong tranh bị cấm tuyệt đối
+
+Mọi negative prompt đều chứa `text, letters, words, speech bubble, watermark`. Chữ do bộ dàn
+trang vẽ bằng font thật, vì mô hình sinh ảnh viết tiếng Việt có dấu gần như luôn sai.
+
+Hệ quả tốt: chữ trong bản SVG vẫn là `<text>` — sửa lại được trước khi in, và **dịch sang
+ngôn ngữ khác chỉ cần thay nội dung `<text>`**, không phải vẽ lại tranh.
+
+## Nhất quán nhân vật — ba tầng
+
+Đây là chỗ truyện tranh do AI vẽ hay hỏng nhất.
+
+1. `canonical_prompt` — mô tả cố định, chèn **nguyên văn** vào mọi khung có nhân vật đó.
+2. `refsheet` — sinh **ảnh** model sheet một lần *(giai đoạn 2)*.
+3. `panelart` — truyền chính ảnh đó làm **ảnh tham chiếu** cho từng khung *(giai đoạn 2)*.
+
+Nếu dự án đã chạy `/video`, các bước trên **nạp lại** `video/consistency-bible.json`,
+`video/characters/*.json`, `video/concept/art-direction.json` và `video/storyboard/{NN}.json`
+thay vì sinh mới — vừa rẻ hơn, vừa giữ cho bản truyện tranh và bản video cùng một thế giới
+hình ảnh.
+
+## Chữ tiếng Việt — hai cạm bẫy kỹ thuật
+
+**1. Bắt buộc chuẩn hoá NFC.** `x/image/font/sfnt` chỉ nối dây bảng GPOS *kern*, **không có
+GSUB và không có mark-to-base**; `font.Face` lại là API theo từng rune. Chuỗi dạng tổ hợp
+(`e` + U+0302 + U+0301 thay vì `ế` U+1EBF — hay gặp với văn bản dán từ macOS) sẽ bị vẽ dấu
+chồng đống ở gốc bút. May là cả 134 chữ cái tiếng Việt đều có dạng tiền-kết-hợp nên NFC là
+đủ, **không cần engine shaping nào**.
+
+**2. Không căn giữa bằng `Metrics().Ascent`.** Đó là ascent *typographic*, một hằng số thiết
+kế. Đo thực tế trên Patrick Hand ở 64px: ascent = −66,7 nhưng mực chữ thường chỉ −30 — căn
+giữa bằng ascent sẽ đẩy chữ xuống ~36px. Bộ dựng quét `GlyphBounds` của **chính chuỗi sắp
+vẽ** để lấy đỉnh mực thật, và đặt giãn dòng mặc định **1,30** (tiếng Anh chỉ ~1,15) để dấu
+chồng dòng dưới không đụng đuôi chữ dòng trên.
+
+## Font
+
+Nhúng sẵn ba font **SIL OFL 1.1**, đã kiểm chứng phủ đủ **165 glyph** tiếng Việt
+(`TestFontsCoverVietnamese`): **Patrick Hand** (thoại) · **Bangers** (tượng thanh) ·
+**Be Vietnam Pro** (thuyết minh).
+
+> ⚠ Đổi font phải chạy lại test phủ glyph. Rất nhiều font lettering truyện tranh **không có
+> dấu tiếng Việt**: **Comic Neue** tuy OFL nhưng thiếu hẳn khối U+1EA0–1EF9 nên `Ở`, `ệ`, `ữ`
+> thành ô vuông lặng lẽ; Blambot *Comicrazy*/*Wildwords* là font thương mại.
+
+## Đóng gói xuất bản
+
+- **PDF 300 DPI** — `MediaBox`/`BleedBox`/`TrimBox`, ảnh JPEG nhét thẳng qua `/DCTDecode`.
+  PDF **không có** thuộc tính DPI: kích thước vật lý nằm trọn ở ma trận `W 0 0 H 0 0 cm`.
+  Tiêu đề tiếng Việt mã hoá UTF-16BE (chuỗi literal PDF sẽ hỏng dấu).
+  A4 @300 DPI = 2480×3508 px; kèm tràn lề 3mm = **2551×3579 px**.
+- **CBZ** — zip `Store` (ảnh đã nén sẵn), đánh số 3 chữ số, kèm `ComicInfo.xml`.
+- **EPUB3 fixed-layout** — `rendition:layout pre-paginated`, viewport đúng bằng pixel ảnh,
+  ảnh bọc `<svg>` nên manifest bắt buộc `properties="svg"`. Ảnh màn hình **cắt bỏ tràn lề**.
+- **PNG + SVG** từng trang — có sẵn từ bước `page`.
+
+Không dùng thư viện ngoài nào; cả ba bộ đóng gói đều viết tay, đúng tinh thần EPUB chữ ở
+[internal/host/exp/epub.go](../internal/host/exp/epub.go).
+
+## Hai giai đoạn
+
+**Giai đoạn 1 (hiện tại) — không tốn một xu tiền ảnh.** Chạy trọn đường ống, khung dùng ô
+giữ chỗ có gạch chéo. Kết quả là **trang truyện tranh thật, chỉ thiếu tranh** — đủ để chấm
+bố cục, nhịp trang, vị trí bong bóng, typography tiếng Việt, và thử cả bốn định dạng xuất bản.
+
+**Giai đoạn 2 — nối API sinh ảnh.** Khớp nối là interface `ImageSource` đã định nghĩa sẵn.
+Bộ dựng đọc ảnh **theo đường dẫn tệp**, nên:
+
+- Giai đoạn 2 chỉ việc đặt tệp vào `art/chuong-{NNN}/t{PP}-k{KK}.png`.
+- **Bạn tự vẽ tay hoặc tự chạy bộ sinh ảnh rồi thả tệp vào đúng chỗ cũng chạy ngay** — xem
+  `prompts/chuong-{NNN}.md` để biết prompt và đường dẫn. Chạy lại `/truyentranh page publish`
+  là có trang hoàn chỉnh, không cần sửa dòng code nào.
+- Vẽ lại một khung hỏng = xoá đúng một tệp PNG rồi chạy lại.
+
+## Chi phí sinh ảnh *(giai đoạn 2)*
+
+Một cuốn 32 chương ≈ **1.900 khung**.
+
+| Model | Giá/ảnh | 1.900 khung |
+|---|---|---|
+| `gemini-3.1-flash-lite-image` (1K) | $0,0336 | ~$64 |
+| `gemini-2.5-flash-image` | $0,039 | ~$74 |
+| `gemini-3.1-flash-image` 1K / 2K | $0,067 / $0,101 | ~$127 / ~$192 |
+| `gemini-3-pro-image` | $0,134 | ~$255 |
+
+> ⚠ **Muốn in thì phải sinh ở 2K**, không phải 1K — A4 @300 DPI là 2480×3508 px, một khung
+> nửa trang đã cần ~2480×1200 px. Điều này gần như **gấp đôi** chi phí so với ước tính hồn
+> nhiên. Bản 1K chỉ đủ cho CBZ/EPUB đọc màn hình.
+
+Biện pháp: `maximages=N` làm cầu dao mỗi lần chạy · hộp thoại Web ước tính trước khi chạy ·
+mặc định **không** ghi đè nên chạy lại chỉ lấp chỗ trống · chạy `/truyentranh to=1` trước.
+
+## Hành vi
+
+- **Ghi nguyên tử** (temp + fsync + rename), đầu ra mặc định `{novelDir}/truyen-tranh/`.
+- **guardExclusive** — không chạy chồng với Coordinator; Web hủy qua `POST /api/job/cancel`,
+  TUI bằng `Esc`.
+- **Bỏ qua mềm từng chương/khung** — một chương hỏng không làm sập cả lần chạy.
+- **Chạy lại tăng dần** — không `--overwrite` thì bỏ qua tệp đã có, kể cả bước LLM.
+- Model dùng vai trò **`architect`**.
