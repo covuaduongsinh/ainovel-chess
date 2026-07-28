@@ -558,6 +558,268 @@ function openVideo() {
   };
 }
 
+// ── Sách nói (Vbee TTS) ──
+
+// Ước lượng số ký tự sẽ gửi Vbee cho một phạm vi chương. Vbee tính tiền theo KÝ TỰ nên
+// người dùng cần thấy con số này TRƯỚC khi bấm chạy.
+function estimateAudiobookChars(from, to) {
+  const s = state.snapshot || {};
+  const doneChaps = s.CompletedChapters || 0;
+  const words = s.TotalWordCount || 0;
+  if (!doneChaps || !words) return 0;
+  const lo = from > 0 ? from : 1;
+  const hi = to > 0 ? Math.min(to, doneChaps) : doneChaps;
+  const n = Math.max(0, hi - lo + 1);
+  // Tiếng Việt trung bình ~5,5 ký tự cho mỗi "từ" (đã tính khoảng trắng).
+  return Math.round((words / doneChaps) * n * 5.5);
+}
+
+function audiobookRange() {
+  return {
+    from: parseInt($('abFrom').value || '0', 10) || 0,
+    to: parseInt($('abTo').value || '0', 10) || 0,
+  };
+}
+
+function refreshAudiobookCost() {
+  const { from, to } = audiobookRange();
+  const chars = estimateAudiobookChars(from, to);
+  const el = $('abCost');
+  if (!el) return;
+  el.textContent = chars
+    ? `⚠ Vbee tính phí theo ký tự. Ước tính ~${chars.toLocaleString('vi-VN')} ký tự cho phạm vi này. Hãy thử "Đến chương = 1" trước.`
+    : '⚠ Vbee tính phí theo ký tự. Hãy thử "Đến chương = 1" trước khi tạo cả sách.';
+}
+
+// Kho giọng đã nạp của nhóm đang xem. Ô "Mã giọng" mới là nguồn sự thật gửi đi —
+// danh sách chỉ là công cụ tra cứu điền vào ô đó, nên dán tay luôn dùng được kể cả
+// khi API danh sách giọng hỏng hoặc giọng không nằm trong nhóm đang chọn.
+let vbeeVoices = [];
+
+// maxVoiceOptions chặn số option dựng ra: nhóm "Cộng đồng" có hơn một nghìn giọng,
+// đổ hết vào <select> vừa chậm vừa không cuộn nổi. Người dùng lọc để thu hẹp.
+const maxVoiceOptions = 300;
+
+function renderVoiceOptions() {
+  const list = $('abVoiceList');
+  if (!list) return;
+  const q = ($('abVoiceFilter').value || '').trim().toLowerCase();
+  const matched = q
+    ? vbeeVoices.filter((v) => ((v.name || '') + ' ' + (v.code || '') + ' ' + (v.language_code || '')).toLowerCase().includes(q))
+    : vbeeVoices;
+  const shown = matched.slice(0, maxVoiceOptions);
+  const current = ($('abVoice').value || '').trim();
+
+  list.innerHTML = shown.map((v) => {
+    const factor = v.credit_factor && v.credit_factor !== 1 ? ` ×${v.credit_factor}` : '';
+    // Kèm ngôn ngữ vì kho giọng gồm nhiều thứ tiếng, và kèm mã vì nhiều giọng trùng
+    // tên hiển thị mà chỉ khác mã (kiểu đọc, tần số lấy mẫu).
+    const lang = v.language_code ? `[${v.language_code}] ` : '';
+    const label = `${lang}${v.name || v.code} (${v.gender || '?'})${factor} — ${v.code}`;
+    return `<option value="${escapeHTML(v.code)}"${v.code === current ? ' selected' : ''}>${escapeHTML(label)}</option>`;
+  }).join('');
+
+  let note = `${matched.length} giọng`;
+  if (matched.length > shown.length) note += ` — đang hiện ${shown.length} đầu tiên, hãy gõ vào ô lọc để thu hẹp`;
+  if (!matched.length) note = 'Không có giọng nào khớp bộ lọc';
+  $('abVoiceCount').textContent = note;
+}
+
+function updateVoiceDemo() {
+  const code = ($('abVoice').value || '').trim();
+  const v = vbeeVoices.find((x) => x.code === code);
+  $('abDemo').innerHTML = v && v.demo
+    ? `<a href="${escapeHTML(v.demo)}" target="_blank" rel="noopener">🔊 Nghe thử miễn phí (không tốn tín dụng)</a>`
+    : '';
+}
+
+function loadVbeeVoices() {
+  const own = $('abVoiceOwn').value;
+  $('abVoiceCount').textContent = 'Đang tải danh sách giọng…';
+  $('abVoiceList').innerHTML = '';
+  vbeeVoices = [];
+  // ownership là tham số BẮT BUỘC của Vbee (thiếu thì trả 400), nên luôn gửi.
+  getJSON(`/api/vbee/voices?ownership=${encodeURIComponent(own)}&limit=100`).then((d) => {
+    if (d && d.error) throw new Error(d.error);
+    vbeeVoices = (d && d.voices) || [];
+    renderVoiceOptions();
+    updateVoiceDemo();
+  }).catch((e) => {
+    // Endpoint danh sách giọng nằm ở host KHÁC endpoint TTS nên có thể hỏng riêng.
+    // Ô "Mã giọng" vẫn dán tay được, nên sự cố ở đây không chặn việc tạo sách nói.
+    vbeeVoices = [];
+    $('abVoiceList').innerHTML = '';
+    $('abVoiceCount').textContent = `Không tải được danh sách giọng (${e.message}) — vẫn dán mã giọng vào ô trên được.`;
+  });
+}
+
+function openAudiobook() {
+  openModal(`<h2>Tạo sách nói</h2><div class="sub">Đọc các chương đã hoàn thành thành tệp MP3 qua dịch vụ Vbee — mỗi chương một tệp, kèm danh sách phát. Kết quả nằm ở thư mục <code>audio/</code> của dự án.</div>
+
+    <details id="abCreds" style="margin:10px 0;border:1px solid var(--line,#333);border-radius:6px;padding:8px">
+      <summary style="cursor:pointer">Thông tin Vbee</summary>
+      <div class="sub" style="margin:6px 0">Lấy App ID và Access Token tại <a href="https://studio.vbee.vn/apps" target="_blank" rel="noopener">studio.vbee.vn/apps</a> → mục Tích hợp API. Token hiển thị dạng che; để nguyên nếu không muốn đổi, gõ <code>-</code> để xóa. Lưu sẽ ghi lại <code>~/.ainovel/config.json</code> (các dòng chú thích <code>//</code> trong tệp sẽ bị lược bỏ).</div>
+      <label>App ID</label><input type="text" id="abAppId" />
+      <label style="margin-top:8px">Access Token</label><input type="password" id="abToken" />
+      <label style="margin-top:8px">Webhook URL</label><input type="text" id="abWebhook" placeholder="https://example.com/vbee-callback" />
+      <div class="sub" style="margin-top:4px">Ứng dụng chạy nội bộ nên không có URL công khai — ta gửi URL giữ chỗ rồi chủ động hỏi trạng thái. Nếu tài khoản từ chối, thay bằng một URL nhận-và-bỏ.</div>
+      <div class="modal-actions" style="margin-top:8px">
+        <button class="btn" id="abTest">Kiểm tra kết nối</button>
+        <button class="btn" id="abSaveCreds">Lưu</button>
+      </div>
+    </details>
+
+    <label>Mã giọng đọc</label>
+    <input type="text" id="abVoice" placeholder="Dán mã giọng, vd hn_female_ngochuyen_full_48k-fhg" />
+    <div class="sub" id="abDemo" style="margin-top:4px"></div>
+
+    <div class="field-row" style="margin-top:8px">
+      <div><label>Nhóm giọng</label><select id="abVoiceOwn">
+        <option value="VBEE">Vbee (giọng chính thức)</option>
+        <option value="COMMUNITY">Cộng đồng</option>
+        <option value="PERSONAL">Cá nhân (giọng bạn tự tạo)</option>
+      </select></div>
+      <div><label>Lọc theo tên hoặc mã</label><input type="text" id="abVoiceFilter" placeholder="vd: ngọc, hanoi, news" /></div>
+    </div>
+    <select id="abVoiceList" size="8" style="width:100%;margin-top:6px"></select>
+    <div class="sub" id="abVoiceCount" style="margin-top:4px"></div>
+
+    <div class="field-row">
+      <div><label>Từ chương</label><input type="number" id="abFrom" min="0" placeholder="đầu" /></div>
+      <div><label>Đến chương</label><input type="number" id="abTo" min="0" placeholder="cuối" /></div>
+    </div>
+    <div class="field-row">
+      <div><label>Tốc độ</label><input type="number" id="abSpeed" min="0.25" max="1.9" step="0.05" placeholder="1.0" /></div>
+      <div><label>Bitrate</label><select id="abBitrate">
+        <option value="128">128 kbps (mặc định)</option><option value="64">64 kbps</option>
+        <option value="32">32 kbps</option><option value="16">16 kbps</option><option value="8">8 kbps</option>
+      </select></div>
+    </div>
+    <div class="field-row">
+      <div><label>Định dạng</label><select id="abFormat"><option value="mp3">mp3 (mặc định)</option><option value="wav">wav</option></select></div>
+      <div><label>Tần số lấy mẫu</label><select id="abRate">
+        <option value="24000">24000 Hz (mặc định)</option><option value="48000">48000 Hz</option>
+        <option value="44100">44100 Hz</option><option value="32000">32000 Hz</option>
+        <option value="22050">22050 Hz</option><option value="16000">16000 Hz</option><option value="8000">8000 Hz</option>
+      </select></div>
+    </div>
+    <div class="sub" id="abFormatWarn" style="margin-top:4px"></div>
+
+    <label class="opt" style="margin-top:12px"><input type="checkbox" id="abOver" /><span class="opt-label">Ghi đè tệp đã tồn tại (bỏ trống = chạy tiếp phần còn thiếu)</span></label>
+    <div class="sub" id="abCost" style="margin-top:10px"></div>
+
+    <div class="modal-actions"><button class="btn" onclick="closeModal()">Hủy</button>
+    <button class="btn primary" id="abGo">Chạy</button></div>`);
+
+  // Nạp cấu hình sẵn có rồi mới nạp danh sách giọng (để chọn đúng giọng mặc định).
+  getJSON('/api/vbee/config').then((c) => {
+    $('abAppId').value = c.configured ? c.appId : '';
+    $('abToken').value = c.configured ? c.accessToken : '';
+    $('abWebhook').value = c.webhookUrl || '';
+    if (c.speed) $('abSpeed').value = c.speed;
+    if (c.bitrate) $('abBitrate').value = String(c.bitrate);
+    if (c.sampleRate) $('abRate').value = String(c.sampleRate);
+    if (c.outputFormat) $('abFormat').value = c.outputFormat;
+    $('abVoice').value = c.voiceCode || '';
+    if (!c.configured) $('abCreds').open = true;
+    loadVbeeVoices();
+  }).catch(() => loadVbeeVoices());
+
+  // Danh sách chỉ là công cụ tra cứu: chọn thì điền vào ô "Mã giọng", và ô đó mới là
+  // thứ được gửi đi. Nhờ vậy dán tay một mã không có trong nhóm đang xem vẫn chạy được.
+  $('abVoiceList').onchange = () => {
+    $('abVoice').value = $('abVoiceList').value;
+    updateVoiceDemo();
+  };
+  $('abVoice').oninput = () => { updateVoiceDemo(); renderVoiceOptions(); };
+  $('abVoiceOwn').onchange = loadVbeeVoices;
+  $('abVoiceFilter').oninput = renderVoiceOptions;
+
+  const collectCreds = () => ({
+    appId: $('abAppId').value.trim(),
+    accessToken: $('abToken').value.trim(),
+    webhookUrl: $('abWebhook').value.trim(),
+    voiceCode: ($('abVoice').value || '').trim(),
+    speed: parseFloat($('abSpeed').value || '0') || 0,
+    bitrate: parseInt($('abBitrate').value, 10) || 0,
+    sampleRate: parseInt($('abRate').value, 10) || 0,
+    outputFormat: $('abFormat').value,
+  });
+
+  $('abSaveCreds').onclick = () => {
+    api('/api/vbee/config', collectCreds())
+      .then(() => toast('Đã lưu thông tin Vbee', 'ok'))
+      .catch((e) => toast(e.message, 'err'));
+  };
+
+  $('abTest').onclick = () => {
+    const btn = $('abTest');
+    btn.disabled = true;
+    btn.textContent = 'Đang kiểm tra…';
+    // Lưu trước để máy chủ dùng đúng thông tin vừa nhập, rồi tổng hợp một câu ngắn
+    // ở chế độ sync — không cần webhookUrl và gần như không tốn tín dụng.
+    api('/api/vbee/config', collectCreds())
+      .then(() => fetch('/api/vbee/preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ voice: ($('abVoice').value || '').trim(), text: 'Xin chào, đây là giọng đọc thử của Vbee.' }),
+      }))
+      .then(async (res) => {
+        if (!res.ok) {
+          let data = {};
+          try { data = await res.json(); } catch (_) {}
+          throw new Error(data.error || ('Lỗi máy chủ (' + res.status + ')'));
+        }
+        return res.blob();
+      })
+      .then((blob) => {
+        const url = URL.createObjectURL(blob);
+        const audio = new Audio(url);
+        audio.onended = () => URL.revokeObjectURL(url);
+        audio.play().catch(() => {});
+        toast('Kết nối Vbee bình thường', 'ok');
+      })
+      .catch((e) => toast(e.message, 'err'))
+      .finally(() => { btn.disabled = false; btn.textContent = 'Kiểm tra kết nối'; });
+  };
+
+  $('abFormat').onchange = () => {
+    $('abFormatWarn').textContent = $('abFormat').value === 'wav'
+      ? '⚠ Định dạng wav không nén: một chương dài có thể lên tới vài trăm MB.'
+      : '';
+  };
+  $('abFrom').oninput = refreshAudiobookCost;
+  $('abTo').oninput = refreshAudiobookCost;
+  refreshAudiobookCost();
+
+  $('abGo').onclick = () => {
+    const { from, to } = audiobookRange();
+    const voice = ($('abVoice').value || '').trim();
+    if (!voice) return toast('Hãy chọn hoặc nhập mã giọng đọc', 'err');
+
+    const done = (state.snapshot && state.snapshot.CompletedChapters) || 0;
+    const hi = to > 0 ? Math.min(to, done) : done;
+    const lo = from > 0 ? from : 1;
+    const n = Math.max(0, hi - lo + 1);
+    if (n > 5) {
+      const chars = estimateAudiobookChars(from, to);
+      const msg = `Sẽ đọc ${n} chương, ước tính ~${chars.toLocaleString('vi-VN')} ký tự tín dụng Vbee.\n\nBạn có chắc muốn chạy không?`;
+      if (!window.confirm(msg)) return;
+    }
+
+    const body = {
+      from, to, voice,
+      speed: parseFloat($('abSpeed').value || '0') || 0,
+      bitrate: parseInt($('abBitrate').value, 10) || 0,
+      sampleRate: parseInt($('abRate').value, 10) || 0,
+      outputFormat: $('abFormat').value,
+      overwrite: $('abOver').checked,
+    };
+    api('/api/audiobook', body).then(() => openProgressModal('Đang tạo sách nói'))
+      .catch((e) => toast(e.message, 'err'));
+  };
+}
+
 function openGrounding() {
   const g = state.grounding;
   openModal(`<h2>Viết bám sát nhân vật có thật</h2><div class="sub">Neo truyện vào một nhân vật/chủ thể CÓ THẬT: giữ đúng tên, mốc thời gian, thành tựu, tính cách thật làm mỏ neo; phần phiêu lưu vẫn hư cấu tự do. Áp dụng cho lần "Bắt đầu" kế tiếp.</div>
@@ -723,6 +985,7 @@ function bindUI() {
       if (cmd === 'abort') return api('/api/abort').catch((e) => toast(e.message, 'err'));
       if (cmd === 'export') return openExport();
       if (cmd === 'video') return openVideo();
+      if (cmd === 'audiobook') return openAudiobook();
       if (cmd === 'import') return openImport();
       if (cmd === 'simulate') return openSimulate();
       if (cmd === 'grounding') return openGrounding();

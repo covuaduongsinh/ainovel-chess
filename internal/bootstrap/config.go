@@ -143,6 +143,9 @@ type Config struct {
 
 	// Notify cấu hình cảnh báo không người giám sát; mặc định kích hoạt (kênh system dự phòng).
 	Notify NotifyConfig `json:"notify,omitzero"`
+
+	// Vbee thông tin xác thực dịch vụ TTS dùng cho tính năng sách nói; rỗng = chưa bật.
+	Vbee VbeeConfig `json:"vbee,omitzero"`
 }
 
 // BudgetConfig là khai báo chính sách ví tiền cho mỗi cuốn sách của người dùng. Dừng khi vượt ngưỡng tương đương người dùng
@@ -165,6 +168,87 @@ type NotifyConfig struct {
 
 // IsEnabled trả về cảnh báo có được kích hoạt không (mặc định true).
 func (n NotifyConfig) IsEnabled() bool { return n.Enabled == nil || *n.Enabled }
+
+// Mặc định cho dịch vụ TTS Vbee. Cố ý chép giá trị thay vì import internal/vbee:
+// bootstrap là gói nền, không nên phụ thuộc vào gói client của một nhà cung cấp.
+const (
+	DefaultVbeeBaseURL    = "https://api.vbee.vn"
+	DefaultVbeeVoicesURL  = "https://vbee.vn" // CHÚ Ý: khác host với endpoint TTS
+	DefaultVbeeWebhookURL = "https://example.com/vbee-callback"
+)
+
+// VbeeConfig là thông tin xác thực + tham số mặc định cho dịch vụ TTS Vbee
+// (tính năng sách nói). Lấy App-Id và Access Token trong Vbee Studio → mục API
+// (https://studio.vbee.vn/apps). Cấu hình được cả trong ~/.ainovel/config.json lẫn
+// hộp thoại "Sách nói" trên giao diện Web.
+//
+// ⚠ Vbee tính phí theo SỐ KÝ TỰ gửi đi — một cuốn 32 chương ≈ 600.000 ký tự.
+type VbeeConfig struct {
+	AppID       string `json:"app_id,omitempty"`
+	AccessToken string `json:"access_token,omitempty"`
+
+	// VoiceCode là giọng đọc mặc định, vd "hn_female_ngochuyen_full_48k-fhg".
+	VoiceCode string `json:"voice_code,omitempty"`
+
+	// BaseURL là endpoint TTS; rỗng = DefaultVbeeBaseURL.
+	BaseURL string `json:"base_url,omitempty"`
+	// VoicesURL là endpoint danh sách giọng — CHÚ Ý: Vbee đặt API này ở host KHÁC
+	// với endpoint TTS. Rỗng = DefaultVbeeVoicesURL.
+	VoicesURL string `json:"voices_url,omitempty"`
+	// WebhookURL: tài liệu Vbee ghi trường này là bắt buộc với mode "async". Ứng dụng
+	// chạy localhost nên KHÔNG có URL công khai — ta gửi một URL giữ chỗ rồi chủ động
+	// poll GET /v1/tts/requests/{id}. Rỗng = DefaultVbeeWebhookURL. Nếu tài khoản của
+	// bạn từ chối URL giữ chỗ, hãy điền một URL nhận-và-bỏ (vd https://webhook.site/<uuid>).
+	WebhookURL string `json:"webhook_url,omitempty"`
+
+	Speed        float64 `json:"speed,omitempty"`         // 0.25–1.9; rỗng = 1.0
+	Bitrate      int     `json:"bitrate,omitempty"`       // 8|16|32|64|128; rỗng = 128
+	SampleRate   int     `json:"sample_rate,omitempty"`   // rỗng = 24000
+	OutputFormat string  `json:"output_format,omitempty"` // mp3 (mặc định) | wav
+}
+
+// Configured cho biết đã đủ thông tin xác thực để gọi Vbee chưa.
+func (v VbeeConfig) Configured() bool {
+	return strings.TrimSpace(v.AppID) != "" && strings.TrimSpace(v.AccessToken) != ""
+}
+
+var knownVbeeBitrates = map[int]bool{8: true, 16: true, 32: true, 64: true, 128: true}
+var knownVbeeSampleRates = map[int]bool{
+	8000: true, 16000: true, 22050: true, 24000: true, 32000: true, 44100: true, 48000: true,
+}
+
+// Validate kiểm tra khoảng giá trị. Chỉ áp dụng cho các trường ĐÃ điền — mục vbee bỏ
+// trống hoàn toàn là hợp lệ (người dùng không dùng tính năng sách nói).
+func (v VbeeConfig) Validate() error {
+	for _, f := range []struct{ label, value string }{
+		{"vbee.app_id", v.AppID},
+		{"vbee.access_token", v.AccessToken},
+		{"vbee.voice_code", v.VoiceCode},
+		{"vbee.base_url", v.BaseURL},
+		{"vbee.voices_url", v.VoicesURL},
+		{"vbee.webhook_url", v.WebhookURL},
+		{"vbee.output_format", v.OutputFormat},
+	} {
+		if err := validateConfigText(f.label, f.value); err != nil {
+			return err
+		}
+	}
+	if v.Speed != 0 && (v.Speed < 0.25 || v.Speed > 1.9) {
+		return fmt.Errorf("vbee.speed phải nằm trong khoảng 0.25–1.9: %w", errs.ErrConfig)
+	}
+	if v.Bitrate != 0 && !knownVbeeBitrates[v.Bitrate] {
+		return fmt.Errorf("vbee.bitrate chỉ nhận 8/16/32/64/128: %w", errs.ErrConfig)
+	}
+	if v.SampleRate != 0 && !knownVbeeSampleRates[v.SampleRate] {
+		return fmt.Errorf("vbee.sample_rate chỉ nhận 8000/16000/22050/24000/32000/44100/48000: %w", errs.ErrConfig)
+	}
+	switch v.OutputFormat {
+	case "", "mp3", "wav":
+	default:
+		return fmt.Errorf("vbee.output_format chỉ nhận mp3 hoặc wav: %w", errs.ErrConfig)
+	}
+	return nil
+}
 
 // ValidateBase kiểm tra cấu hình cơ bản.
 func (c *Config) ValidateBase() error {
@@ -265,6 +349,11 @@ func (c *Config) ValidateBase() error {
 		}
 	}
 
+	// Kiểm tra cấu hình Vbee (sách nói)
+	if err := c.Vbee.Validate(); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -329,6 +418,32 @@ func (c *Config) FillDefaults() {
 	}
 	if c.Budget.Enabled() && c.Budget.WarnRatio == 0 {
 		c.Budget.WarnRatio = 0.8
+	}
+	// Chỉ điền mặc định Vbee khi người dùng ĐÃ nhập thông tin xác thực. Nếu điền vô
+	// điều kiện thì mọi lần ghi lại config (SwitchModel/SetRoleThinking) sẽ vẽ ra một
+	// khối "vbee" rỗng vô nghĩa trong tệp của người không dùng tính năng sách nói.
+	if c.Vbee.Configured() {
+		if c.Vbee.BaseURL == "" {
+			c.Vbee.BaseURL = DefaultVbeeBaseURL
+		}
+		if c.Vbee.VoicesURL == "" {
+			c.Vbee.VoicesURL = DefaultVbeeVoicesURL
+		}
+		if c.Vbee.WebhookURL == "" {
+			c.Vbee.WebhookURL = DefaultVbeeWebhookURL
+		}
+		if c.Vbee.Speed == 0 {
+			c.Vbee.Speed = 1.0
+		}
+		if c.Vbee.Bitrate == 0 {
+			c.Vbee.Bitrate = 128
+		}
+		if c.Vbee.SampleRate == 0 {
+			c.Vbee.SampleRate = 24000
+		}
+		if c.Vbee.OutputFormat == "" {
+			c.Vbee.OutputFormat = "mp3"
+		}
 	}
 }
 

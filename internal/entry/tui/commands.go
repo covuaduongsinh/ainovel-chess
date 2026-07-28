@@ -241,6 +241,28 @@ func commandRegistryInstance() commandRegistry {
 				return m, listenCmd
 			},
 		},
+		{
+			Name:        "sachnoi",
+			Aliases:     []string{"audiobook", "tts"},
+			Group:       "writing",
+			Usage:       "/sachnoi [voice=CODE] [from=N] [to=M] [speed=1.0] [bitrate=128] [format=mp3|wav] [samplerate=24000] [out=PATH] [--overwrite]",
+			Description: "Tạo sách nói (mỗi chương một MP3) từ các chương đã hoàn thành qua Vbee",
+			NeedsIdle:   true,
+			Run: func(m Model, args []string) (tea.Model, tea.Cmd) {
+				m.audiobookSeq++
+				state, listenCmd, err := startAudiobook(m.runtime, m.audiobookSeq, args, m.width, m.height)
+				if err != nil {
+					m.applyEvent(host.Event{
+						Time: time.Now(), Category: "ERROR", Summary: "Khởi động tạo sách nói thất bại: " + err.Error(), Level: "error",
+					})
+					m.refreshEventViewport()
+					return m, nil
+				}
+				m.audiobooker = state
+				m.textarea.Blur()
+				return m, listenCmd
+			},
+		},
 	})
 }
 

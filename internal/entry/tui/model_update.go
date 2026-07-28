@@ -9,6 +9,7 @@ import (
 	"github.com/voocel/ainovel-cli/internal/entry/startup"
 	"github.com/voocel/ainovel-cli/internal/host"
 	"github.com/voocel/ainovel-cli/internal/host/adapt"
+	"github.com/voocel/ainovel-cli/internal/host/tts"
 	"github.com/voocel/ainovel-cli/internal/host/imp"
 	"github.com/voocel/ainovel-cli/internal/utils"
 )
@@ -74,6 +75,8 @@ func (m Model) handleOverlayKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 		return m.handleBlockingModalKey(msg, m.handleImportKey)
 	case m.videoer != nil:
 		return m.handleBlockingModalKey(msg, m.handleVideoKey)
+	case m.audiobooker != nil:
+		return m.handleBlockingModalKey(msg, m.handleAudiobookKey)
 	case m.simulator != nil:
 		return m.handleBlockingModalKey(msg, m.handleSimulationKey)
 	default:
@@ -515,6 +518,16 @@ func (m Model) handleRuntimeMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			return m, nil, true
 		}
 		return m, listenVideoEvent(msg.reqID, msg.ch), true
+	case audiobookEventMsg:
+		if m.audiobooker == nil || msg.reqID != m.audiobooker.reqID {
+			return m, nil, true
+		}
+		boxW, _ := reportModalSize(m.width, m.height)
+		m.audiobooker.appendEvent(msg.ev, paddedModalContentWidth(boxW))
+		if msg.ev.Stage == tts.StageDone || msg.ev.Stage == tts.StageError {
+			return m, nil, true
+		}
+		return m, listenAudiobookEvent(msg.reqID, msg.ch), true
 	case simEventMsg:
 		if m.simulator == nil || msg.reqID != m.simulator.reqID {
 			return m, nil, true
