@@ -572,9 +572,16 @@ function estimateComicPanels(from, to) {
     const hi = to > 0 ? Math.min(to, done || to) : (done || to);
     n = Math.max(0, hi - lo + 1);
   }
-  // Kinh nghiệm: ~10 trang mỗi chương, ~5 khung mỗi trang.
-  return { chapters: n, panels: n * 10 * 5 };
+  // GIẢ ĐỊNH THÔ, không phải số đo: ~10 trang mỗi chương, ~5 khung mỗi trang.
+  // Số khung thật do bước "kịch bản" quyết định và chỉ biết được sau khi chạy bước đó.
+  return { chapters: n, panels: n * PAGES_PER_CHAPTER * PANELS_PER_PAGE };
 }
+
+const PAGES_PER_CHAPTER = 10;
+const PANELS_PER_PAGE = 5;
+
+// Giá mỗi ảnh theo bảng giá công bố của Google (bậc Standard) cho gemini-3.1-flash-image.
+const IMG_PRICE = { '1K': 0.067, '2K': 0.101 };
 
 function refreshComicCost() {
   const el = $('cmcCost');
@@ -584,10 +591,17 @@ function refreshComicCost() {
   const { chapters, panels } = estimateComicPanels(from, to);
   if (!chapters) { el.textContent = ''; return; }
   const size = $('cmcImgSize') ? $('cmcImgSize').value : '2K';
-  const unit = size === '2K' ? 0.101 : 0.067;
-  el.innerHTML = `Ước tính <b>${chapters}</b> chương ≈ <b>${panels}</b> khung. ` +
-    `Giai đoạn này <b>chưa sinh ảnh</b> nên chi phí = 0 — khung dùng ảnh giữ chỗ. ` +
-    `Khi bật sinh ảnh ở ${size}, chi phí tham khảo ≈ <b>$${(panels * unit).toFixed(0)}</b>.`;
+  const unit = IMG_PRICE[size] || IMG_PRICE['2K'];
+  const cost = panels * unit;
+  el.innerHTML =
+    `<b>Giai đoạn này chưa sinh ảnh — chi phí thực tế = $0.</b> Khung dùng ảnh giữ chỗ; ` +
+    `chỉ tốn token cho ${chapters > 1 ? chapters + ' lời gọi kịch bản' : '1 lời gọi kịch bản'} ` +
+    `(cộng 2 lời gọi cấp sách nếu chưa có).<br>` +
+    `<span style="opacity:.75">Tham khảo cho giai đoạn 2: <b>${chapters}</b> chương × ` +
+    `${PAGES_PER_CHAPTER} trang × ${PANELS_PER_PAGE} khung ≈ <b>${panels}</b> khung ` +
+    `× $${unit}/ảnh (${size}) ≈ <b>$${cost.toFixed(cost < 10 ? 2 : 0)}</b>. ` +
+    `Con số ${PAGES_PER_CHAPTER}×${PANELS_PER_PAGE} là <i>giả định thô</i>, không phải số đo — ` +
+    `số khung thật chỉ biết sau khi chạy bước kịch bản (xem <code>prompts/</code>).</span>`;
 }
 
 function openComic() {
