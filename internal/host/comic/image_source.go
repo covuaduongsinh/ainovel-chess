@@ -42,4 +42,11 @@ type RefImage struct {
 type PanelImage struct {
 	Data     []byte // byte ảnh đã giải mã (PNG hoặc JPEG)
 	MimeType string
+
+	// Width/Height là kích thước THẬT đo được, không phải kích thước đã yêu cầu.
+	Width, Height int
+
+	// Warning là cảnh báo tiếng Việt khi kết quả không đúng đơn đặt hàng (vd trả tiền 2K
+	// nhận 1K). Đường ống chiếu nó lên UI để khoản lãng phí không còn vô hình.
+	Warning string
 }

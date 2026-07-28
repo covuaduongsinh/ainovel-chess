@@ -230,7 +230,8 @@ type runCtx struct {
 	style      *StyleResult
 	characters []CharacterSheet
 
-	imagesMade int // đếm ảnh đã sinh, để tôn trọng Options.MaxImages
+	imagesMade int  // đếm ảnh đã sinh, để tôn trọng Options.MaxImages
+	warnedSize bool // đã cảnh báo về độ phân giải chưa (chỉ nói một lần mỗi lần chạy)
 }
 
 // path trả về đường dẫn tuyệt đối của một tệp trong outDir.

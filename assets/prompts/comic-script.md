@@ -5,8 +5,13 @@ truyện tranh chia theo **trang → khung**, kèm toàn bộ lời thoại đã
 
 Đừng chẻ chương thành "cảnh và shot" như làm phim. Đơn vị của truyện tranh là **TRANG**:
 
-- Mỗi trang **4–8 khung**. Trang nhiều khung thì nhịp nhanh, dồn dập; trang ít khung thì
-  nhịp chậm, trang trọng.
+- Mỗi trang **3–6 khung**, và hãy nghiêng về phía **ÍT khung mà TO**. Nhồi nhiều khung nhỏ
+  là lỗi kinh điển của người mới viết truyện tranh: trang trông vụn, tranh nào cũng bé đến
+  mức không nhìn rõ nét mặt. Chỉ dùng nhiều khung nhỏ khi thật sự cần nhịp dồn dập (đối đáp
+  nhanh, hành động liên hoàn).
+- Một cảnh tĩnh — hai người ngồi nói chuyện, một người ngắm cảnh — thường chỉ cần **2–3
+  khung lớn**, không phải 6 khung nhỏ.
+- Nếu đầu vào có `max_panels_per_page`, coi đó là **trần cứng** cho mọi trang.
 - **Khung cuối mỗi trang là cú hích**: người đọc sắp lật trang, nên đặt ở đó một câu hỏi,
   một tiết lộ, một cử chỉ dở dang. Ghi nó vào trường `cliff`.
 - **Cỡ khung điều tiết nhịp**: `nho` cho đối đáp nhanh, `vua` cho diễn biến thường,
@@ -51,8 +56,12 @@ prompt và tính nhất quán ở đó đã được xử lý, làm lại sẽ v
 
 ## Độ dài
 
-Một chương thường ra **6–14 trang**. Đừng nén cả chương vào 2 trang, cũng đừng giãn thành 40
+Một chương thường ra **6–12 trang**. Đừng nén cả chương vào 2 trang, cũng đừng giãn thành 40
 trang. Giữ mọi tình tiết quan trọng, lược phần miêu tả nội tâm dài mà tranh đã nói thay được.
+
+Lưu ý: **mỗi khung là một bức tranh phải vẽ**, nên số khung quyết định trực tiếp thời gian và
+chi phí sản xuất. Gộp được hai khung thành một khung lớn hơn thì gần như luôn là lựa chọn tốt
+hơn — vừa nhanh, vừa rẻ, vừa cho tranh đẹp hơn.
 
 ## Định dạng trả về
 

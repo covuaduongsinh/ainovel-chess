@@ -57,6 +57,26 @@ func artFile(ch, page, panel int) string {
 	return fmt.Sprintf("art/chuong-%03d/t%02d-k%02d.png", ch, page, panel)
 }
 
+// artExts là các đuôi tệp ảnh khung được chấp nhận, thứ tự dò khi nạp.
+var artExts = []string{".png", ".jpg", ".jpeg"}
+
+// withMimeExt đổi đuôi tệp cho khớp MIME THẬT của ảnh trả về.
+//
+// Cần thiết vì các model trả định dạng khác nhau: bản 2.5 trả PNG, bản 3.1-flash-lite trả
+// JPEG. Ghi byte JPEG vào tên .png thì bộ dựng vẫn đọc được (image.Decode tự nhận dạng),
+// nhưng bản SVG sẽ trỏ tới ".png" chứa JPEG — trình đọc SVG nghiêm ngặt sẽ từ chối, và mọi
+// công cụ ngoài mở thư mục art/ đều bị đánh lừa.
+func withMimeExt(rel, mime string) string {
+	ext := ".png"
+	switch {
+	case strings.Contains(mime, "jpeg"), strings.Contains(mime, "jpg"):
+		ext = ".jpg"
+	case strings.Contains(mime, "webp"):
+		ext = ".webp"
+	}
+	return strings.TrimSuffix(rel, filepath.Ext(rel)) + ext
+}
+
 // aspectForPanel chọn tỉ lệ khung hình gần nhất mà bộ sinh ảnh hỗ trợ.
 // Luôn chọn tỉ lệ RỘNG HƠN hoặc bằng khung thật rồi cắt phủ — kéo méo sẽ bóp mặt nhân vật.
 func aspectForPanel(box comicdraw.Rect, spec comicdraw.PageSpec) string {
@@ -155,17 +175,27 @@ func filterEmpty(in []string) []string {
 	return out
 }
 
-// imageSize trả về độ phân giải yêu cầu: 2K nếu có xuất PDF (in ấn), ngược lại 1K.
+// imageSize trả về độ phân giải yêu cầu, suy từ lượt vẽ.
+//
+// Cố ý KHÔNG suy từ danh sách định dạng nữa. Bản cũ thấy có PDF là xin 2K — nhưng chọn xuất
+// PDF không có nghĩa là đã ưng bản vẽ; kết quả là mọi bản nháp đều bị tính giá in.
+// Nay mặc định là nháp 1K, chỉ lượt "in" mới trả giá 2K.
 func (rc *runCtx) imageSize() string {
 	if s := strings.TrimSpace(rc.opts.ImageSize); s != "" {
 		return s
 	}
-	for _, f := range rc.formats() {
-		if f == FormatPDF {
-			return "2K"
-		}
+	if rc.opts.ArtPass.normalize() == ArtPassIn {
+		return "2K"
 	}
 	return "1K"
+}
+
+// maxPanelsPerPage trả về trần khung mỗi trang hiệu lực.
+func (rc *runCtx) maxPanelsPerPage() int {
+	if n := rc.opts.MaxPanelsPerPage; n > 0 {
+		return n
+	}
+	return defaultMaxPanelsPerPage
 }
 
 func (rc *runCtx) formats() []Format {
@@ -207,13 +237,27 @@ func (rc *runCtx) writePanelPrompts(ch int, script *ScriptResult) error {
 		[]byte(renderPanelPromptMarkdown(ch, script.Title, rows)))
 }
 
+// artExists dò mọi đuôi tệp được chấp nhận, trả về true nếu ảnh đã có dưới bất kỳ dạng nào.
+func (rc *runCtx) artExists(rel string) bool {
+	base := strings.TrimSuffix(rel, filepath.Ext(rel))
+	for _, ext := range artExts {
+		if exists(rc.path(base + ext)) {
+			return true
+		}
+	}
+	return false
+}
+
 // refsFor trả về đường dẫn ảnh model sheet của các nhân vật trong khung (nếu đã sinh).
 func (rc *runCtx) refsFor(p Panel) []string {
 	var out []string
 	for _, name := range p.Characters {
-		rel := "nhan-vat/" + slug(name) + ".png"
-		if exists(rc.path(rel)) {
-			out = append(out, rel)
+		base := "nhan-vat/" + slug(name)
+		for _, ext := range artExts {
+			if exists(rc.path(base + ext)) {
+				out = append(out, base+ext)
+				break
+			}
 		}
 	}
 	return out
@@ -393,7 +437,7 @@ func strokeFor(k comicdraw.BalloonKind) comicdraw.Millimeter {
 // Trả về (ảnh, đường dẫn tương đối) — đường dẫn dùng cho bản SVG.
 func (rc *runCtx) loadArt(ch, page, panel int) (image.Image, string) {
 	base := strings.TrimSuffix(artFile(ch, page, panel), ".png")
-	for _, ext := range []string{".png", ".jpg", ".jpeg"} {
+	for _, ext := range artExts {
 		rel := base + ext
 		f, err := os.Open(rc.path(rel))
 		if err != nil {
@@ -426,7 +470,7 @@ func (rc *runCtx) generatePanelArt(ctx context.Context, ch int) error {
 				Message: fmt.Sprintf("Đã chạm trần %d ảnh cho lần chạy này — dừng sinh ảnh", rc.opts.MaxImages)})
 			return nil
 		}
-		if !rc.opts.Overwrite && exists(rc.path(row.ArtFile)) {
+		if !rc.opts.Overwrite && rc.artExists(row.ArtFile) {
 			continue
 		}
 		req := PanelRequest{Prompt: row.Prompt, Negative: row.Negative, Aspect: row.Aspect, Size: row.Size}
@@ -447,8 +491,14 @@ func (rc *runCtx) generatePanelArt(ctx context.Context, ch int) error {
 				Message: fmt.Sprintf("Bỏ qua khung T%d·K%d chương %d: %v", row.Page, row.Panel, ch, err)})
 			continue
 		}
-		if err := rc.writeAlways(ProductPanelArt, row.ArtFile, img.Data); err != nil {
+		if err := rc.writeAlways(ProductPanelArt, withMimeExt(row.ArtFile, img.MimeType), img.Data); err != nil {
 			return err
+		}
+		// Cảnh báo độ phân giải chỉ hiện MỘT lần cho mỗi lần chạy: nó là vấn đề của cấu
+		// hình chứ không của từng khung, lặp lại 38 lần chỉ làm nhiễu nhật ký.
+		if img.Warning != "" && !rc.warnedSize {
+			rc.warnedSize = true
+			rc.emit(Event{Stage: StagePanelArt, Message: "⚠ " + img.Warning})
 		}
 		rc.imagesMade++
 	}

@@ -156,7 +156,7 @@ type Config struct {
 // bootstrap là gói nền, không được phụ thuộc vào gói client của nhà cung cấp.
 const (
 	DefaultComicImageBaseURL = "https://generativelanguage.googleapis.com"
-	DefaultComicImageModel   = "gemini-2.5-flash-image"
+	DefaultComicImageModel   = "gemini-3.1-flash-lite-image"
 	DefaultComicImageDialect = "generatecontent"
 )
 
@@ -485,20 +485,27 @@ func (c *Config) FillDefaults() {
 	// khối "vbee" rỗng vô nghĩa trong tệp của người không dùng tính năng sách nói.
 	// Khoá ảnh để rỗng thì mượn khoá của provider "gemini" — người dùng đã khai một lần
 	// cho LLM thì không nên bắt khai lại cho ảnh.
+	borrowedKey := false
 	if strings.TrimSpace(c.Comic.APIKey) == "" {
-		if p, ok := c.Providers["gemini"]; ok {
+		if p, ok := c.Providers["gemini"]; ok && strings.TrimSpace(p.APIKey) != "" {
 			c.Comic.APIKey = strings.TrimSpace(p.APIKey)
+			borrowedKey = true
 		}
 	}
 	if c.Comic.ImageEnabled() {
-		if c.Comic.BaseURL == "" {
-			c.Comic.BaseURL = DefaultComicImageBaseURL
+		// CHỈ điền endpoint/phương ngữ của Google khi khoá là do MƯỢN từ provider gemini.
+		// Nếu người dùng tự khai khoá thì rất có thể họ trỏ sang nơi khác (proxy, gateway),
+		// và ép BaseURL về Google sẽ âm thầm gửi khoá của họ sai địa chỉ.
+		if borrowedKey {
+			if c.Comic.BaseURL == "" {
+				c.Comic.BaseURL = DefaultComicImageBaseURL
+			}
+			if c.Comic.Dialect == "" {
+				c.Comic.Dialect = DefaultComicImageDialect
+			}
 		}
 		if c.Comic.Model == "" {
 			c.Comic.Model = DefaultComicImageModel
-		}
-		if c.Comic.Dialect == "" {
-			c.Comic.Dialect = DefaultComicImageDialect
 		}
 	}
 

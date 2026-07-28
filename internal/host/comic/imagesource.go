@@ -64,7 +64,10 @@ func (g *geminiSource) Panel(ctx context.Context, req PanelRequest) (*PanelImage
 		return nil, err
 	}
 	g.reset()
-	return &PanelImage{Data: res.Image, MimeType: res.MimeType}, nil
+	return &PanelImage{
+		Data: res.Image, MimeType: res.MimeType,
+		Width: res.Width, Height: res.Height, Warning: res.Warning,
+	}, nil
 }
 
 // note cập nhật trạng thái sau một lỗi: khoá sai thì chí tử ngay, 429 thì đếm.

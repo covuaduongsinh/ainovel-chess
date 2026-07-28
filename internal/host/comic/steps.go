@@ -114,10 +114,11 @@ func scriptChapter(ctx context.Context, rc *runCtx, ch int) (*ScriptResult, erro
 		"outline":      entry,
 		"source_kind":  kind,
 		"source":       compact(source, maxChapterRunes),
-		"characters":   rc.characterPromptTable(),
-		"style_tokens": rc.styleTokens(),
-		"style_preset": rc.bible.Preset.Label,
-		"style_hint":   rc.bible.StyleHint,
+		"characters":          rc.characterPromptTable(),
+		"style_tokens":        rc.styleTokens(),
+		"style_preset":        rc.bible.Preset.Label,
+		"style_hint":          rc.bible.StyleHint,
+		"max_panels_per_page": rc.maxPanelsPerPage(),
 	}
 	// Phân cảnh video nếu có — gộp shot thành trang rẻ hơn nhiều so với chẻ lại chương.
 	if sb := rc.bible.loadStoryboard(ch); sb != nil {

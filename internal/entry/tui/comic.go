@@ -276,11 +276,24 @@ func parseComicArgs(args []string) (comic.Options, string, error) {
 				opts.MaxImages = n
 			case "imagesize":
 				opts.ImageSize = strings.ToUpper(v)
+			case "pass":
+				switch strings.ToLower(v) {
+				case "nhap", "in":
+					opts.ArtPass = comic.ArtPass(strings.ToLower(v))
+				default:
+					return comic.Options{}, "", fmt.Errorf("pass chỉ nhận nhap|in: %q", v)
+				}
+			case "maxpanels":
+				n, err := strconv.Atoi(v)
+				if err != nil || n < 0 {
+					return comic.Options{}, "", fmt.Errorf("maxpanels phải là số nguyên không âm: %q", v)
+				}
+				opts.MaxPanelsPerPage = n
 			case "out":
 				opts.OutDir = v
 			default:
 				return comic.Options{}, "", fmt.Errorf(
-					"tham số không rõ %q (hỗ trợ: preset, style, from, to, size, format, maximages, imagesize, out)", k)
+					"tham số không rõ %q (hỗ trợ: preset, style, from, to, size, pass, maxpanels, format, maximages, imagesize, out)", k)
 			}
 		case a == "all":
 			// tất cả — để products rỗng

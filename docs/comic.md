@@ -152,7 +152,57 @@ Cả hai chỉ lộ ra khi **nhìn ảnh sinh ra**, test không bắt được:
    thành khung lồng khung. Nay preset dùng `comic book illustration`, và negative cấm thẳng
    `panel border, picture frame, white margin, multiple panels`.
 
-## Chi phí sinh ảnh *(giai đoạn 2)*
+## Cắt chi phí sinh ảnh
+
+Sinh ảnh là bước tốn tiền duy nhất. Bốn đòn bẩy, xếp theo hiệu quả:
+
+**1. Chạy lượt `nhap` trước, `in` sau.** Mặc định là `nhap` (1K, model rẻ). Chỉ khi đã ưng
+một chương mới chạy `pass=in` cho riêng chương đó ở 2K. Nháp cả sách rồi in 4 chương chọn lọc
+≈ **$88**, so với in thẳng cả sách ≈ **$192**.
+
+```bash
+/truyentranh to=32              # nháp cả sách, 1K
+/truyentranh panelart page pass=in from=1 to=4 --overwrite   # chỉ in 4 chương đã chọn
+```
+
+**2. Chỉ trả tiền cho khung CÒN THIẾU.** Cơ chế bỏ-qua-nếu-đã-có làm chạy lại gần như miễn
+phí. Hộp thoại Web hiển thị đúng con số này (đếm thật từ `prompts/`), không phải tổng số khung.
+
+**3. Ít khung mà to.** Chi phí tỉ lệ thuận số khung, mà truyện tranh hay lại thường ít khung
+mà to — nhồi khung nhỏ là lỗi của người mới. Trần mặc định 6 khung/trang, đổi bằng `maxpanels=`.
+
+**4. Chọn đúng model.** Xem bảng dưới. Lưu ý `gemini-2.5-flash-image` nhận tham số `2K` rồi
+**lặng lẽ trả về 1K** mà vẫn tính tiền đủ — hệ thống nay tự phát hiện và cảnh báo.
+
+### Model nào làm được gì
+
+| Model | Độ phân giải | Giá/ảnh | Dùng khi |
+|---|---|---|---|
+| `gemini-3.1-flash-lite-image` **(mặc định)** | **chỉ 1K** | $0,0336 | bản nháp, đọc màn hình |
+| `gemini-2.5-flash-image` | thực tế ~1K | $0,039 | bản cũ, không có lợi thế gì |
+| `gemini-3.1-flash-image` | 512/1K/2K/4K | $0,067 / $0,101 (2K) | **in 300 DPI** |
+| `gemini-3-pro-image` | 1K/2K/4K | $0,134 | chất lượng cao nhất |
+
+Hệ thống **không im lặng khi độ phân giải bị bỏ qua**: nếu model không làm được cỡ đã chọn thì
+tham số bị bỏ đi kèm cảnh báo, và ảnh trả về luôn được **đo pixel thật** để đối chiếu.
+
+> **Định dạng tệp theo MIME thật.** Các model trả định dạng khác nhau — bản 2.5 trả PNG, bản
+> 3.1-flash-lite trả JPEG. Ảnh khung được ghi với đuôi khớp nội dung thật (`.png`/`.jpg`), nếu
+> không thì bản SVG sẽ trỏ tới `.png` chứa JPEG và trình đọc nghiêm ngặt sẽ từ chối.
+
+### Không có nguồn miễn phí nào phù hợp
+
+Đã tra thực tế, không phải phỏng đoán:
+
+- **OpenRouter**: 341 model, **11 model sinh ảnh, 0 miễn phí**. 15 model hậu tố `:free` đều
+  **chỉ ra chữ**. Giá ảnh bằng đúng Google.
+- **9Router**: cổng trung chuyển mã nguồn mở, miễn phí — nhưng backend vẫn tính tiền. Chỉ thật
+  sự miễn phí khi trỏ vào ComfyUI/SD WebUI chạy máy nhà, mà việc đó cần GPU rời.
+- **Pollinations**: miễn phí thật, không cần khoá, nhưng **không nhận ảnh tham chiếu** → mất
+  hẳn cơ chế giữ nhất quán nhân vật.
+- **Free tier Gemini**: trang giá chính thức của Google ghi **"Not available"** cho mọi model ảnh.
+
+## Chi phí sinh ảnh *(bảng tham khảo)*
 
 Một cuốn 32 chương ≈ **1.900 khung**.
 

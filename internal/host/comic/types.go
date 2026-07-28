@@ -143,8 +143,38 @@ type Options struct {
 	MaxImages int
 
 	// ImageSize truyền xuống nguồn sinh ảnh: "1K" (đọc màn hình) | "2K" (in được).
-	// Rỗng = "2K" khi có FormatPDF trong Formats, ngược lại "1K".
+	// Rỗng = suy ra từ ArtPass, xem runCtx.imageSize().
 	ImageSize string
+
+	// ArtPass chọn lượt vẽ. Đây là đòn bẩy tiết kiệm lớn nhất không cần Batch API:
+	// đừng trả giá in cho những trang rồi sẽ bỏ.
+	//   ArtPassNhap (mặc định) — 1K, model rẻ; đủ để xem bố cục và nhịp trang
+	//   ArtPassIn               — 2K, model in được; CHỈ chạy cho phạm vi from–to đã chọn
+	// Nhờ hợp đồng "đọc ảnh theo đường dẫn tệp", đổi lượt chỉ là ghi đè tệp trong art/ —
+	// bước dàn trang không phải sửa gì.
+	ArtPass ArtPass
+
+	// MaxPanelsPerPage gợi ý cho LLM khi chẻ trang (0 = mặc định defaultMaxPanelsPerPage).
+	// Chi phí tỉ lệ THUẬN với số khung, mà truyện tranh hay lại thường ít khung mà to.
+	MaxPanelsPerPage int
+}
+
+// ArtPass là lượt vẽ tranh.
+type ArtPass string
+
+const (
+	ArtPassNhap ArtPass = "nhap"
+	ArtPassIn   ArtPass = "in"
+)
+
+// defaultMaxPanelsPerPage — 6 khung/trang là nhịp thoáng, dễ đọc và rẻ.
+const defaultMaxPanelsPerPage = 6
+
+func (a ArtPass) normalize() ArtPass {
+	if a == ArtPassIn {
+		return ArtPassIn
+	}
+	return ArtPassNhap
 }
 
 // Stage là giai đoạn tiến trình, chiếu ra UI.

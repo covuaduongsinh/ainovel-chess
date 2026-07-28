@@ -267,7 +267,7 @@ func commandRegistryInstance() commandRegistry {
 			Name:        "truyentranh",
 			Aliases:     []string{"comic"},
 			Group:       "writing",
-			Usage:       "/truyentranh [style|character|script|layout|panelprompt|page|publish|all] [preset=thieu-nhi|manga|au-my|ta-thuc|ky-hoa] [style=...] [from=N] [to=M] [size=a4|b5] [format=pdf,cbz,epub] [--overwrite]",
+			Usage:       "/truyentranh [style|character|script|layout|panelprompt|refsheet|panelart|page|publish|all] [preset=...] [from=N] [to=M] [size=a4|b5] [pass=nhap|in] [format=pdf,cbz,epub] [maximages=N] [--overwrite]",
 			Description: "Làm truyện tranh: dựng trang hoàn chỉnh có bong bóng thoại rồi đóng gói PDF/CBZ/EPUB",
 			NeedsIdle:   true,
 			Run: func(m Model, args []string) (tea.Model, tea.Cmd) {

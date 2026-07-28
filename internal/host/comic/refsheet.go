@@ -31,7 +31,7 @@ func runRefSheet(ctx context.Context, rc *runCtx) error {
 			return err
 		}
 		rel := "nhan-vat/" + slug(c.Name) + ".png"
-		if !rc.opts.Overwrite && exists(rc.path(rel)) {
+		if !rc.opts.Overwrite && rc.artExists(rel) {
 			continue
 		}
 		if rc.opts.MaxImages > 0 && rc.imagesMade >= rc.opts.MaxImages {
@@ -59,8 +59,12 @@ func runRefSheet(ctx context.Context, rc *runCtx) error {
 				Message: fmt.Sprintf("Bỏ qua model sheet %s: %v", c.Name, err)})
 			continue
 		}
-		if err := rc.writeAlways(ProductRefSheet, rel, img.Data); err != nil {
+		if err := rc.writeAlways(ProductRefSheet, withMimeExt(rel, img.MimeType), img.Data); err != nil {
 			return err
+		}
+		if img.Warning != "" && !rc.warnedSize {
+			rc.warnedSize = true
+			rc.emit(Event{Stage: StageRefSheet, Message: "⚠ " + img.Warning})
 		}
 		rc.imagesMade++
 		made++

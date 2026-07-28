@@ -563,97 +563,51 @@ function openVideo() {
 // Ước tính số khung sẽ phải sinh ảnh. Sinh ảnh là bước TỐN TIỀN duy nhất của tính năng
 // này, nên con số phải hiện ra TRƯỚC khi bấm chạy — cùng tinh thần với ước tính ký tự của
 // Sách nói. Giai đoạn 1 chưa nối API ảnh nên chi phí thực tế vẫn là 0.
-function estimateComicPanels(from, to) {
-  const snap = window.__snapshot || {};
-  const done = snap.completedChapters || snap.chapters || 0;
-  let n = done;
-  if (from > 0 || to > 0) {
-    const lo = from > 0 ? from : 1;
-    const hi = to > 0 ? Math.min(to, done || to) : (done || to);
-    n = Math.max(0, hi - lo + 1);
-  }
-  // GIẢ ĐỊNH THÔ, không phải số đo: ~10 trang mỗi chương, ~5 khung mỗi trang.
-  // Số khung thật do bước "kịch bản" quyết định và chỉ biết được sau khi chạy bước đó.
-  return { chapters: n, panels: n * PAGES_PER_CHAPTER * PANELS_PER_PAGE };
-}
-
-const PAGES_PER_CHAPTER = 10;
+// refreshComicCost hỏi máy chủ số khung THẬT (đếm từ prompts/) thay vì đoán.
+// Con số quan trọng là số khung CÒN THIẾU: cơ chế bỏ-qua-nếu-đã-có làm chạy lại gần như
+// miễn phí, nên báo tổng số khung sẽ doạ người dùng bằng tiền họ không phải trả.
+const PAGES_PER_CHAPTER = 10;   // chỉ dùng khi CHƯA có dữ liệu thật
 const PANELS_PER_PAGE = 5;
-
-// Giá mỗi ảnh theo bảng giá công bố của Google (bậc Standard) cho gemini-3.1-flash-image.
-const IMG_PRICE = { '1K': 0.067, '2K': 0.101 };
 
 function refreshComicCost() {
   const el = $('cmcCost');
   if (!el) return;
   const from = parseInt($('cmcFrom').value || '0', 10) || 0;
   const to = parseInt($('cmcTo').value || '0', 10) || 0;
-  const { chapters, panels } = estimateComicPanels(from, to);
-  if (!chapters) { el.textContent = ''; return; }
-  const size = $('cmcImgSize') ? $('cmcImgSize').value : '2K';
-  const unit = IMG_PRICE[size] || IMG_PRICE['2K'];
-  const cost = panels * unit;
-  el.innerHTML =
-    `<b>Giai đoạn này chưa sinh ảnh — chi phí thực tế = $0.</b> Khung dùng ảnh giữ chỗ; ` +
-    `chỉ tốn token cho ${chapters > 1 ? chapters + ' lời gọi kịch bản' : '1 lời gọi kịch bản'} ` +
-    `(cộng 2 lời gọi cấp sách nếu chưa có).<br>` +
-    `<span style="opacity:.75">Tham khảo cho giai đoạn 2: <b>${chapters}</b> chương × ` +
-    `${PAGES_PER_CHAPTER} trang × ${PANELS_PER_PAGE} khung ≈ <b>${panels}</b> khung ` +
-    `× $${unit}/ảnh (${size}) ≈ <b>$${cost.toFixed(cost < 10 ? 2 : 0)}</b>. ` +
-    `Con số ${PAGES_PER_CHAPTER}×${PANELS_PER_PAGE} là <i>giả định thô</i>, không phải số đo — ` +
-    `số khung thật chỉ biết sau khi chạy bước kịch bản (xem <code>prompts/</code>).</span>`;
-}
+  const size = $('cmcImgSize') ? $('cmcImgSize').value : '1K';
+  const model = $('cmcModel') && $('cmcModel').value ? $('cmcModel').value : '';
 
-// loadComicCred nạp cấu hình sinh ảnh và cho biết đã bật chưa.
-function loadComicCred() {
-  fetch('/api/comic/config').then((r) => r.json()).then((d) => {
-    if (!d || !d.config) return;
-    const c = d.config;
-    const st = $('cmcCredState');
-    if (st) {
-      st.innerHTML = c.enabled
-        ? '<b style="color:#7ac77a">đã bật</b> — khung sẽ có tranh thật'
-        : '<b>chưa bật</b> — khung dùng ảnh giữ chỗ';
+  const qs = `from=${from}&to=${to}&size=${encodeURIComponent(size)}&model=${encodeURIComponent(model)}`;
+  fetch('/api/comic/estimate?' + qs).then((r) => r.json()).then((d) => {
+    if (!d) { el.textContent = ''; return; }
+    let html = '';
+
+    // Cảnh báo model không làm được độ phân giải đã chọn — hiện TRƯỚC khi bấm Chạy.
+    if (d.model && d.supportsSize === false) {
+      html += `<div style="color:#e0a85e"><b>⚠ Model <code>${d.model}</code> không làm được ${d.size}</b>` +
+        (d.modelSizes ? ` (chỉ ${d.modelSizes.join('/')})` : '') +
+        `. Tham số độ phân giải sẽ bị bỏ qua. Muốn in 300 DPI hãy chọn <code>gemini-3.1-flash-image</code>.</div>`;
     }
-    if ($('cmcKey')) $('cmcKey').placeholder = c.apiKey || 'dán khoá Gemini vào đây';
-    const sel = $('cmcModel');
-    if (sel && d.models) {
-      sel.innerHTML = d.models.map((m) => `<option value="${m[0]}">${m[1]}</option>`).join('');
-      if (c.model) sel.value = c.model;
+
+    if (d.hasData) {
+      const missing = d.missing || 0;
+      const have = (d.totalPanels || 0) - missing;
+      html += `<b>${d.chapters}</b> chương · <b>${d.totalPanels}</b> khung · đã có <b>${have}</b> · ` +
+        `<b>còn thiếu ${missing}</b>`;
+      if (typeof d.usdMissing === 'number') {
+        html += ` → phải trả cho <b>${missing}</b> ảnh × $${d.usdPerImage} ≈ <b>$${d.usdMissing.toFixed(2)}</b>`;
+      }
+      html += `<br><span style="opacity:.75">Số khung đếm THẬT từ <code>prompts/</code>. ` +
+        `Khung đã có ảnh không bị tính lại (trừ khi bật Ghi đè).</span>`;
+    } else {
+      const n = (from > 0 || to > 0) ? Math.max(0, (to || from) - (from || 1) + 1) : 0;
+      const panels = n * PAGES_PER_CHAPTER * PANELS_PER_PAGE;
+      html += `<span style="opacity:.75">Chưa chạy bước kịch bản nên chưa biết số khung thật. ` +
+        (n ? `Giả định thô: ${n} chương × ${PAGES_PER_CHAPTER} trang × ${PANELS_PER_PAGE} khung ≈ <b>${panels}</b> khung.` : '') +
+        ` Chạy bước <b>kịch bản</b> trước rồi mở lại để thấy con số thật.</span>`;
     }
-    if ($('cmcDialect') && c.dialect) $('cmcDialect').value = c.dialect;
-  }).catch(() => {});
-}
-
-function saveComicCred() {
-  const body = {
-    apiKey: $('cmcKey').value.trim(),
-    model: $('cmcModel') ? $('cmcModel').value : '',
-    dialect: $('cmcDialect') ? $('cmcDialect').value : '',
-  };
-  return api('/api/comic/config', body).then(() => {
-    $('cmcKey').value = '';
-    loadComicCred();
-    toast('Đã lưu cấu hình sinh ảnh');
-  }).catch((e) => toast(e.message, 'err'));
-}
-
-// testComicImage sinh ĐÚNG MỘT ảnh nhỏ. Đây là bước bắt buộc trước khi chạy cả sách:
-// sai khoá hoặc sai phương ngữ mà phát hiện muộn thì đã tốn cả trăm đô tiền ảnh.
-function testComicImage() {
-  const out = $('cmcTestOut');
-  out.textContent = 'Đang sinh một ảnh thử… (có thể mất tới một phút)';
-  fetch('/api/comic/test-image', { method: 'POST' }).then((r) => {
-    if (!r.ok) return r.json().then((d) => { throw new Error(d.error || 'thất bại'); });
-    return r.blob();
-  }).then((blob) => {
-    const url = URL.createObjectURL(blob);
-    out.innerHTML = `<b style="color:#7ac77a">Kết nối tốt.</b> Ảnh thử:<br>` +
-      `<img src="${url}" style="max-width:220px;border-radius:8px;margin-top:6px" />`;
-  }).catch((e) => {
-    out.innerHTML = `<b style="color:#e08585">Thất bại:</b> ${e.message}<br>` +
-      `<span style="opacity:.8">Nếu báo lỗi 404 hoặc model không tồn tại, thử đổi Phương ngữ API sang <code>interactions</code>.</span>`;
-  });
+    el.innerHTML = html;
+  }).catch(() => { el.textContent = ''; });
 }
 
 function openComic() {
@@ -697,9 +651,13 @@ function openComic() {
     <label style="margin-top:8px">Định dạng xuất bản</label>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:2px 12px;margin:6px 0">${fmtBoxes}</div>
     <div class="field-row">
+      <div><label>Lượt vẽ</label><select id="cmcPass" style="width:100%">
+        <option value="nhap">Nháp — 1K, rẻ nhất (mặc định)</option>
+        <option value="in">Bản in — 2K, chỉ cho chương đã chọn</option>
+      </select></div>
       <div><label>Độ phân giải ảnh khung</label><select id="cmcImgSize" style="width:100%">
-        <option value="2K">2K — in được</option>
         <option value="1K">1K — đọc màn hình</option>
+        <option value="2K">2K — in 300 DPI</option>
       </select></div>
       <div><label>Trần số ảnh mỗi lần chạy</label><input type="number" id="cmcMaxImg" min="0" placeholder="0 = không giới hạn" /></div>
     </div>
@@ -739,8 +697,16 @@ function openComic() {
     sel.innerHTML = d.presets.map((p) => `<option value="${p.key}">${p.label}</option>`).join('');
   }).catch(() => {});
 
-  ['cmcFrom', 'cmcTo', 'cmcImgSize'].forEach((id) => {
+  // Đổi lượt vẽ thì tự đặt độ phân giải tương ứng — hai thứ này gắn liền nhau.
+  if ($('cmcPass')) {
+    $('cmcPass').addEventListener('change', () => {
+      $('cmcImgSize').value = $('cmcPass').value === 'in' ? '2K' : '1K';
+      refreshComicCost();
+    });
+  }
+  ['cmcFrom', 'cmcTo', 'cmcImgSize', 'cmcModel'].forEach((id) => {
     const el = $(id);
+    if (el) el.addEventListener('change', refreshComicCost);
     if (el) el.addEventListener('input', refreshComicCost);
   });
   refreshComicCost();
@@ -760,6 +726,7 @@ function openComic() {
       from: parseInt($('cmcFrom').value || '0', 10) || 0,
       to: parseInt($('cmcTo').value || '0', 10) || 0,
       imageSize: $('cmcImgSize').value,
+      artPass: $('cmcPass') ? $('cmcPass').value : 'nhap',
       maxImages: parseInt($('cmcMaxImg').value || '0', 10) || 0,
       overwrite: $('cmcOver').checked,
     };

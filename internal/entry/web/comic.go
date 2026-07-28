@@ -3,11 +3,13 @@ package web
 import (
 	"context"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/voocel/ainovel-cli/internal/bootstrap"
 	"github.com/voocel/ainovel-cli/internal/host/comic"
+	"github.com/voocel/ainovel-cli/internal/imggen"
 )
 
 // comicRequest là body cho POST /api/comic (mirror lệnh /truyentranh trên TUI).
@@ -23,6 +25,7 @@ type comicRequest struct {
 	Overwrite bool     `json:"overwrite"`
 	MaxImages int      `json:"maxImages"`
 	ImageSize string   `json:"imageSize"`
+	ArtPass   string   `json:"artPass"`
 }
 
 func (s *Server) handleComic(w http.ResponseWriter, r *http.Request) {
@@ -60,6 +63,7 @@ func (s *Server) handleComic(w http.ResponseWriter, r *http.Request) {
 		Overwrite:   req.Overwrite,
 		MaxImages:   req.MaxImages,
 		ImageSize:   strings.TrimSpace(req.ImageSize),
+		ArtPass:     comic.ArtPass(strings.TrimSpace(req.ArtPass)),
 	}
 
 	id, ctx := s.jobs.start()
@@ -116,16 +120,25 @@ func (s *Server) handleComicConfigSave(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
-	cur := s.eng.ComicConfig()
-	cc := bootstrap.ComicConfig{
-		// mergeSecret: rỗng hoặc chứa "****" = giữ khoá cũ; "-" = xoá.
-		APIKey:     mergeSecret(cur.APIKey, req.APIKey),
-		BaseURL:    strings.TrimSpace(req.BaseURL),
-		Model:      strings.TrimSpace(req.Model),
-		Dialect:    strings.TrimSpace(req.Dialect),
-		ImageSize:  strings.TrimSpace(req.ImageSize),
-		KeyInQuery: req.KeyInQuery,
+	// GHÉP với cấu hình hiện tại, KHÔNG dựng lại từ DTO.
+	// Giao diện chỉ gửi vài trường nó có ô nhập; dựng lại từ DTO sẽ âm thầm xoá sạch những
+	// trường còn lại (base_url, image_size…) mỗi lần bấm Lưu.
+	cc := s.eng.ComicConfig()
+	// mergeSecret: rỗng hoặc chứa "****" = giữ khoá cũ; "-" = xoá.
+	cc.APIKey = mergeSecret(cc.APIKey, req.APIKey)
+	if v := strings.TrimSpace(req.BaseURL); v != "" {
+		cc.BaseURL = v
 	}
+	if v := strings.TrimSpace(req.Model); v != "" {
+		cc.Model = v
+	}
+	if v := strings.TrimSpace(req.Dialect); v != "" {
+		cc.Dialect = v
+	}
+	if v := strings.TrimSpace(req.ImageSize); v != "" {
+		cc.ImageSize = v
+	}
+	cc.KeyInQuery = req.KeyInQuery
 	if err := s.eng.SetComicConfig(cc); err != nil {
 		writeErr(w, http.StatusBadRequest, err)
 		return
@@ -152,6 +165,51 @@ func (s *Server) handleComicTestImage(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", mime)
 	w.Header().Set("Cache-Control", "no-store")
 	_, _ = w.Write(data)
+}
+
+// handleComicEstimate ước tính chi phí bằng SỐ KHUNG THẬT đã có trong prompts/, thay vì
+// giả định thô. Quan trọng: chi phí thật là số khung CÒN THIẾU, không phải tổng số khung —
+// cơ chế bỏ-qua-nếu-đã-có làm việc chạy lại gần như miễn phí.
+func (s *Server) handleComicEstimate(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	atoi := func(k string) int {
+		n, _ := strconv.Atoi(strings.TrimSpace(q.Get(k)))
+		return n
+	}
+	cc := s.eng.ComicConfig()
+	size := strings.TrimSpace(q.Get("size"))
+	model := strings.TrimSpace(q.Get("model"))
+	if model == "" {
+		model = cc.Model
+	}
+
+	est, err := s.eng.ComicEstimate(atoi("from"), atoi("to"))
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	price, hasPrice := imggen.PriceFor(model, size)
+	caps, hasCaps := imggen.CapsFor(model)
+
+	out := map[string]any{
+		"hasData":      est.HasData,
+		"chapters":     est.Chapters,
+		"totalPanels":  est.TotalPanels,
+		"missing":      est.MissingPanels,
+		"model":        model,
+		"size":         size,
+		"supportsSize": imggen.SupportsSize(model, size),
+	}
+	if hasCaps {
+		out["modelSizes"] = caps.Sizes
+		out["modelNote"] = caps.Note
+	}
+	if hasPrice {
+		out["usdPerImage"] = price
+		out["usdMissing"] = price * float64(est.MissingPanels)
+	}
+	writeOK(w, out)
 }
 
 // handleComicPresets trả danh sách preset phong cách để Web và TUI hiển thị giống nhau.

@@ -5,6 +5,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"image"
+	_ "image/jpeg" // đăng ký bộ giải mã để image.DecodeConfig đo được ảnh JPEG
+	_ "image/png"  // ...và PNG
 	"io"
 	"math/rand"
 	"net/http"
@@ -120,6 +123,18 @@ func (c *Client) Generate(ctx context.Context, r Request) (*Result, error) {
 	if model == "" {
 		model = c.model
 	}
+
+	// Model không làm được độ phân giải đã đặt: BỎ tham số đi thay vì gửi để bị lờ.
+	// Gửi đi rồi bị lờ vẫn mất đúng số tiền đó, mà không ai biết.
+	wantSize := normalizeSize(r.ImageSize)
+	var warn string
+	if wantSize != "" && !SupportsSize(model, wantSize) {
+		caps, _ := CapsFor(model)
+		warn = fmt.Sprintf("model %s không làm được %s (chỉ %s) — đã bỏ yêu cầu độ phân giải; muốn in 300 DPI hãy đổi sang %s",
+			model, wantSize, strings.Join(caps.Sizes, "/"), ModelFlash)
+		r.ImageSize = ""
+	}
+
 	body, err := c.dialect.build(model, r)
 	if err != nil {
 		return nil, err
@@ -130,6 +145,7 @@ func (c *Client) Generate(ctx context.Context, r Request) (*Result, error) {
 		res, err := c.once(ctx, model, body)
 		if err == nil {
 			res.Model = model
+			c.inspectImage(res, wantSize, warn)
 			return res, nil
 		}
 		last = err
@@ -141,6 +157,37 @@ func (c *Client) Generate(ctx context.Context, r Request) (*Result, error) {
 		}
 	}
 	return nil, fmt.Errorf("sinh ảnh thất bại sau %d lần thử: %w", c.timing.MaxAttempts, last)
+}
+
+// inspectImage đo kích thước THẬT của ảnh trả về và đối chiếu với thứ đã đặt hàng.
+//
+// Bước này không thể bỏ: máy chủ vẫn trả HTTP 200 và vẫn tính tiền đủ khi nó lờ đi tham số
+// imageSize. Chỉ có cách tự đo pixel mới biết mình đã trả tiền 2K để nhận 1K.
+func (c *Client) inspectImage(res *Result, wantSize, preWarn string) {
+	res.Warning = preWarn
+	if len(res.Image) == 0 {
+		return
+	}
+	cfg, _, err := image.DecodeConfig(bytes.NewReader(res.Image))
+	if err != nil {
+		return // định dạng lạ (vd webp) — không suy đoán
+	}
+	res.Width, res.Height = cfg.Width, cfg.Height
+
+	if wantSize == "" {
+		return
+	}
+	wantMP := megapixelFor(wantSize)
+	gotMP := float64(cfg.Width) * float64(cfg.Height) / 1e6
+	if wantMP > 0 && gotMP < wantMP*0.75 {
+		msg := fmt.Sprintf("đã yêu cầu %s nhưng ảnh trả về chỉ %dx%d (%.1f MP) — máy chủ bỏ qua tham số độ phân giải, tiền vẫn tính đủ",
+			wantSize, cfg.Width, cfg.Height, gotMP)
+		if res.Warning == "" {
+			res.Warning = msg
+		} else {
+			res.Warning += "; " + msg
+		}
+	}
 }
 
 // backoff tính thời gian chờ: luỹ thừa 2 có TRẦN, rồi jitter toàn phần.

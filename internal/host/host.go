@@ -1286,6 +1286,11 @@ func (h *Host) Comic(ctx context.Context, opts comic.Options) (<-chan comic.Even
 	if cc.ImageEnabled() {
 		deps.Img = comic.NewGeminiSource(h.newImageClient(cc))
 	}
+	// ImageSize trong cau hinh la MAC DINH cua nguoi dung; Options moi la quyet dinh cua
+	// lan chay nay. Truoc day truong cau hinh nay khong duoc tieu thu o dau ca.
+	if strings.TrimSpace(opts.ImageSize) == "" {
+		opts.ImageSize = strings.TrimSpace(cc.ImageSize)
+	}
 	return comic.Run(ctx, deps, opts)
 }
 
@@ -1327,6 +1332,12 @@ func (h *Host) SetComicConfig(cc bootstrap.ComicConfig) error {
 
 // ComicImageModels liet ke cac model sinh anh de UI goi y.
 func (h *Host) ComicImageModels() [][2]string { return imggen.KnownModels }
+
+// ComicEstimate dem so khung THAT tu bang prompt da sinh, de UI uoc tinh chi phi.
+// Chi doc dia, khong goi LLM lan API anh → khong guardExclusive.
+func (h *Host) ComicEstimate(from, to int) (comic.Estimate, error) {
+	return comic.EstimateCost(filepath.Join(h.store.Dir(), "truyen-tranh"), from, to)
+}
 
 // ComicTestImage sinh DUNG MOT anh nho de kiem chung khoa API va phuong ngu day.
 //

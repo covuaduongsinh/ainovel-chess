@@ -1,10 +1,13 @@
 package imggen
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"image"
+	"image/png"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -57,9 +60,11 @@ func TestGenerateHappyPath(t *testing.T) {
 		_, _ = io.WriteString(w, okResponse(want))
 	})
 
+	// Dùng ModelFlash vì nó THẬT SỰ làm được 2K; model mặc định chỉ 1K nên tham số 2K
+	// sẽ bị bỏ đi (hành vi đó có test riêng bên dưới).
 	res, err := c.Generate(context.Background(), Request{
 		Prompt: "a boy at a chessboard", Negative: "text, watermark",
-		AspectRatio: "4:3", ImageSize: "2K",
+		AspectRatio: "4:3", ImageSize: "2K", Model: ModelFlash,
 	})
 	if err != nil {
 		t.Fatalf("Generate: %v", err)
@@ -70,10 +75,10 @@ func TestGenerateHappyPath(t *testing.T) {
 	if res.MimeType != "image/png" || res.FinishReason != "STOP" || res.TotalTokens != 1234 {
 		t.Errorf("metadata sai: %+v", res)
 	}
-	if res.Model != DefaultModel {
-		t.Errorf("model = %q, muốn %q", res.Model, DefaultModel)
+	if res.Model != ModelFlash {
+		t.Errorf("model = %q, muốn %q", res.Model, ModelFlash)
 	}
-	if want := "/v1beta/models/" + DefaultModel + ":generateContent"; gotPath != want {
+	if want := "/v1beta/models/" + ModelFlash + ":generateContent"; gotPath != want {
 		t.Errorf("path = %q, muốn %q", gotPath, want)
 	}
 	// Khoá phải đi qua HEADER, không nằm trong URL — tránh lọt vào log proxy.
@@ -332,6 +337,103 @@ func TestInteractionsDialect(t *testing.T) {
 	}
 	if c.Dialect() != "interactions" {
 		t.Errorf("Dialect() = %q", c.Dialect())
+	}
+}
+
+// pngBytes dựng một PNG thật cỡ w×h để test đo được kích thước.
+func pngBytes(t *testing.T, w, h int) []byte {
+	t.Helper()
+	img := image.NewRGBA(image.Rect(0, 0, w, h))
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, img); err != nil {
+		t.Fatalf("mã hoá PNG: %v", err)
+	}
+	return buf.Bytes()
+}
+
+func TestModelCaps(t *testing.T) {
+	if SupportsSize(ModelFlashLite, "2K") {
+		t.Error("flash-lite chỉ làm được 1K, không được báo là hỗ trợ 2K")
+	}
+	if !SupportsSize(ModelFlashLite, "1K") {
+		t.Error("flash-lite phải hỗ trợ 1K")
+	}
+	if !SupportsSize(ModelFlash, "2K") {
+		t.Error("flash phải hỗ trợ 2K")
+	}
+	// Model lạ: không chặn thứ mình không biết.
+	if !SupportsSize("model-la-hoac-moi", "4K") {
+		t.Error("model lạ phải được cho qua, không suy đoán")
+	}
+	if p, ok := PriceFor(ModelFlash, "2K"); !ok || p != 0.101 {
+		t.Errorf("giá flash 2K = %v (ok=%v), muốn 0.101", p, ok)
+	}
+}
+
+// TestDropsUnsupportedImageSize là test then chốt của việc cắt lãng phí: xin 2K từ model
+// chỉ-1K thì tham số phải bị BỎ (gửi đi cũng bị lờ mà vẫn mất tiền) và phải có cảnh báo.
+func TestDropsUnsupportedImageSize(t *testing.T) {
+	var gotBody []byte
+	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		gotBody, _ = io.ReadAll(r.Body)
+		_, _ = io.WriteString(w, okResponse(pngBytes(t, 1024, 1024)))
+	})
+	res, err := c.Generate(context.Background(), Request{
+		Prompt: "p", ImageSize: "2K", AspectRatio: "1:1", Model: ModelFlashLite,
+	})
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	var req genRequest
+	if err := json.Unmarshal(gotBody, &req); err != nil {
+		t.Fatal(err)
+	}
+	if req.GenerationConfig.ImageConfig.ImageSize != "" {
+		t.Errorf("phải BỎ imageSize khi model không hỗ trợ, nhưng vẫn gửi %q",
+			req.GenerationConfig.ImageConfig.ImageSize)
+	}
+	if req.GenerationConfig.ImageConfig.AspectRatio != "1:1" {
+		t.Error("tỉ lệ khung hình vẫn phải được gửi")
+	}
+	if !strings.Contains(res.Warning, "không làm được 2K") {
+		t.Errorf("thiếu cảnh báo về độ phân giải: %q", res.Warning)
+	}
+	if !strings.Contains(res.Warning, ModelFlash) {
+		t.Errorf("cảnh báo phải chỉ ra model nào in được: %q", res.Warning)
+	}
+}
+
+// TestWarnsWhenServerIgnoresSize bắt đúng kiểu lỗi đã gặp thật: máy chủ nhận 2K, trả 200,
+// tính tiền đủ, nhưng ảnh chỉ ~1 megapixel.
+func TestWarnsWhenServerIgnoresSize(t *testing.T) {
+	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.WriteString(w, okResponse(pngBytes(t, 1024, 1024))) // 1 MP dù xin 2K
+	})
+	res, err := c.Generate(context.Background(), Request{
+		Prompt: "p", ImageSize: "2K", Model: ModelFlash, // model NÀY hỗ trợ 2K
+	})
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	if res.Width != 1024 || res.Height != 1024 {
+		t.Errorf("phải đo được kích thước thật, nhận %dx%d", res.Width, res.Height)
+	}
+	if !strings.Contains(res.Warning, "bỏ qua tham số độ phân giải") {
+		t.Errorf("phải cảnh báo khi ảnh nhỏ hơn mức đã đặt: %q", res.Warning)
+	}
+}
+
+// TestNoWarningWhenSizeHonoured — đúng cỡ thì không được cảnh báo bừa.
+func TestNoWarningWhenSizeHonoured(t *testing.T) {
+	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.WriteString(w, okResponse(pngBytes(t, 2048, 1600))) // 3,3 MP ≈ 2K
+	})
+	res, err := c.Generate(context.Background(), Request{Prompt: "p", ImageSize: "2K", Model: ModelFlash})
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	if res.Warning != "" {
+		t.Errorf("không được cảnh báo khi độ phân giải đúng: %q", res.Warning)
 	}
 }
 
