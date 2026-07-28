@@ -81,6 +81,8 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/importsim", s.handleImportSim)
 	s.mux.HandleFunc("POST /api/adapt", s.handleAdapt)
 	s.mux.HandleFunc("POST /api/audiobook", s.handleAudiobook)
+	s.mux.HandleFunc("POST /api/comic", s.handleComic)
+	s.mux.HandleFunc("GET /api/comic/presets", s.handleComicPresets)
 	s.mux.HandleFunc("POST /api/job/cancel", s.handleJobCancel)
 
 	// Sách nói (Vbee TTS)

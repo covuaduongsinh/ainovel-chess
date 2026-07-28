@@ -34,6 +34,9 @@ type Prompts struct {
 	AdaptConsistency string
 	AdaptScreenplay  string
 	AdaptStoryboard  string
+	ComicStyle       string
+	ComicCharacter   string
+	ComicScript      string
 }
 
 // Bundle là tập hợp tài nguyên tĩnh cần cho việc chạy.
@@ -99,6 +102,9 @@ func loadPrompts() Prompts {
 		AdaptConsistency: mustRead(promptsFS, "prompts/adapt-consistency.md"),
 		AdaptScreenplay:  mustRead(promptsFS, "prompts/adapt-screenplay.md"),
 		AdaptStoryboard:  mustRead(promptsFS, "prompts/adapt-storyboard.md"),
+		ComicStyle:       mustRead(promptsFS, "prompts/comic-style.md"),
+		ComicCharacter:   mustRead(promptsFS, "prompts/comic-character.md"),
+		ComicScript:      mustRead(promptsFS, "prompts/comic-script.md"),
 	}
 }
 

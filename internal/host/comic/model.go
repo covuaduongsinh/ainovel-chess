@@ -100,12 +100,21 @@ type PanelPrompt struct {
 
 // panelSizeWeight quy đổi ngữ nghĩa kích thước khung sang trọng số bố cục.
 // Đây là bảng tra DUY NHẤT quyết định khung to nhỏ — sửa ở đây là đổi nhịp cả cuốn.
+//
+// Các giá trị được chọn để ăn khớp với rowBudget=3.0 trong layout.go, cho ra đúng những
+// tổ hợp hàng quen thuộc của truyện tranh:
+//
+//	nho+nho+nho = 3.0 ✓   vua+vua = 3.0 ✓   lon+nho = 3.0 ✓   vua+nho = 2.5 ✓
+//	lon+vua = 3.5 ✗ (tách hàng)             lon+lon = 4.0 ✗ (tách hàng)
+//
+// Đừng nâng "lon" lên 2.5: khi đó lon+nho = 3.5 sẽ bị tách hàng, mà cặp khung lớn cạnh
+// khung nhỏ lại là bố cục phổ biến nhất trong truyện tranh.
 func panelSizeWeight(size string) float64 {
 	switch size {
 	case "tran-trang":
 		return 0 // 0 = chiếm trọn trang, layout.go xử lý riêng
 	case "lon":
-		return 2.5
+		return 2.0
 	case "vua":
 		return 1.5
 	case "nho":

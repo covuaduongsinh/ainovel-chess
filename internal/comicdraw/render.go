@@ -294,8 +294,9 @@ func drawBalloon(dst *image.RGBA, clip image.Rectangle, spec PageSpec, b *Balloo
 			}
 			switch b.Kind {
 			case BalloonThought:
-				outer.segs = append(outer.segs, thoughtTailPath(cx, cy, rx+sw, ry+sw, tx, ty).segs...)
-				inner.segs = append(inner.segs, thoughtTailPath(cx, cy, rx, ry, tx, ty).segs...)
+				// Cùng rx,ry cho cả hai; chỉ inflate bán kính để nét bao đều quanh ruột.
+				outer.segs = append(outer.segs, thoughtTailPath(cx, cy, rx, ry, tx, ty, sw).segs...)
+				inner.segs = append(inner.segs, thoughtTailPath(cx, cy, rx, ry, tx, ty, 0).segs...)
 			case BalloonBox:
 				// Ô thuyết minh không có đuôi.
 			default:

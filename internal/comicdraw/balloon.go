@@ -101,6 +101,18 @@ func dashedEllipsePath(cx, cy, rx, ry, thickness float64) *Path {
 	return p
 }
 
+// clampTailLen kẹp độ dài đuôi theo cỡ bong bóng.
+//
+// Đuôi truyện tranh là một cái vẩy NGẮN chỉ về phía người nói, không phải một sợi dây nối
+// tới tận miệng nhân vật. Nếu lấy thẳng khoảng cách tới đích, một bong bóng ở góc trên mà
+// người nói ở góc dưới sẽ sinh ra cái đuôi chạy suốt khung trông như vệt sáng.
+// Người đọc chỉ cần HƯỚNG của đuôi là đủ hiểu ai đang nói.
+func clampTailLen(dist, rx, ry float64) float64 {
+	maxLen := math.Max(rx, ry) * 1.6
+	minLen := math.Min(rx, ry) * 0.9
+	return math.Max(minLen, math.Min(dist, maxLen))
+}
+
 // tailPath dựng đuôi bong bóng trỏ từ thân về phía điểm tx,ty.
 //
 // Đỉnh đuôi được kéo lùi khỏi đích một chút để không chạm vào miệng nhân vật; hai cạnh
@@ -116,7 +128,8 @@ func tailPath(cx, cy, rx, ry, tx, ty, width, shorten float64) *Path {
 	if dist < 1 {
 		return &Path{}
 	}
-	ux, uy := dx/dist, dy/dist
+	ux, uy := dx/dist, dy/dist // vector đơn vị, tính TRƯỚC khi kẹp độ dài
+	dist = clampTailLen(dist, rx, ry)
 	px, py := -uy, ux // pháp tuyến
 
 	// Hai chân đuôi nằm trên biên ellipse, lệch ±width/2 quanh hướng đi.
@@ -139,17 +152,25 @@ func tailPath(cx, cy, rx, ry, tx, ty, width, shorten float64) *Path {
 }
 
 // thoughtTailPath dựng đuôi bong bóng độc thoại: ba bong bóng tròn nhỏ dần.
-func thoughtTailPath(cx, cy, rx, ry, tx, ty float64) *Path {
+//
+// inflate CHỈ phình bán kính, không đổi vị trí — vị trí luôn tính từ rx,ry gốc. Nếu để
+// inflate ảnh hưởng cả vị trí thì contour nét và contour ruột sẽ lệch tâm nhau và ba bong
+// bóng in ra thành hình lưỡi liềm.
+func thoughtTailPath(cx, cy, rx, ry, tx, ty, inflate float64) *Path {
 	dx, dy := tx-cx, ty-cy
 	dist := math.Hypot(dx, dy)
 	if dist < 1 {
 		return &Path{}
 	}
 	ux, uy := dx/dist, dy/dist
+	// Điểm ra khỏi thân theo đúng hướng đi (biên ellipse), rồi tiến từng bước ngắn.
+	edge := 1 / math.Hypot(ux/math.Max(rx, 1e-6), uy/math.Max(ry, 1e-6))
+	step := math.Min(rx, ry) * 0.55
 	p := &Path{}
-	for i, f := range []float64{0.45, 0.68, 0.88} {
-		r := math.Min(rx, ry) * []float64{0.30, 0.20, 0.12}[i]
-		p.AddEllipse(cx+ux*dist*f, cy+uy*dist*f, r, r, 0)
+	radii := []float64{0.26, 0.18, 0.11}
+	for i, k := range []float64{0.9, 1.9, 2.7} {
+		d := edge + step*k
+		p.AddEllipse(cx+ux*d, cy+uy*d, math.Min(rx, ry)*radii[i], math.Min(rx, ry)*radii[i], inflate)
 	}
 	return p
 }

@@ -558,6 +558,122 @@ function openVideo() {
   };
 }
 
+// ── Truyện tranh ──
+
+// Ước tính số khung sẽ phải sinh ảnh. Sinh ảnh là bước TỐN TIỀN duy nhất của tính năng
+// này, nên con số phải hiện ra TRƯỚC khi bấm chạy — cùng tinh thần với ước tính ký tự của
+// Sách nói. Giai đoạn 1 chưa nối API ảnh nên chi phí thực tế vẫn là 0.
+function estimateComicPanels(from, to) {
+  const snap = window.__snapshot || {};
+  const done = snap.completedChapters || snap.chapters || 0;
+  let n = done;
+  if (from > 0 || to > 0) {
+    const lo = from > 0 ? from : 1;
+    const hi = to > 0 ? Math.min(to, done || to) : (done || to);
+    n = Math.max(0, hi - lo + 1);
+  }
+  // Kinh nghiệm: ~10 trang mỗi chương, ~5 khung mỗi trang.
+  return { chapters: n, panels: n * 10 * 5 };
+}
+
+function refreshComicCost() {
+  const el = $('cmcCost');
+  if (!el) return;
+  const from = parseInt($('cmcFrom').value || '0', 10) || 0;
+  const to = parseInt($('cmcTo').value || '0', 10) || 0;
+  const { chapters, panels } = estimateComicPanels(from, to);
+  if (!chapters) { el.textContent = ''; return; }
+  const size = $('cmcImgSize') ? $('cmcImgSize').value : '2K';
+  const unit = size === '2K' ? 0.101 : 0.067;
+  el.innerHTML = `Ước tính <b>${chapters}</b> chương ≈ <b>${panels}</b> khung. ` +
+    `Giai đoạn này <b>chưa sinh ảnh</b> nên chi phí = 0 — khung dùng ảnh giữ chỗ. ` +
+    `Khi bật sinh ảnh ở ${size}, chi phí tham khảo ≈ <b>$${(panels * unit).toFixed(0)}</b>.`;
+}
+
+function openComic() {
+  const products = [
+    ['style', 'Định hướng mỹ thuật'],
+    ['character', 'Model sheet nhân vật'],
+    ['script', 'Kịch bản trang → khung'],
+    ['layout', 'Bố cục trang'],
+    ['panelprompt', 'Bảng prompt khung'],
+    ['page', 'Dàn trang + lồng chữ'],
+    ['publish', 'Đóng gói xuất bản'],
+  ];
+  const boxes = products.map(([id, label]) =>
+    `<label class="opt"><input type="checkbox" class="cmcProd" value="${id}" /><span class="opt-label">${label}</span></label>`
+  ).join('');
+  const formats = [
+    ['pdf', 'PDF in ấn 300 DPI'],
+    ['cbz', 'CBZ (truyện tranh số)'],
+    ['epub', 'EPUB3 fixed-layout'],
+  ];
+  const fmtBoxes = formats.map(([id, label]) =>
+    `<label class="opt"><input type="checkbox" class="cmcFmt" value="${id}" checked /><span class="opt-label">${label}</span></label>`
+  ).join('');
+
+  openModal(`<h2>Làm truyện tranh</h2><div class="sub">Từ các chương đã hoàn thành, dựng trang truyện tranh hoàn chỉnh: kịch bản trang→khung, bố cục, bong bóng thoại tiếng Việt, rồi đóng gói xuất bản. Không chọn mục nào = chạy tất cả.</div>
+    <label>Sản phẩm</label>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:2px 12px;margin:6px 0">${boxes}</div>
+    <div class="field-row">
+      <div><label>Phong cách</label><select id="cmcPreset" style="width:100%"></select></div>
+      <div><label>Khổ trang</label><select id="cmcPageSize" style="width:100%">
+        <option value="a4">A4 (210×297mm)</option>
+        <option value="b5">B5 (176×250mm)</option>
+      </select></div>
+    </div>
+    <label style="margin-top:8px">Tinh chỉnh phong cách (tùy chọn)</label>
+    <input type="text" id="cmcStyle" placeholder="vd: tông ấm màu mật ong, nét mềm, bối cảnh Havana 1900" />
+    <div class="field-row">
+      <div><label>Từ chương</label><input type="number" id="cmcFrom" min="0" placeholder="đầu" /></div>
+      <div><label>Đến chương</label><input type="number" id="cmcTo" min="0" placeholder="cuối" /></div>
+    </div>
+    <label style="margin-top:8px">Định dạng xuất bản</label>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:2px 12px;margin:6px 0">${fmtBoxes}</div>
+    <div class="field-row">
+      <div><label>Độ phân giải ảnh khung</label><select id="cmcImgSize" style="width:100%">
+        <option value="2K">2K — in được</option>
+        <option value="1K">1K — đọc màn hình</option>
+      </select></div>
+      <div><label>Trần số ảnh mỗi lần chạy</label><input type="number" id="cmcMaxImg" min="0" placeholder="0 = không giới hạn" /></div>
+    </div>
+    <div class="sub" id="cmcCost" style="margin-top:8px"></div>
+    <label class="opt" style="margin-top:12px"><input type="checkbox" id="cmcOver" /><span class="opt-label">Ghi đè file đã tồn tại</span></label>
+    <div class="modal-actions"><button class="btn" onclick="closeModal()">Hủy</button>
+    <button class="btn primary" id="cmcGo">Chạy</button></div>`);
+
+  fetch('/api/comic/presets').then((r) => r.json()).then((d) => {
+    const sel = $('cmcPreset');
+    if (!sel || !d || !d.presets) return;
+    sel.innerHTML = d.presets.map((p) => `<option value="${p.key}">${p.label}</option>`).join('');
+  }).catch(() => {});
+
+  ['cmcFrom', 'cmcTo', 'cmcImgSize'].forEach((id) => {
+    const el = $(id);
+    if (el) el.addEventListener('input', refreshComicCost);
+  });
+  refreshComicCost();
+
+  $('cmcGo').onclick = () => {
+    const chosen = Array.from(document.querySelectorAll('.cmcProd:checked')).map((c) => c.value);
+    const fmts = Array.from(document.querySelectorAll('.cmcFmt:checked')).map((c) => c.value);
+    const body = {
+      products: chosen,
+      formats: fmts,
+      preset: $('cmcPreset').value,
+      pageSize: $('cmcPageSize').value,
+      style: $('cmcStyle').value.trim(),
+      from: parseInt($('cmcFrom').value || '0', 10) || 0,
+      to: parseInt($('cmcTo').value || '0', 10) || 0,
+      imageSize: $('cmcImgSize').value,
+      maxImages: parseInt($('cmcMaxImg').value || '0', 10) || 0,
+      overwrite: $('cmcOver').checked,
+    };
+    api('/api/comic', body).then(() => openProgressModal('Đang làm truyện tranh'))
+      .catch((e) => toast(e.message, 'err'));
+  };
+}
+
 // ── Sách nói (Vbee TTS) ──
 
 // Ước lượng số ký tự sẽ gửi Vbee cho một phạm vi chương. Vbee tính tiền theo KÝ TỰ nên
@@ -986,6 +1102,7 @@ function bindUI() {
       if (cmd === 'export') return openExport();
       if (cmd === 'video') return openVideo();
       if (cmd === 'audiobook') return openAudiobook();
+      if (cmd === 'comic') return openComic();
       if (cmd === 'import') return openImport();
       if (cmd === 'simulate') return openSimulate();
       if (cmd === 'grounding') return openGrounding();

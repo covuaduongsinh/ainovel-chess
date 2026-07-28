@@ -131,8 +131,12 @@ type Panel struct {
 	FullBleed   bool  // tràn ra tận mép bleed ở những cạnh chạm khung trim
 	Border      Border
 	Art         image.Image // nil ⇒ vẽ Placeholder
-	ArtFocus    Point // tâm cắt khi cover-fit; zero value ⇒ {0.5, 0.5}
+	ArtFocus    Point       // tâm cắt khi cover-fit; zero value ⇒ {0.5, 0.5}
 	Placeholder Placeholder
+
+	// ArtHref là đường dẫn ảnh dùng cho bản SVG (<image xlink:href>). Rỗng ⇒ SVG vẽ ô màu
+	// giữ chỗ. Tách khỏi Art vì bản raster cần ảnh đã giải mã, còn SVG chỉ cần tham chiếu.
+	ArtHref string
 }
 
 // BalloonKind là loại bong bóng.

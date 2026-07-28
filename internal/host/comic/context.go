@@ -122,6 +122,15 @@ func (b *storyBible) loadStoryboard(ch int) *adapt.StoryboardResult {
 	return nil
 }
 
+// readVideo đọc một tệp trong thư mục video/ của dự án (best-effort).
+func (b *storyBible) readVideo(rel string) ([]byte, bool) {
+	data, err := os.ReadFile(filepath.Join(b.videoDir, filepath.FromSlash(rel)))
+	if err != nil {
+		return nil, false
+	}
+	return data, true
+}
+
 // outlineFor tìm mục dàn ý của một chương (rỗng nếu không có).
 func (b *storyBible) outlineFor(chapter int) domain.OutlineEntry {
 	for _, e := range b.Outline {

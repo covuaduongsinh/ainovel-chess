@@ -17,9 +17,11 @@ import (
 	"github.com/voocel/ainovel-cli/internal/agents"
 	"github.com/voocel/ainovel-cli/internal/agents/ctxpack"
 	"github.com/voocel/ainovel-cli/internal/bootstrap"
+	"github.com/voocel/ainovel-cli/internal/comicdraw"
 	"github.com/voocel/ainovel-cli/internal/domain"
 	"github.com/voocel/ainovel-cli/internal/dossier"
 	"github.com/voocel/ainovel-cli/internal/host/adapt"
+	"github.com/voocel/ainovel-cli/internal/host/comic"
 	"github.com/voocel/ainovel-cli/internal/host/exp"
 	"github.com/voocel/ainovel-cli/internal/host/flow"
 	"github.com/voocel/ainovel-cli/internal/host/imp"
@@ -1247,6 +1249,35 @@ func (h *Host) Adapt(ctx context.Context, opts adapt.Options) (<-chan adapt.Even
 		},
 	}
 	return adapt.Run(ctx, deps, opts)
+}
+
+// Comic chuyen mot du an sach da hoan thanh thanh TRANG TRUYEN TRANH xuat ban duoc:
+// kich ban trang-khung, bo cuc, prompt anh, trang da dan chu (PNG + SVG) va cac goi
+// PDF / CBZ / EPUB3 fixed-layout.
+//
+// Giong Adapt: tac vu LLM-nang chay dai, xung dot voi Coordinator nen guardExclusive.
+// Khac Adapt: co buoc dung anh nen can bo font nhung; giai doan 1 khong tiem ImageSource
+// (Deps.Img = nil) nen cac khung dung anh giu cho va KHONG ton tien sinh anh.
+func (h *Host) Comic(ctx context.Context, opts comic.Options) (<-chan comic.Event, error) {
+	if err := h.guardExclusive("tao truyen tranh"); err != nil {
+		return nil, err
+	}
+	f := assets.LoadComicFonts()
+	fonts, err := comicdraw.NewFontSet(f.Dialogue, f.SFX, f.Narration, f.Bold)
+	if err != nil {
+		return nil, fmt.Errorf("nap bo font truyen tranh: %w", err)
+	}
+	deps := comic.Deps{
+		Store: h.store,
+		LLM:   h.models.ForRole("architect"),
+		Fonts: fonts,
+		Prompts: comic.Prompts{
+			Style:     h.bundle.Prompts.ComicStyle,
+			Character: h.bundle.Prompts.ComicCharacter,
+			Script:    h.bundle.Prompts.ComicScript,
+		},
+	}
+	return comic.Run(ctx, deps, opts)
 }
 
 // Audiobook tao sach noi (moi chuong mot tep MP3) tu cac chuong da hoan thanh, qua API TTS Vbee.
