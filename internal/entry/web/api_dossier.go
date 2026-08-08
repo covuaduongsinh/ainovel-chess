@@ -19,7 +19,7 @@ func (s *Server) handleDossierDraft(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, errMsg("vui lòng nhập tên nhân vật có thật"))
 		return
 	}
-	d, err := s.eng.DraftDossier(subject)
+	d, err := s.eng.DraftDossier(r.Context(), subject)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err)
 		return

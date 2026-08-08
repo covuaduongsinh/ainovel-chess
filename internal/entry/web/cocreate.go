@@ -169,7 +169,7 @@ func (b *coCreateBridge) start() error {
 		if err != nil {
 			return err
 		}
-		if err := b.s.eng.PrepareUserRules(plan.RawPrompt); err != nil {
+		if err := b.s.eng.PrepareUserRules(context.Background(), plan.RawPrompt); err != nil {
 			return err
 		}
 		if err := b.s.eng.StartPrepared(plan.StartPrompt); err != nil {

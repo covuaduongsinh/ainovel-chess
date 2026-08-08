@@ -112,7 +112,7 @@ func bootstrapRuntime(rt *host.Host) tea.Cmd {
 func startRuntime(rt *host.Host, plan startup.Plan) tea.Cmd {
 	return func() tea.Msg {
 		// Phía khởi động tạo xác định snapshot quy tắc người dùng cho cuốn sách này (chuẩn hóa bằng prompt gốc), phải trước StartPrepared.
-		if err := rt.PrepareUserRules(plan.RawPrompt); err != nil {
+		if err := rt.PrepareUserRules(context.Background(), plan.RawPrompt); err != nil {
 			return startResultMsg{err: err}
 		}
 		err := rt.StartPrepared(plan.StartPrompt)

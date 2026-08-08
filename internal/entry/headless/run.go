@@ -1,6 +1,7 @@
 ﻿package headless
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -65,7 +66,7 @@ func Run(cfg bootstrap.Config, bundle assets.Bundle, opts Options) error {
 		}
 		fmt.Fprintf(stderr, "headless khởi động: %s\n", eng.Dir())
 		// Phía khởi động tạo xác định snapshot quy tắc người dùng cho cuốn này (chuẩn hóa từ prompt gốc), phải chạy trước StartPrepared.
-		if err := eng.PrepareUserRules(plan.RawPrompt); err != nil {
+		if err := eng.PrepareUserRules(context.Background(), plan.RawPrompt); err != nil {
 			return err
 		}
 		if err := eng.StartPrepared(plan.StartPrompt); err != nil {

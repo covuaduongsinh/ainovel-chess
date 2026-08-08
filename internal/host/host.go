@@ -73,7 +73,12 @@ type Host struct {
 	mu         sync.Mutex
 	lifecycle  lifecycle
 	cocreating bool // Chiếm dụng đồng sáng tác giai đoạn: chặn can thiệp đồng thời của import/simulate/continue trong cửa sổ paused
-	closeOnce  sync.Once
+	// starting chiếm chỗ cho cửa sổ khởi động lạnh. lifecycle chỉ chuyển sang running SAU khi
+	// coordinator.Prompt trả về — mà bước đó kéo dài hàng phút. Nếu chỉ soi lifecycle thì hai lần
+	// khởi động cách nhau vài giây đều lọt qua cổng và dựng ra HAI Coordinator trên cùng một cuốn
+	// sách, cùng ghi đè premise/outline của nhau.
+	starting  bool
+	closeOnce sync.Once
 }
 
 type lifecycle string
@@ -203,6 +208,15 @@ func New(cfg bootstrap.Config, bundle assets.Bundle) (*Host, error) {
 
 // ── Vòng đời ──
 
+// prepareLLMTimeout là trần thời gian cho các cuộc gọi LLM ở đường khởi động (chuẩn hóa quy tắc,
+// chuẩn hóa/soạn hồ sơ nhân vật). Đây là những cuộc gọi trích xuất cơ học, tắt tư duy — bình thường
+// mất vài chục giây; vượt xa mốc này nghĩa là provider đứng hình.
+//
+// Không có trần này thì một provider treo sẽ giữ lượt khởi động vĩnh viễn: giao diện không có gì để
+// hiển thị, người dùng chỉ thấy im lặng. Cả hai chỗ gọi đều GIÁNG CẤP khi chuẩn hóa thất bại
+// (giữ văn bản gốc) nên hết giờ làm chậm chất lượng một chút, chứ không chặn việc sáng tác.
+const prepareLLMTimeout = 5 * time.Minute
+
 // PrepareUserRules tạo snapshot quy tắc người dùng của cuốn sách này ở chế độ mới tạo (xác định từ phía khởi động, không qua Coordinator, không vào Run sáng tác chính).
 //
 // Tham số đầu vào là yêu cầu sáng tác **thô** của người dùng (chưa được BuildStartPrompt bao bọc) — chuẩn hóa cần quy tắc người dùng chính nó,
@@ -210,9 +224,12 @@ func New(cfg bootstrap.Config, bundle assets.Bundle) (*Host, error) {
 //
 // Chuẩn hóa thất bại chỉ hạ cấp không báo lỗi (đường tăng cường); chỉ khi snapshot không thể ghi xuống đĩa mới trả error dừng mở sách —
 // các lần chạy tiếp theo sẽ không có nguồn sự thật ổn định (xem thiết kế §Thất bại và hạ cấp).
-func (h *Host) PrepareUserRules(rawPrompt string) error {
+// ctx thuộc về bên gọi (người dùng bấm Dừng thì hủy được); Host áp thêm prepareLLMTimeout làm chốt chặn.
+func (h *Host) PrepareUserRules(ctx context.Context, rawPrompt string) error {
+	ctx, cancel := context.WithTimeout(ctx, prepareLLMTimeout)
+	defer cancel()
 	svc := userrules.NewService(h.store, h.models.Default, rules.DefaultOptions())
-	snap, err := svc.Build(context.Background(), rawPrompt)
+	snap, err := svc.Build(ctx, rawPrompt)
 	if err != nil {
 		return fmt.Errorf("ghi snapshot quy tắc người dùng thất bại, không thể tiếp tục: %w", err)
 	}
@@ -226,12 +243,14 @@ func (h *Host) PrepareUserRules(rawPrompt string) error {
 // Khi enabled=false vẫn ghi một hồ sơ tắt để downstream nhất quán (novel_context bỏ qua khi !Enabled).
 // Khi bật: chuẩn hóa sourceText người dùng đã duyệt thành dữ kiện có cấu trúc rồi lưu với Confirmed=true.
 // Chuẩn hóa thất bại chỉ giáng cấp (giữ tư liệu thô), chỉ lỗi ghi đĩa mới trả error.
-func (h *Host) PrepareDossier(subject, sourceText string, enabled bool) error {
+func (h *Host) PrepareDossier(ctx context.Context, subject, sourceText string, enabled bool) error {
 	if !enabled {
 		return h.store.Dossier.Save(&domain.Dossier{Enabled: false, Fidelity: domain.FidelityAnchored})
 	}
+	ctx, cancel := context.WithTimeout(ctx, prepareLLMTimeout)
+	defer cancel()
 	svc := dossier.NewService(h.models.Default)
-	d, err := svc.NormalizeSource(context.Background(), subject, sourceText)
+	d, err := svc.NormalizeSource(ctx, subject, sourceText)
 	if err != nil {
 		return fmt.Errorf("chuẩn hóa hồ sơ nhân vật thất bại: %w", err)
 	}
@@ -247,9 +266,11 @@ func (h *Host) PrepareDossier(subject, sourceText string, enabled bool) error {
 
 // DraftDossier để AI soạn nháp hồ sơ từ tên nhân vật, phục vụ nút "Soạn hồ sơ" trên giao diện.
 // KHÔNG ghi store — chỉ trả bản nháp để người dùng duyệt/sửa; hồ sơ chính thức được lưu ở PrepareDossier.
-func (h *Host) DraftDossier(subject string) (domain.Dossier, error) {
+func (h *Host) DraftDossier(ctx context.Context, subject string) (domain.Dossier, error) {
+	ctx, cancel := context.WithTimeout(ctx, prepareLLMTimeout)
+	defer cancel()
 	svc := dossier.NewService(h.models.Default)
-	return svc.DraftFromSubject(context.Background(), subject)
+	return svc.DraftFromSubject(ctx, subject)
 }
 
 // ensureUserRules lazily đảm bảo snapshot tồn tại (khi sách cũ không có snapshot thì tạo theo system_defaults + file rules).
@@ -290,7 +311,7 @@ func logUserRulesSnapshot(snap *rules.Snapshot) {
 // StartPrepared bắt đầu sáng tác bằng prompt khởi động đã được sắp xếp xong.
 func (h *Host) StartPrepared(promptText string) error {
 	h.mu.Lock()
-	if h.lifecycle == lifecycleRunning {
+	if h.lifecycle == lifecycleRunning || h.starting {
 		h.mu.Unlock()
 		return fmt.Errorf("already running")
 	}
@@ -298,7 +319,15 @@ func (h *Host) StartPrepared(promptText string) error {
 		h.mu.Unlock()
 		return fmt.Errorf("đang đồng sáng tác giai đoạn, hãy kết thúc đồng sáng tác trước")
 	}
+	h.starting = true
 	h.mu.Unlock()
+	// Nhả chỗ khi thoát: đường thành công đã đặt lifecycle=running nên cổng vẫn đóng,
+	// đường lỗi thì phải nhả để người dùng bấm lại được.
+	defer func() {
+		h.mu.Lock()
+		h.starting = false
+		h.mu.Unlock()
+	}()
 
 	promptText = strings.TrimSpace(promptText)
 	if promptText == "" {
@@ -337,7 +366,7 @@ func (h *Host) StartPrepared(promptText string) error {
 // Resume chế độ khôi phục: tạo resume prompt từ checkpoint + progress rồi khởi động.
 func (h *Host) Resume() (string, error) {
 	h.mu.Lock()
-	if h.lifecycle == lifecycleRunning {
+	if h.lifecycle == lifecycleRunning || h.starting {
 		h.mu.Unlock()
 		return "", fmt.Errorf("already running")
 	}
