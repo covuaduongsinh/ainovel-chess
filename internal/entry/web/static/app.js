@@ -432,6 +432,9 @@ function onProgress(p) {
     scrollDown(log);
   }
   if (p.done) {
+    // Khởi động thành công thì đóng luôn: việc người dùng muốn xem tiếp là AI viết, không phải
+    // một hộp thoại "Hoàn tất" chắn đường. Các job khác (nhập/phỏng tác) vẫn để người dùng tự đóng.
+    if (p.job === 'start' && !p.error) return closeModal();
     const title = $('progTitle');
     if (title) title.textContent = p.error ? 'Đã dừng (lỗi)' : 'Hoàn tất';
     const cancel = $('progCancel');
@@ -1185,8 +1188,12 @@ function onPrimary() {
     if (!text) return toast('Nhập yêu cầu sáng tác', 'err');
     $('btnPrimary').disabled = true;
     const g = state.grounding || {};
+    // Khởi động là một job: chuẩn hóa hồ sơ + quy tắc là hai cuộc gọi LLM tuần tự trước khi Coordinator
+    // chạy, tổng cộng có thể vài phút. Mở hộp thoại tiến trình ngay để người dùng thấy đang tới bước nào
+    // và có nút Dừng — trước đây màn hình đứng im cho tới khi request chết với "Failed to fetch".
     api('/api/start', { prompt: text, grounding: !!g.enabled, subject: g.subject || '', sourceText: g.sourceText || '' })
-      .then(() => { input.value = ''; }).catch((e) => toast(e.message, 'err'))
+      .then(() => { input.value = ''; openProgressModal('Đang khởi động sáng tác'); })
+      .catch((e) => toast(e.message, 'err'))
       .finally(() => { $('btnPrimary').disabled = false; });
     return;
   }

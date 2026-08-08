@@ -1,6 +1,7 @@
 package eval
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -64,7 +65,7 @@ func RunCase(cfg bootstrap.Config, bundle assets.Bundle, c Case, opts RunOptions
 	if err != nil {
 		return err
 	}
-	if err := eng.PrepareUserRules(plan.RawPrompt); err != nil {
+	if err := eng.PrepareUserRules(context.Background(), plan.RawPrompt); err != nil {
 		return fmt.Errorf("chuẩn bị quy tắc người dùng: %w", err)
 	}
 	if err := eng.StartPrepared(plan.StartPrompt); err != nil {
