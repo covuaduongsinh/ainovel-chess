@@ -558,6 +558,243 @@ function openVideo() {
   };
 }
 
+// ── Truyện tranh ──
+
+// Ước tính số khung sẽ phải sinh ảnh. Sinh ảnh là bước TỐN TIỀN duy nhất của tính năng
+// này, nên con số phải hiện ra TRƯỚC khi bấm chạy — cùng tinh thần với ước tính ký tự của
+// Sách nói. Giai đoạn 1 chưa nối API ảnh nên chi phí thực tế vẫn là 0.
+// refreshComicCost hỏi máy chủ số khung THẬT (đếm từ prompts/) thay vì đoán.
+// Con số quan trọng là số khung CÒN THIẾU: cơ chế bỏ-qua-nếu-đã-có làm chạy lại gần như
+// miễn phí, nên báo tổng số khung sẽ doạ người dùng bằng tiền họ không phải trả.
+const PAGES_PER_CHAPTER = 10;   // chỉ dùng khi CHƯA có dữ liệu thật
+const PANELS_PER_PAGE = 5;
+
+function refreshComicCost() {
+  const el = $('cmcCost');
+  if (!el) return;
+  const from = parseInt($('cmcFrom').value || '0', 10) || 0;
+  const to = parseInt($('cmcTo').value || '0', 10) || 0;
+  const size = $('cmcImgSize') ? $('cmcImgSize').value : '1K';
+  const model = $('cmcModel') && $('cmcModel').value ? $('cmcModel').value : '';
+
+  const qs = `from=${from}&to=${to}&size=${encodeURIComponent(size)}&model=${encodeURIComponent(model)}`;
+  fetch('/api/comic/estimate?' + qs).then((r) => r.json()).then((d) => {
+    if (!d) { el.textContent = ''; return; }
+    let html = '';
+
+    // Cảnh báo model không làm được độ phân giải đã chọn — hiện TRƯỚC khi bấm Chạy.
+    if (d.model && d.supportsSize === false) {
+      html += `<div style="color:#e0a85e"><b>⚠ Model <code>${d.model}</code> không làm được ${d.size}</b>` +
+        (d.modelSizes ? ` (chỉ ${d.modelSizes.join('/')})` : '') +
+        `. Tham số độ phân giải sẽ bị bỏ qua. Muốn in 300 DPI hãy chọn <code>gemini-3.1-flash-image</code>.</div>`;
+    }
+
+    if (d.hasData) {
+      const missing = d.missing || 0;
+      const have = (d.totalPanels || 0) - missing;
+      html += `<b>${d.chapters}</b> chương · <b>${d.totalPanels}</b> khung · đã có <b>${have}</b> · ` +
+        `<b>còn thiếu ${missing}</b>`;
+      if (typeof d.usdMissing === 'number') {
+        html += ` → phải trả cho <b>${missing}</b> ảnh × $${d.usdPerImage} ≈ <b>$${d.usdMissing.toFixed(2)}</b>`;
+      }
+      html += `<br><span style="opacity:.75">Số khung đếm THẬT từ <code>prompts/</code>. ` +
+        `Khung đã có ảnh không bị tính lại (trừ khi bật Ghi đè).</span>`;
+    } else {
+      const n = (from > 0 || to > 0) ? Math.max(0, (to || from) - (from || 1) + 1) : 0;
+      const panels = n * PAGES_PER_CHAPTER * PANELS_PER_PAGE;
+      html += `<span style="opacity:.75">Chưa chạy bước kịch bản nên chưa biết số khung thật. ` +
+        (n ? `Giả định thô: ${n} chương × ${PAGES_PER_CHAPTER} trang × ${PANELS_PER_PAGE} khung ≈ <b>${panels}</b> khung.` : '') +
+        ` Chạy bước <b>kịch bản</b> trước rồi mở lại để thấy con số thật.</span>`;
+    }
+    el.innerHTML = html;
+  }).catch(() => { el.textContent = ''; });
+}
+
+// loadComicCred nạp cấu hình sinh ảnh và cho biết đã bật chưa.
+function loadComicCred() {
+  fetch('/api/comic/config').then((r) => r.json()).then((d) => {
+    if (!d || !d.config) return;
+    const c = d.config;
+    const st = $('cmcCredState');
+    if (st) {
+      st.innerHTML = c.enabled
+        ? '<b style="color:#7ac77a">đã bật</b> — khung sẽ có tranh thật'
+        : '<b>chưa bật</b> — khung dùng ảnh giữ chỗ';
+    }
+    if ($('cmcKey')) $('cmcKey').placeholder = c.apiKey || 'dán khoá Gemini vào đây';
+    const sel = $('cmcModel');
+    if (sel && d.models) {
+      sel.innerHTML = d.models.map((m) => `<option value="${m[0]}">${m[1]}</option>`).join('');
+      if (c.model) sel.value = c.model;
+    }
+    if ($('cmcDialect') && c.dialect) $('cmcDialect').value = c.dialect;
+    refreshComicCost();
+  }).catch(() => {
+    const st = $('cmcCredState');
+    if (st) st.innerHTML = '<b style="color:#e08585">không đọc được cấu hình</b>';
+  });
+}
+
+function saveComicCred() {
+  const body = {
+    apiKey: $('cmcKey').value.trim(),
+    model: $('cmcModel') ? $('cmcModel').value : '',
+    dialect: $('cmcDialect') ? $('cmcDialect').value : '',
+  };
+  return api('/api/comic/config', body).then(() => {
+    $('cmcKey').value = '';
+    loadComicCred();
+    toast('Đã lưu cấu hình sinh ảnh');
+  }).catch((e) => toast(e.message, 'err'));
+}
+
+// testComicImage sinh ĐÚNG MỘT ảnh nhỏ. Đây là bước bắt buộc trước khi chạy cả sách:
+// sai khoá hoặc sai phương ngữ mà phát hiện muộn thì đã tốn cả trăm đô tiền ảnh.
+function testComicImage() {
+  const out = $('cmcTestOut');
+  out.textContent = 'Đang sinh một ảnh thử… (có thể mất tới một phút)';
+  fetch('/api/comic/test-image', { method: 'POST' }).then((r) => {
+    if (!r.ok) return r.json().then((d) => { throw new Error(d.error || 'thất bại'); });
+    return r.blob();
+  }).then((blob) => {
+    const url = URL.createObjectURL(blob);
+    out.innerHTML = '<b style="color:#7ac77a">Kết nối tốt.</b> Ảnh thử:<br>' +
+      `<img src="${url}" style="max-width:220px;border-radius:8px;margin-top:6px" />`;
+  }).catch((e) => {
+    out.innerHTML = `<b style="color:#e08585">Thất bại:</b> ${e.message}<br>` +
+      '<span style="opacity:.8">Nếu báo lỗi 404 hoặc model không tồn tại, thử đổi Phương ngữ API sang <code>interactions</code>.</span>';
+  });
+}
+
+function openComic() {
+  const products = [
+    ['style', 'Định hướng mỹ thuật'],
+    ['character', 'Model sheet nhân vật'],
+    ['script', 'Kịch bản trang → khung'],
+    ['layout', 'Bố cục trang'],
+    ['panelprompt', 'Bảng prompt khung'],
+    ['page', 'Dàn trang + lồng chữ'],
+    ['publish', 'Đóng gói xuất bản'],
+  ];
+  const boxes = products.map(([id, label]) =>
+    `<label class="opt"><input type="checkbox" class="cmcProd" value="${id}" /><span class="opt-label">${label}</span></label>`
+  ).join('');
+  const formats = [
+    ['pdf', 'PDF in ấn 300 DPI'],
+    ['cbz', 'CBZ (truyện tranh số)'],
+    ['epub', 'EPUB3 fixed-layout'],
+  ];
+  const fmtBoxes = formats.map(([id, label]) =>
+    `<label class="opt"><input type="checkbox" class="cmcFmt" value="${id}" checked /><span class="opt-label">${label}</span></label>`
+  ).join('');
+
+  openModal(`<h2>Làm truyện tranh</h2><div class="sub">Từ các chương đã hoàn thành, dựng trang truyện tranh hoàn chỉnh: kịch bản trang→khung, bố cục, bong bóng thoại tiếng Việt, rồi đóng gói xuất bản. Không chọn mục nào = chạy tất cả.</div>
+    <label>Sản phẩm</label>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:2px 12px;margin:6px 0">${boxes}</div>
+    <div class="field-row">
+      <div><label>Phong cách</label><select id="cmcPreset" style="width:100%"></select></div>
+      <div><label>Khổ trang</label><select id="cmcPageSize" style="width:100%">
+        <option value="a4">A4 (210×297mm)</option>
+        <option value="b5">B5 (176×250mm)</option>
+      </select></div>
+    </div>
+    <label style="margin-top:8px">Tinh chỉnh phong cách (tùy chọn)</label>
+    <input type="text" id="cmcStyle" placeholder="vd: tông ấm màu mật ong, nét mềm, bối cảnh Havana 1900" />
+    <div class="field-row">
+      <div><label>Từ chương</label><input type="number" id="cmcFrom" min="0" placeholder="đầu" /></div>
+      <div><label>Đến chương</label><input type="number" id="cmcTo" min="0" placeholder="cuối" /></div>
+    </div>
+    <label style="margin-top:8px">Định dạng xuất bản</label>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:2px 12px;margin:6px 0">${fmtBoxes}</div>
+    <div class="field-row">
+      <div><label>Lượt vẽ</label><select id="cmcPass" style="width:100%">
+        <option value="nhap">Nháp — 1K, rẻ nhất (mặc định)</option>
+        <option value="in">Bản in — 2K, chỉ cho chương đã chọn</option>
+      </select></div>
+      <div><label>Độ phân giải ảnh khung</label><select id="cmcImgSize" style="width:100%">
+        <option value="1K">1K — đọc màn hình</option>
+        <option value="2K">2K — in 300 DPI</option>
+      </select></div>
+      <div><label>Trần số ảnh mỗi lần chạy</label><input type="number" id="cmcMaxImg" min="0" placeholder="0 = không giới hạn" /></div>
+    </div>
+    <div class="sub" id="cmcCost" style="margin-top:8px"></div>
+    <details id="cmcCredBox" style="margin-top:12px">
+      <summary style="cursor:pointer">🎨 Sinh ảnh khung (Gemini) — <span id="cmcCredState">đang tải…</span></summary>
+      <div style="margin-top:8px">
+        <label>Khoá API Gemini</label>
+        <input type="text" id="cmcKey" placeholder="để trống = giữ khoá hiện tại · nhập - để xoá" />
+        <div class="field-row">
+          <div><label>Model sinh ảnh</label><select id="cmcModel" style="width:100%"></select></div>
+          <div><label>Phương ngữ API</label><select id="cmcDialect" style="width:100%">
+            <option value="generatecontent">generateContent (mặc định)</option>
+            <option value="interactions">interactions (bản mới)</option>
+          </select></div>
+        </div>
+        <div class="sub" style="margin-top:6px">
+          Google đang có <b>hai</b> bề mặt API sinh ảnh. Nếu phương ngữ mặc định lỗi, đổi sang
+          <code>interactions</code> rồi bấm Kiểm tra lại.
+        </div>
+        <div class="modal-actions" style="margin-top:8px">
+          <button class="btn" id="cmcSaveCred">Lưu khoá</button>
+          <button class="btn" id="cmcTest">Kiểm tra kết nối (1 ảnh)</button>
+        </div>
+        <div id="cmcTestOut" class="sub"></div>
+      </div>
+    </details>
+    <label class="opt" style="margin-top:12px"><input type="checkbox" id="cmcOver" /><span class="opt-label">Ghi đè file đã tồn tại</span></label>
+    <div class="modal-actions"><button class="btn" onclick="closeModal()">Hủy</button>
+    <button class="btn primary" id="cmcGo">Chạy</button></div>`);
+
+  loadComicCred();
+
+  fetch('/api/comic/presets').then((r) => r.json()).then((d) => {
+    const sel = $('cmcPreset');
+    if (!sel || !d || !d.presets) return;
+    sel.innerHTML = d.presets.map((p) => `<option value="${p.key}">${p.label}</option>`).join('');
+  }).catch(() => {});
+
+  // Đổi lượt vẽ thì tự đặt độ phân giải tương ứng — hai thứ này gắn liền nhau.
+  if ($('cmcPass')) {
+    $('cmcPass').addEventListener('change', () => {
+      $('cmcImgSize').value = $('cmcPass').value === 'in' ? '2K' : '1K';
+      refreshComicCost();
+    });
+  }
+  ['cmcFrom', 'cmcTo', 'cmcImgSize', 'cmcModel'].forEach((id) => {
+    const el = $(id);
+    if (el) el.addEventListener('change', refreshComicCost);
+    if (el) el.addEventListener('input', refreshComicCost);
+  });
+  refreshComicCost();
+
+  // Nối các nút PHỤ một cách chịu lỗi. Trước đây một phần tử thiếu là `.onclick` ném lỗi,
+  // và vì nút Chạy được nối SAU nên nó chết theo — hộp thoại trông bình thường mà bấm Chạy
+  // không có gì xảy ra. Nút Chạy nay luôn được nối trước và không phụ thuộc khối cấu hình.
+  const bind = (id, fn) => { const el = $(id); if (el) el.onclick = fn; };
+  bind('cmcSaveCred', saveComicCred);
+  bind('cmcTest', testComicImage);
+
+  $('cmcGo').onclick = () => {
+    const chosen = Array.from(document.querySelectorAll('.cmcProd:checked')).map((c) => c.value);
+    const fmts = Array.from(document.querySelectorAll('.cmcFmt:checked')).map((c) => c.value);
+    const body = {
+      products: chosen,
+      formats: fmts,
+      preset: $('cmcPreset').value,
+      pageSize: $('cmcPageSize').value,
+      style: $('cmcStyle').value.trim(),
+      from: parseInt($('cmcFrom').value || '0', 10) || 0,
+      to: parseInt($('cmcTo').value || '0', 10) || 0,
+      imageSize: $('cmcImgSize').value,
+      artPass: $('cmcPass') ? $('cmcPass').value : 'nhap',
+      maxImages: parseInt($('cmcMaxImg').value || '0', 10) || 0,
+      overwrite: $('cmcOver').checked,
+    };
+    api('/api/comic', body).then(() => openProgressModal('Đang làm truyện tranh'))
+      .catch((e) => toast(e.message, 'err'));
+  };
+}
+
 // ── Sách nói (Vbee TTS) ──
 
 // Ước lượng số ký tự sẽ gửi Vbee cho một phạm vi chương. Vbee tính tiền theo KÝ TỰ nên
@@ -986,6 +1223,7 @@ function bindUI() {
       if (cmd === 'export') return openExport();
       if (cmd === 'video') return openVideo();
       if (cmd === 'audiobook') return openAudiobook();
+      if (cmd === 'comic') return openComic();
       if (cmd === 'import') return openImport();
       if (cmd === 'simulate') return openSimulate();
       if (cmd === 'grounding') return openGrounding();

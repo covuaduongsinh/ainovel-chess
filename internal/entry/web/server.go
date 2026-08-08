@@ -2,9 +2,12 @@ package web
 
 import (
 	"encoding/json"
+	"errors"
 	"io/fs"
+	"log/slog"
 	"net/http"
 	"path/filepath"
+	"runtime/debug"
 
 	"github.com/voocel/ainovel-cli/assets"
 	"github.com/voocel/ainovel-cli/internal/bootstrap"
@@ -44,6 +47,63 @@ func newServer(eng *host.Host, cfg bootstrap.Config, bundle assets.Bundle, versi
 	return s
 }
 
+// handler trả về http.Handler đối ngoại của server: mux định tuyến được bọc bởi
+// middleware recover. Trước đây session.go gắn thẳng s.mux, nên một panic trong bất kỳ
+// handler nào sẽ do net/http bắt và đóng phắt kết nối — trình duyệt chỉ thấy "mạng lỗi",
+// không có thông điệp, còn log thì không có ngữ cảnh route.
+func (s *Server) handler() http.Handler {
+	return recoverMiddleware(s.mux)
+}
+
+// headerTracker theo dõi việc header đã được gửi chưa, để middleware biết còn kịp
+// trả về JSON lỗi hay không (SSE/tải file đã stream thì chỉ ghi log rồi ngắt).
+type headerTracker struct {
+	http.ResponseWriter
+	wrote bool
+}
+
+func (t *headerTracker) WriteHeader(code int) {
+	t.wrote = true
+	t.ResponseWriter.WriteHeader(code)
+}
+
+func (t *headerTracker) Write(b []byte) (int, error) {
+	t.wrote = true
+	return t.ResponseWriter.Write(b)
+}
+
+// Flush giữ nguyên khả năng streaming của SSE (handleStream ép kiểu http.Flusher).
+func (t *headerTracker) Flush() {
+	if f, ok := t.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
+func recoverMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		tw := &headerTracker{ResponseWriter: w}
+		defer func() {
+			rec := recover()
+			if rec == nil {
+				return
+			}
+			// http.ErrAbortHandler là quy ước "chủ động bỏ request", không phải lỗi thật.
+			if err, ok := rec.(error); ok && errors.Is(err, http.ErrAbortHandler) {
+				panic(rec)
+			}
+			slog.Error("panic trong handler web",
+				"module", "web", "method", r.Method, "path", r.URL.Path,
+				"panic", rec, "stack", string(debug.Stack()))
+			if !tw.wrote {
+				writeJSON(tw, http.StatusInternalServerError, map[string]any{
+					"error": "lỗi nội bộ máy chủ (đã ghi log)",
+				})
+			}
+		}()
+		next.ServeHTTP(tw, r)
+	})
+}
+
 func (s *Server) routes() {
 	// Tài nguyên tĩnh frontend (đường dẫn gốc).
 	sub, _ := fs.Sub(staticFS, "static")
@@ -81,6 +141,12 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/importsim", s.handleImportSim)
 	s.mux.HandleFunc("POST /api/adapt", s.handleAdapt)
 	s.mux.HandleFunc("POST /api/audiobook", s.handleAudiobook)
+	s.mux.HandleFunc("POST /api/comic", s.handleComic)
+	s.mux.HandleFunc("GET /api/comic/presets", s.handleComicPresets)
+	s.mux.HandleFunc("GET /api/comic/config", s.handleComicConfig)
+	s.mux.HandleFunc("POST /api/comic/config", s.handleComicConfigSave)
+	s.mux.HandleFunc("POST /api/comic/test-image", s.handleComicTestImage)
+	s.mux.HandleFunc("GET /api/comic/estimate", s.handleComicEstimate)
 	s.mux.HandleFunc("POST /api/job/cancel", s.handleJobCancel)
 
 	// Sách nói (Vbee TTS)

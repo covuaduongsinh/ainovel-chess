@@ -146,6 +146,67 @@ type Config struct {
 
 	// Vbee thông tin xác thực dịch vụ TTS dùng cho tính năng sách nói; rỗng = chưa bật.
 	Vbee VbeeConfig `json:"vbee,omitzero"`
+
+	// Comic là cấu hình sinh ảnh cho tính năng truyện tranh; rỗng = chưa bật sinh ảnh
+	// (khung sẽ dùng ảnh giữ chỗ). Xem docs/comic.md.
+	Comic ComicConfig `json:"comic,omitzero"`
+}
+
+// Mặc định cho sinh ảnh truyện tranh. Cố ý chép giá trị thay vì import internal/imggen:
+// bootstrap là gói nền, không được phụ thuộc vào gói client của nhà cung cấp.
+const (
+	DefaultComicImageBaseURL = "https://generativelanguage.googleapis.com"
+	DefaultComicImageModel   = "gemini-3.1-flash-lite-image"
+	DefaultComicImageDialect = "generatecontent"
+)
+
+// ComicConfig là cấu hình sinh ảnh khung cho tính năng truyện tranh.
+//
+// ⚠ Sinh ảnh là bước TỐN TIỀN duy nhất của tính năng này: một cuốn 32 chương ≈ 1.900 khung.
+// Muốn IN được thì phải đặt image_size = "2K" (A4 ở 300 DPI là 2480×3508 px), và điều đó
+// gần như gấp đôi chi phí so với 1K. Hãy chạy thử một chương trước.
+type ComicConfig struct {
+	// APIKey là khoá Gemini. Để rỗng thì hệ thống tự dùng providers["gemini"].api_key
+	// nếu có — không phải nhập lại khoá đã khai báo cho LLM.
+	APIKey string `json:"api_key,omitempty"`
+
+	BaseURL string `json:"base_url,omitempty"`
+	Model   string `json:"model,omitempty"`
+
+	// Dialect chọn bề mặt API: "generatecontent" (mặc định) | "interactions".
+	// Google đang có hai đường song song và đã gắn nhãn đường cũ là "Legacy" mà chưa công
+	// bố ngày khai tử. Nếu đường mặc định lỗi, đổi sang "interactions" rồi bấm
+	// "Kiểm tra kết nối" trên hộp thoại Truyện tranh.
+	Dialect string `json:"dialect,omitempty"`
+
+	// KeyInQuery gửi khoá qua ?key= thay vì header x-goog-api-key. Chỉ dùng cho proxy
+	// nào không chuyển tiếp header.
+	KeyInQuery bool `json:"key_in_query,omitempty"`
+
+	// ImageSize mặc định: "1K" (đọc màn hình) | "2K" (in được).
+	ImageSize string `json:"image_size,omitempty"`
+}
+
+// ImageEnabled cho biết đã đủ điều kiện sinh ảnh chưa.
+func (c ComicConfig) ImageEnabled() bool { return strings.TrimSpace(c.APIKey) != "" }
+
+// Validate kiểm tra các trường tuỳ chọn. Mục để trống hoàn toàn là HỢP LỆ — nó chỉ có
+// nghĩa "chưa bật sinh ảnh", và giai đoạn 1 chạy hoàn toàn bình thường ở trạng thái đó.
+func (c ComicConfig) Validate() error {
+	switch strings.ToLower(strings.TrimSpace(c.Dialect)) {
+	case "", "generatecontent", "interactions":
+	default:
+		return fmt.Errorf("comic.dialect chỉ nhận generatecontent|interactions, nhận %q", c.Dialect)
+	}
+	switch strings.ToUpper(strings.TrimSpace(c.ImageSize)) {
+	case "", "512", "1K", "2K", "4K":
+	default:
+		return fmt.Errorf("comic.image_size chỉ nhận 512|1K|2K|4K, nhận %q", c.ImageSize)
+	}
+	if u := strings.TrimSpace(c.BaseURL); u != "" && !strings.HasPrefix(u, "http") {
+		return fmt.Errorf("comic.base_url phải là URL http(s), nhận %q", c.BaseURL)
+	}
+	return nil
 }
 
 // BudgetConfig là khai báo chính sách ví tiền cho mỗi cuốn sách của người dùng. Dừng khi vượt ngưỡng tương đương người dùng
@@ -422,6 +483,32 @@ func (c *Config) FillDefaults() {
 	// Chỉ điền mặc định Vbee khi người dùng ĐÃ nhập thông tin xác thực. Nếu điền vô
 	// điều kiện thì mọi lần ghi lại config (SwitchModel/SetRoleThinking) sẽ vẽ ra một
 	// khối "vbee" rỗng vô nghĩa trong tệp của người không dùng tính năng sách nói.
+	// Khoá ảnh để rỗng thì mượn khoá của provider "gemini" — người dùng đã khai một lần
+	// cho LLM thì không nên bắt khai lại cho ảnh.
+	borrowedKey := false
+	if strings.TrimSpace(c.Comic.APIKey) == "" {
+		if p, ok := c.Providers["gemini"]; ok && strings.TrimSpace(p.APIKey) != "" {
+			c.Comic.APIKey = strings.TrimSpace(p.APIKey)
+			borrowedKey = true
+		}
+	}
+	if c.Comic.ImageEnabled() {
+		// CHỈ điền endpoint/phương ngữ của Google khi khoá là do MƯỢN từ provider gemini.
+		// Nếu người dùng tự khai khoá thì rất có thể họ trỏ sang nơi khác (proxy, gateway),
+		// và ép BaseURL về Google sẽ âm thầm gửi khoá của họ sai địa chỉ.
+		if borrowedKey {
+			if c.Comic.BaseURL == "" {
+				c.Comic.BaseURL = DefaultComicImageBaseURL
+			}
+			if c.Comic.Dialect == "" {
+				c.Comic.Dialect = DefaultComicImageDialect
+			}
+		}
+		if c.Comic.Model == "" {
+			c.Comic.Model = DefaultComicImageModel
+		}
+	}
+
 	if c.Vbee.Configured() {
 		if c.Vbee.BaseURL == "" {
 			c.Vbee.BaseURL = DefaultVbeeBaseURL

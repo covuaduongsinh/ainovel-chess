@@ -139,6 +139,25 @@
   //   "events": ["run_end", "repeat", "budget"]
   // }
 
+  // Tùy chọn. Sinh ảnh khung cho tính năng "Truyện tranh" (/truyentranh).
+  // Bỏ mục này = KHÔNG sinh ảnh: đường ống vẫn chạy trọn vẹn và ra trang thật, chỉ là
+  // khung dùng ảnh giữ chỗ. Đó là cách chạy thử miễn phí trước khi tiêu tiền.
+  // api_key: để trống thì hệ thống tự mượn providers["gemini"].api_key — không phải khai lại.
+  // ⚠ Sinh ảnh là bước TỐN TIỀN duy nhất: một cuốn 32 chương ≈ 1.900 khung.
+  //   Muốn IN được phải đặt image_size = "2K" (A4 ở 300 DPI là 2480×3508 px), và điều đó
+  //   gần như GẤP ĐÔI chi phí so với "1K". Hãy chạy "/truyentranh to=1" trước.
+  // ⚠ dialect: Google đang có HAI bề mặt API sinh ảnh và đã gắn nhãn đường cũ là "Legacy"
+  //   mà chưa công bố ngày khai tử. Mặc định dùng "generatecontent"; nếu tài khoản của bạn
+  //   báo lỗi, đổi sang "interactions" rồi bấm "Kiểm tra kết nối" trên hộp thoại Truyện tranh.
+  // "comic": {
+  //   "api_key": "",
+  //   "model": "gemini-2.5-flash-image",
+  //   "base_url": "https://generativelanguage.googleapis.com",
+  //   "dialect": "generatecontent",
+  //   "image_size": "2K",
+  //   "key_in_query": false
+  // }
+
   // Tùy chọn. Dịch vụ TTS Vbee — dùng cho tính năng "Sách nói" (mỗi chương một tệp MP3).
   // Lấy app_id / access_token trong Vbee Studio → mục API (https://studio.vbee.vn/apps).
   // Cũng có thể nhập ngay trong hộp thoại "🎧 Sách nói" trên Web (token hiển thị dạng che abcd****wxyz).

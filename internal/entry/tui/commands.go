@@ -263,6 +263,28 @@ func commandRegistryInstance() commandRegistry {
 				return m, listenCmd
 			},
 		},
+		{
+			Name:        "truyentranh",
+			Aliases:     []string{"comic"},
+			Group:       "writing",
+			Usage:       "/truyentranh [style|character|script|layout|panelprompt|refsheet|panelart|page|publish|all] [preset=...] [from=N] [to=M] [size=a4|b5] [pass=nhap|in] [format=pdf,cbz,epub] [maximages=N] [--overwrite]",
+			Description: "Làm truyện tranh: dựng trang hoàn chỉnh có bong bóng thoại rồi đóng gói PDF/CBZ/EPUB",
+			NeedsIdle:   true,
+			Run: func(m Model, args []string) (tea.Model, tea.Cmd) {
+				m.comicSeq++
+				state, listenCmd, err := startComic(m.runtime, m.comicSeq, args, m.width, m.height)
+				if err != nil {
+					m.applyEvent(host.Event{
+						Time: time.Now(), Category: "ERROR", Summary: "Khởi động làm truyện tranh thất bại: " + err.Error(), Level: "error",
+					})
+					m.refreshEventViewport()
+					return m, nil
+				}
+				m.comicer = state
+				m.textarea.Blur()
+				return m, listenCmd
+			},
+		},
 	})
 }
 

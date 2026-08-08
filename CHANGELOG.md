@@ -9,6 +9,51 @@ Nhật ký này tập trung vào các thay đổi của **bản Việt hóa** so
 ## [Chưa phát hành]
 
 ### Đã thêm
+- **Truyện tranh** — khả năng ngang mới [internal/host/comic](internal/host/comic/) dựng
+  **trang truyện tranh hoàn chỉnh, xuất bản được** từ các chương đã hoàn thành, ghi vào
+  `{novelDir}/truyen-tranh/`. Tài liệu: [docs/comic.md](docs/comic.md).
+  - **Điểm vào mirror nhau**: lệnh `/truyentranh` (alias `/comic`) trên TUI và nút
+    **▤ Truyện tranh** trên Web, cả hai gọi `host.Host.Comic(ctx, comic.Options)`.
+  - **Gói dựng ảnh** [internal/comicdraw](internal/comicdraw/) — gói lá thuần đồ hoạ, dựng
+    trang ra **PNG lẫn SVG** từ cùng một mô tả nên hai đầu ra không thể lệch nhau. Bản SVG
+    giữ chữ ở dạng `<text>` nên tút lại bằng Illustrator/Inkscape được, và dịch sang ngôn
+    ngữ khác chỉ cần thay chữ chứ không phải vẽ lại tranh.
+  - **LLM ra ngữ nghĩa, Go ra hình học**: LLM chỉ quyết định số khung, cỡ khung và chỗ xuống
+    hàng; toạ độ do Go tính xác định. Để LLM sinh toạ độ thì khung chồng nhau và hở lỗ — lỗi
+    chỉ lộ ra khi nhìn trang đã in. Nay "lát kín trang, không chồng lấn" là **bất biến có test**.
+  - **Chỉ ba bước gọi LLM** (định hướng mỹ thuật · model sheet nhân vật · kịch bản từng
+    chương); bố cục, prompt khung, dàn trang và đóng gói đều thuần Go, không tốn token.
+  - **Tái dùng di sản `/video`** khi có (`consistency-bible`, model sheet, storyboard) thay
+    vì sinh lại — vừa rẻ hơn vừa giữ bản truyện tranh cùng thế giới hình ảnh với bản video.
+  - **Đóng gói xuất bản viết tay, không thêm thư viện**: PDF 1.7 in ấn (MediaBox/BleedBox/
+    TrimBox, JPEG qua `/DCTDecode`, tiêu đề UTF-16BE), CBZ (zip Store + `ComicInfo.xml`),
+    EPUB3 fixed-layout (`rendition:layout pre-paginated`, ảnh bọc `<svg>`).
+  - **Chữ tiếng Việt**: bắt buộc chuẩn hoá NFC vì `x/image/font/sfnt` không có GSUB lẫn
+    mark-to-base — chuỗi dạng tổ hợp sẽ vẽ dấu chồng đống ở gốc bút; và căn giữa theo **đỉnh
+    mực thật** chứ không theo ascent typographic (đo trên Patrick Hand 64px: ascent −66,7
+    nhưng mực chữ thường −30, căn theo ascent đẩy chữ xuống ~36px).
+  - **Font nhúng** ba bộ SIL OFL 1.1 đã kiểm chứng phủ đủ 165 glyph tiếng Việt: Patrick Hand,
+    Bangers, Be Vietnam Pro. ⚠ Comic Neue tuy OFL nhưng **thiếu hẳn khối U+1EA0–1EF9**.
+  - **Giai đoạn 2 — sinh ảnh thật qua Gemini.** Client HTTP thuần ở
+    [internal/imggen](internal/imggen/) (stdlib, test bằng `httptest`), tách **phương ngữ dây**
+    khỏi **chính sách** vì Google đang có hai bề mặt API sinh ảnh song song và đã gắn nhãn
+    đường cũ là "Legacy" mà chưa công bố ngày khai tử — đổi được bằng cấu hình `comic.dialect`.
+    Có nút **"Kiểm tra kết nối (1 ảnh)"** bắt buộc dùng trước khi chạy cả sách. Khoá để trống
+    thì tự mượn `providers["gemini"].api_key`. 429 liên tiếp 5 lần thì tự nâng thành lỗi chí
+    tử (429 vừa nghĩa "quá nhanh" vừa nghĩa "cạn hạn mức", tầng transport không phân biệt được).
+  - **Hai bẫy prompt chỉ lộ ra khi nhìn tranh thật**: (a) câu *"chừa chỗ … cho bong bóng
+    thoại"* khiến mô hình **vẽ hẳn một bong bóng rỗng** — nhắc tên thứ mình không muốn vẽ là
+    hỏng, kể cả khi đã cấm trong negative; (b) token `comic panel` khiến mô hình **tự vẽ khung
+    viền** bên trong ảnh, thành khung lồng khung sau khi dàn trang. Đã sửa cả hai.
+  - **Chia hai giai đoạn.** Giai đoạn 1 chạy trọn đường ống với **ảnh giữ chỗ**,
+    **không tốn một xu tiền sinh ảnh** — đủ để nghiệm thu bố cục và typography trước. Giai
+    đoạn 2 nối API sinh ảnh qua interface `ImageSource` đã định sẵn. Vì bộ dựng đọc ảnh
+    **theo đường dẫn tệp**, bạn có thể tự vẽ hoặc tự chạy bộ sinh ảnh rồi thả tệp vào
+    `art/` là trang có tranh ngay, không cần sửa dòng code nào.
+  - **⚠ Chi phí giai đoạn 2**: muốn **in** thì phải sinh ảnh ở **2K** chứ không phải 1K
+    (A4 @300 DPI = 2480×3508 px), gần như gấp đôi chi phí. Một cuốn 32 chương ≈ 1.900 khung
+    ≈ $74–192 tuỳ model. Có `maximages` làm cầu dao và ước tính hiện trên hộp thoại Web.
+  - `golang.org/x/image` chuyển từ dependency gián tiếp sang trực tiếp (`go.sum` không đổi).
 - **Sách nói qua Vbee TTS** — khả năng ngang mới [internal/host/tts](internal/host/tts/)
   đọc các chương đã hoàn thành thành tệp MP3, **mỗi chương một tệp**, kèm `playlist.m3u`
   (cả sách + từng tập) và `index.md`, ghi vào `{novelDir}/audio/`. Tài liệu:

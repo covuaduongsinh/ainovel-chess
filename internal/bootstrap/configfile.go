@@ -213,6 +213,26 @@ func mergeConfig(base, overlay Config) Config {
 	// tin xác thực chứ không phải khai báo chính sách — cấu hình cấp dự án thường chỉ
 	// muốn đổi voice_code mà vẫn kế thừa app_id/access_token toàn cục, giống cách
 	// Providers được ghép ở trên.
+	// Comic: ghép từng trường, cùng lý do với Vbee (kho thông tin xác thực).
+	if overlay.Comic.APIKey != "" {
+		base.Comic.APIKey = overlay.Comic.APIKey
+	}
+	if overlay.Comic.BaseURL != "" {
+		base.Comic.BaseURL = overlay.Comic.BaseURL
+	}
+	if overlay.Comic.Model != "" {
+		base.Comic.Model = overlay.Comic.Model
+	}
+	if overlay.Comic.Dialect != "" {
+		base.Comic.Dialect = overlay.Comic.Dialect
+	}
+	if overlay.Comic.ImageSize != "" {
+		base.Comic.ImageSize = overlay.Comic.ImageSize
+	}
+	if overlay.Comic.KeyInQuery {
+		base.Comic.KeyInQuery = true
+	}
+
 	if overlay.Vbee.AppID != "" {
 		base.Vbee.AppID = overlay.Vbee.AppID
 	}

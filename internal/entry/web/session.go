@@ -70,7 +70,7 @@ func (sm *sessionManager) open(dir string) error {
 		eng.Close()
 		clean()
 	}
-	sm.swap.set(srv.mux)
+	sm.swap.set(srv.handler())
 	return nil
 }
 
@@ -79,7 +79,7 @@ func (sm *sessionManager) showPicker() {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 	sm.closeCurrentLocked()
-	sm.swap.set(newPickerMux(sm))
+	sm.swap.set(recoverMiddleware(newPickerMux(sm)))
 }
 
 // closeCurrent đóng phiên hiện tại (nếu có). An toàn khi gọi qua defer lúc RunWeb thoát.

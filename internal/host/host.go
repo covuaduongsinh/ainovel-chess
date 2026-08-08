@@ -17,14 +17,17 @@ import (
 	"github.com/voocel/ainovel-cli/internal/agents"
 	"github.com/voocel/ainovel-cli/internal/agents/ctxpack"
 	"github.com/voocel/ainovel-cli/internal/bootstrap"
+	"github.com/voocel/ainovel-cli/internal/comicdraw"
 	"github.com/voocel/ainovel-cli/internal/domain"
 	"github.com/voocel/ainovel-cli/internal/dossier"
 	"github.com/voocel/ainovel-cli/internal/host/adapt"
+	"github.com/voocel/ainovel-cli/internal/host/comic"
 	"github.com/voocel/ainovel-cli/internal/host/exp"
 	"github.com/voocel/ainovel-cli/internal/host/flow"
 	"github.com/voocel/ainovel-cli/internal/host/imp"
 	"github.com/voocel/ainovel-cli/internal/host/sim"
 	"github.com/voocel/ainovel-cli/internal/host/tts"
+	"github.com/voocel/ainovel-cli/internal/imggen"
 	modelreg "github.com/voocel/ainovel-cli/internal/models"
 	"github.com/voocel/ainovel-cli/internal/notify"
 	"github.com/voocel/ainovel-cli/internal/rules"
@@ -58,6 +61,14 @@ type Host struct {
 	events   chan Event
 	streamCh chan string
 	done     chan struct{}
+
+	// chanMu bảo vệ việc gửi trên events/streamCh khỏi đua với close() trong Close().
+	// Người gửi giữ RLock (nhiều goroutine phát sự kiện song song), Close giữ Lock.
+	// chansClosed là cờ trạng thái cuối: một khi đã đặt, mọi lần phát về sau là no-op.
+	// Trước đây chỗ này dựa vào `defer recover()` để nuốt panic "send on closed channel",
+	// vốn che giấu race thật và có thể nuốt cả panic khác.
+	chanMu      sync.RWMutex
+	chansClosed bool
 
 	mu         sync.Mutex
 	lifecycle  lifecycle
@@ -484,6 +495,12 @@ func (h *Host) Close() {
 		slog.Warn("Ghi usage trước khi thoát thất bại", "module", "usage", "err", err)
 	}
 	h.closeOnce.Do(func() {
+		// Chặn mọi emit đang bay trước khi close: người gửi giữ RLock, ở đây lấy Lock
+		// nên chắc chắn không còn ai đang ở trong thân select gửi kênh.
+		h.chanMu.Lock()
+		h.chansClosed = true
+		h.chanMu.Unlock()
+
 		close(h.done)
 		close(h.events)
 		close(h.streamCh)
@@ -537,10 +554,16 @@ func (h *Host) waitDone() {
 		}
 	}
 
-	select {
-	case h.done <- struct{}{}:
-	default:
+	// Gửi tín hiệu done phải đi qua cùng cổng chắn với emit*: nếu Close() đã đóng kênh,
+	// một `h.done <- struct{}{}` trong select vẫn panic.
+	h.chanMu.RLock()
+	if !h.chansClosed {
+		select {
+		case h.done <- struct{}{}:
+		default:
+		}
 	}
+	h.chanMu.RUnlock()
 }
 
 // runEndBody lắp ráp nội dung thông báo run_end: tên sách + tóm tắt tiến độ + chi phí lũy kế.
@@ -570,7 +593,6 @@ func (h *Host) AskUser() *tools.AskUserTool { return h.askUser }
 // ── Phát sự kiện ──
 
 func (h *Host) emitEvent(ev Event) {
-	defer func() { recover() }()
 	// Điểm vào slog duy nhất cho tất cả sự kiện. Cả sự kiện agentcore mà observer dịch
 	// lẫn sự kiện SYSTEM tự phát của Host (Start/Abort/Resume...) đều ghi log ở đây,
 	// tránh ESC abort và kết thúc ngoài không phân biệt được trên tui.log.
@@ -593,6 +615,14 @@ func (h *Host) emitEvent(ev Event) {
 		}
 		slog.Log(context.Background(), level, msg, attrs...)
 	}
+
+	h.chanMu.RLock()
+	defer h.chanMu.RUnlock()
+	if h.chansClosed {
+		return // Host đã đóng: log vẫn ghi ở trên, kênh UI thì bỏ qua.
+	}
+	// Kênh có đệm; khi consumer (TUI/SSE) chậm thì bỏ bản ghi cũ nhất để không bao giờ
+	// chặn luồng thực thi LLM. Ghi log/persist đã xong ở trên nên không mất dữ liệu thật.
 	select {
 	case h.events <- ev:
 	default:
@@ -608,7 +638,11 @@ func (h *Host) emitEvent(ev Event) {
 }
 
 func (h *Host) emitDelta(delta string) {
-	defer func() { recover() }()
+	h.chanMu.RLock()
+	defer h.chanMu.RUnlock()
+	if h.chansClosed {
+		return
+	}
 	select {
 	case h.streamCh <- delta:
 	default:
@@ -1247,6 +1281,118 @@ func (h *Host) Adapt(ctx context.Context, opts adapt.Options) (<-chan adapt.Even
 		},
 	}
 	return adapt.Run(ctx, deps, opts)
+}
+
+// Comic chuyen mot du an sach da hoan thanh thanh TRANG TRUYEN TRANH xuat ban duoc:
+// kich ban trang-khung, bo cuc, prompt anh, trang da dan chu (PNG + SVG) va cac goi
+// PDF / CBZ / EPUB3 fixed-layout.
+//
+// Giong Adapt: tac vu LLM-nang chay dai, xung dot voi Coordinator nen guardExclusive.
+// Khac Adapt: co buoc dung anh nen can bo font nhung; giai doan 1 khong tiem ImageSource
+// (Deps.Img = nil) nen cac khung dung anh giu cho va KHONG ton tien sinh anh.
+func (h *Host) Comic(ctx context.Context, opts comic.Options) (<-chan comic.Event, error) {
+	if err := h.guardExclusive("tao truyen tranh"); err != nil {
+		return nil, err
+	}
+	f := assets.LoadComicFonts()
+	fonts, err := comicdraw.NewFontSet(f.Dialogue, f.SFX, f.Narration, f.Bold)
+	if err != nil {
+		return nil, fmt.Errorf("nap bo font truyen tranh: %w", err)
+	}
+	deps := comic.Deps{
+		Store: h.store,
+		LLM:   h.models.ForRole("architect"),
+		Fonts: fonts,
+		Prompts: comic.Prompts{
+			Style:     h.bundle.Prompts.ComicStyle,
+			Character: h.bundle.Prompts.ComicCharacter,
+			Script:    h.bundle.Prompts.ComicScript,
+		},
+	}
+	// Giai doan 2: co khoa anh thi cam nguon sinh anh vao. Khong co thi Img=nil va cac
+	// khung dung anh giu cho — dung buoc lai, khong phai loi.
+	h.mu.Lock()
+	cc := h.cfg.Comic
+	h.mu.Unlock()
+	if cc.ImageEnabled() {
+		deps.Img = comic.NewGeminiSource(h.newImageClient(cc))
+	}
+	// ImageSize trong cau hinh la MAC DINH cua nguoi dung; Options moi la quyet dinh cua
+	// lan chay nay. Truoc day truong cau hinh nay khong duoc tieu thu o dau ca.
+	if strings.TrimSpace(opts.ImageSize) == "" {
+		opts.ImageSize = strings.TrimSpace(cc.ImageSize)
+	}
+	return comic.Run(ctx, deps, opts)
+}
+
+// newImageClient dung client sinh anh tu cau hinh hien tai.
+func (h *Host) newImageClient(cc bootstrap.ComicConfig) *imggen.Client {
+	return imggen.NewClient(imggen.Options{
+		APIKey:     cc.APIKey,
+		BaseURL:    cc.BaseURL,
+		Model:      cc.Model,
+		Dialect:    cc.Dialect,
+		KeyInQuery: cc.KeyInQuery,
+	})
+}
+
+// ComicConfig tra ve cau hinh sinh anh hien tai.
+func (h *Host) ComicConfig() bootstrap.ComicConfig {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.cfg.Comic
+}
+
+// SetComicConfig ghi cau hinh sinh anh vao config toan cuc (mirror SetVbeeConfig).
+func (h *Host) SetComicConfig(cc bootstrap.ComicConfig) error {
+	if err := cc.Validate(); err != nil {
+		return err
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.cfg.Comic = cc
+	h.cfg.FillDefaults()
+	if path := bootstrap.DefaultConfigPath(); path != "" {
+		if err := bootstrap.SaveConfig(path, h.cfg); err != nil {
+			slog.Warn("Luu cau hinh sinh anh truyen tranh that bai", "module", "host", "err", err)
+			return err
+		}
+	}
+	return nil
+}
+
+// ComicImageModels liet ke cac model sinh anh de UI goi y.
+func (h *Host) ComicImageModels() [][2]string { return imggen.KnownModels }
+
+// ComicEstimate dem so khung THAT tu bang prompt da sinh, de UI uoc tinh chi phi.
+// Chi doc dia, khong goi LLM lan API anh → khong guardExclusive.
+func (h *Host) ComicEstimate(from, to int) (comic.Estimate, error) {
+	return comic.EstimateCost(filepath.Join(h.store.Dir(), "truyen-tranh"), from, to)
+}
+
+// ComicTestImage sinh DUNG MOT anh nho de kiem chung khoa API va phuong ngu day.
+//
+// Bat buoc phai co truoc khi chay ca sach: Google dang co HAI be mat API cho viec sinh anh
+// va tai lieu da gan nhan duong cu la "Legacy". Mot anh thu ton vai xu, con chay ca cuon
+// roi moi phat hien sai phuong ngu thi mat ca tram do la.
+func (h *Host) ComicTestImage(ctx context.Context) ([]byte, string, error) {
+	h.mu.Lock()
+	cc := h.cfg.Comic
+	h.mu.Unlock()
+	if !cc.ImageEnabled() {
+		return nil, "", fmt.Errorf("chua cau hinh khoa API sinh anh")
+	}
+	c := h.newImageClient(cc)
+	res, err := c.Generate(ctx, imggen.Request{
+		Prompt:      "A single simple wooden chess pawn on a plain cream background, warm watercolor children's book illustration",
+		Negative:    "text, letters, watermark, signature",
+		AspectRatio: "1:1",
+		ImageSize:   "1K",
+	})
+	if err != nil {
+		return nil, "", err
+	}
+	return res.Image, res.MimeType, nil
 }
 
 // Audiobook tao sach noi (moi chuong mot tep MP3) tu cac chuong da hoan thanh, qua API TTS Vbee.

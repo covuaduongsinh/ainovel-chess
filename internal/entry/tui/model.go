@@ -67,6 +67,8 @@ type Model struct {
 	videoSeq       int
 	audiobooker    *audiobookState
 	audiobookSeq   int
+	comicer        *comicState
+	comicSeq       int
 	simulator      *simulationState
 	simSeq         int
 	compItems      []commandPaletteItem
@@ -621,6 +623,9 @@ func (m Model) View() string {
 	}
 	if m.videoer != nil {
 		return renderVideoModal(m.width, m.height, m.videoer)
+	}
+	if m.comicer != nil {
+		return renderComicModal(m.width, m.height, m.comicer)
 	}
 	if m.audiobooker != nil {
 		return renderAudiobookModal(m.width, m.height, m.audiobooker)
