@@ -62,6 +62,14 @@ type Host struct {
 	streamCh chan string
 	done     chan struct{}
 
+	// chanMu bảo vệ việc gửi trên events/streamCh khỏi đua với close() trong Close().
+	// Người gửi giữ RLock (nhiều goroutine phát sự kiện song song), Close giữ Lock.
+	// chansClosed là cờ trạng thái cuối: một khi đã đặt, mọi lần phát về sau là no-op.
+	// Trước đây chỗ này dựa vào `defer recover()` để nuốt panic "send on closed channel",
+	// vốn che giấu race thật và có thể nuốt cả panic khác.
+	chanMu      sync.RWMutex
+	chansClosed bool
+
 	mu         sync.Mutex
 	lifecycle  lifecycle
 	cocreating bool // Chiếm dụng đồng sáng tác giai đoạn: chặn can thiệp đồng thời của import/simulate/continue trong cửa sổ paused
@@ -487,6 +495,12 @@ func (h *Host) Close() {
 		slog.Warn("Ghi usage trước khi thoát thất bại", "module", "usage", "err", err)
 	}
 	h.closeOnce.Do(func() {
+		// Chặn mọi emit đang bay trước khi close: người gửi giữ RLock, ở đây lấy Lock
+		// nên chắc chắn không còn ai đang ở trong thân select gửi kênh.
+		h.chanMu.Lock()
+		h.chansClosed = true
+		h.chanMu.Unlock()
+
 		close(h.done)
 		close(h.events)
 		close(h.streamCh)
@@ -540,10 +554,16 @@ func (h *Host) waitDone() {
 		}
 	}
 
-	select {
-	case h.done <- struct{}{}:
-	default:
+	// Gửi tín hiệu done phải đi qua cùng cổng chắn với emit*: nếu Close() đã đóng kênh,
+	// một `h.done <- struct{}{}` trong select vẫn panic.
+	h.chanMu.RLock()
+	if !h.chansClosed {
+		select {
+		case h.done <- struct{}{}:
+		default:
+		}
 	}
+	h.chanMu.RUnlock()
 }
 
 // runEndBody lắp ráp nội dung thông báo run_end: tên sách + tóm tắt tiến độ + chi phí lũy kế.
@@ -573,7 +593,6 @@ func (h *Host) AskUser() *tools.AskUserTool { return h.askUser }
 // ── Phát sự kiện ──
 
 func (h *Host) emitEvent(ev Event) {
-	defer func() { recover() }()
 	// Điểm vào slog duy nhất cho tất cả sự kiện. Cả sự kiện agentcore mà observer dịch
 	// lẫn sự kiện SYSTEM tự phát của Host (Start/Abort/Resume...) đều ghi log ở đây,
 	// tránh ESC abort và kết thúc ngoài không phân biệt được trên tui.log.
@@ -596,6 +615,14 @@ func (h *Host) emitEvent(ev Event) {
 		}
 		slog.Log(context.Background(), level, msg, attrs...)
 	}
+
+	h.chanMu.RLock()
+	defer h.chanMu.RUnlock()
+	if h.chansClosed {
+		return // Host đã đóng: log vẫn ghi ở trên, kênh UI thì bỏ qua.
+	}
+	// Kênh có đệm; khi consumer (TUI/SSE) chậm thì bỏ bản ghi cũ nhất để không bao giờ
+	// chặn luồng thực thi LLM. Ghi log/persist đã xong ở trên nên không mất dữ liệu thật.
 	select {
 	case h.events <- ev:
 	default:
@@ -611,7 +638,11 @@ func (h *Host) emitEvent(ev Event) {
 }
 
 func (h *Host) emitDelta(delta string) {
-	defer func() { recover() }()
+	h.chanMu.RLock()
+	defer h.chanMu.RUnlock()
+	if h.chansClosed {
+		return
+	}
 	select {
 	case h.streamCh <- delta:
 	default:

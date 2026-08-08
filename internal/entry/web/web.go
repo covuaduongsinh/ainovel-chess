@@ -78,7 +78,7 @@ func RunWeb(configPath, version string, opts Options) error {
 	// Thiết lập lần đầu: hướng dẫn trong trình duyệt, viết cấu hình xong rồi tiếp tục.
 	if bootstrap.NeedsSetup(configPath) {
 		done := make(chan struct{}, 1)
-		swap.set(newSetupMux(configPath, done))
+		swap.set(recoverMiddleware(newSetupMux(configPath, done)))
 		banner(url, "Thiết lập lần đầu — hãy chọn nhà cung cấp và nhập API key trên trình duyệt.")
 		if opts.Open {
 			openBrowser(url)

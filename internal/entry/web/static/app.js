@@ -610,6 +610,62 @@ function refreshComicCost() {
   }).catch(() => { el.textContent = ''; });
 }
 
+// loadComicCred nạp cấu hình sinh ảnh và cho biết đã bật chưa.
+function loadComicCred() {
+  fetch('/api/comic/config').then((r) => r.json()).then((d) => {
+    if (!d || !d.config) return;
+    const c = d.config;
+    const st = $('cmcCredState');
+    if (st) {
+      st.innerHTML = c.enabled
+        ? '<b style="color:#7ac77a">đã bật</b> — khung sẽ có tranh thật'
+        : '<b>chưa bật</b> — khung dùng ảnh giữ chỗ';
+    }
+    if ($('cmcKey')) $('cmcKey').placeholder = c.apiKey || 'dán khoá Gemini vào đây';
+    const sel = $('cmcModel');
+    if (sel && d.models) {
+      sel.innerHTML = d.models.map((m) => `<option value="${m[0]}">${m[1]}</option>`).join('');
+      if (c.model) sel.value = c.model;
+    }
+    if ($('cmcDialect') && c.dialect) $('cmcDialect').value = c.dialect;
+    refreshComicCost();
+  }).catch(() => {
+    const st = $('cmcCredState');
+    if (st) st.innerHTML = '<b style="color:#e08585">không đọc được cấu hình</b>';
+  });
+}
+
+function saveComicCred() {
+  const body = {
+    apiKey: $('cmcKey').value.trim(),
+    model: $('cmcModel') ? $('cmcModel').value : '',
+    dialect: $('cmcDialect') ? $('cmcDialect').value : '',
+  };
+  return api('/api/comic/config', body).then(() => {
+    $('cmcKey').value = '';
+    loadComicCred();
+    toast('Đã lưu cấu hình sinh ảnh');
+  }).catch((e) => toast(e.message, 'err'));
+}
+
+// testComicImage sinh ĐÚNG MỘT ảnh nhỏ. Đây là bước bắt buộc trước khi chạy cả sách:
+// sai khoá hoặc sai phương ngữ mà phát hiện muộn thì đã tốn cả trăm đô tiền ảnh.
+function testComicImage() {
+  const out = $('cmcTestOut');
+  out.textContent = 'Đang sinh một ảnh thử… (có thể mất tới một phút)';
+  fetch('/api/comic/test-image', { method: 'POST' }).then((r) => {
+    if (!r.ok) return r.json().then((d) => { throw new Error(d.error || 'thất bại'); });
+    return r.blob();
+  }).then((blob) => {
+    const url = URL.createObjectURL(blob);
+    out.innerHTML = '<b style="color:#7ac77a">Kết nối tốt.</b> Ảnh thử:<br>' +
+      `<img src="${url}" style="max-width:220px;border-radius:8px;margin-top:6px" />`;
+  }).catch((e) => {
+    out.innerHTML = `<b style="color:#e08585">Thất bại:</b> ${e.message}<br>` +
+      '<span style="opacity:.8">Nếu báo lỗi 404 hoặc model không tồn tại, thử đổi Phương ngữ API sang <code>interactions</code>.</span>';
+  });
+}
+
 function openComic() {
   const products = [
     ['style', 'Định hướng mỹ thuật'],
@@ -711,8 +767,12 @@ function openComic() {
   });
   refreshComicCost();
 
-  $('cmcSaveCred').onclick = saveComicCred;
-  $('cmcTest').onclick = testComicImage;
+  // Nối các nút PHỤ một cách chịu lỗi. Trước đây một phần tử thiếu là `.onclick` ném lỗi,
+  // và vì nút Chạy được nối SAU nên nó chết theo — hộp thoại trông bình thường mà bấm Chạy
+  // không có gì xảy ra. Nút Chạy nay luôn được nối trước và không phụ thuộc khối cấu hình.
+  const bind = (id, fn) => { const el = $(id); if (el) el.onclick = fn; };
+  bind('cmcSaveCred', saveComicCred);
+  bind('cmcTest', testComicImage);
 
   $('cmcGo').onclick = () => {
     const chosen = Array.from(document.querySelectorAll('.cmcProd:checked')).map((c) => c.value);
